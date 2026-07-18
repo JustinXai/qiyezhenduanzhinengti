@@ -48,11 +48,11 @@ describe("Provider Mode (MOCK | REAL)", () => {
     expect(() => buildProviders("REAL", {})).toThrow(ProviderModeError);
   });
 
-  it("3) REAL fully-configured still fails with PROVIDER_CANARY_REQUIRED (not authorized this build)", () => {
+  it("3) REAL fully-configured but WITHOUT the technical-canary switch fails with TECHNICAL_COMPANY_CANARY_NOT_AUTHORIZED", () => {
     const env = { BOCHA_API_KEY: "x".repeat(20), DEEPSEEK_API_KEY: "y".repeat(20) };
     const err = realProviderPreflight(env);
-    expect(err?.code).toBe(PROVIDER_ERROR.CANARY_REQUIRED);
-    expect(() => buildProviders("REAL", env)).toThrow(/PROVIDER_CANARY|canary/i);
+    expect(err?.code).toBe(PROVIDER_ERROR.TECHNICAL_CANARY_NOT_AUTHORIZED);
+    expect(() => buildProviders("REAL", env)).toThrow(/TECHNICAL_COMPANY_CANARY|canary/i);
   });
 
   it("4) REAL never silently falls back to MOCK (always throws)", () => {
