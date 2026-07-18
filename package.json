@@ -25,7 +25,7 @@
     "@next/env": "15.5.20",
     "better-sqlite3": "11.8.1",
     "cheerio": "1.0.0",
-    "drizzle-orm": "0.38.4",
+    "drizzle-orm": "0.45.2",
     "next": "15.5.20",
     "p-limit": "6.2.0",
     "react": "19.0.0",
@@ -35,7 +35,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "3.2.0",
     "@next/eslint-plugin-next": "15.5.20",
-    "@playwright/test": "1.50.1",
+    "@playwright/test": "1.55.1",
     "@types/better-sqlite3": "7.6.12",
     "@types/node": "22.13.1",
     "@types/react": "19.0.8",
@@ -47,13 +47,16 @@
     "eslint-config-next": "15.5.20",
     "eslint-plugin-react": "7.37.4",
     "eslint-plugin-react-hooks": "5.1.0",
-    "postcss": "8.5.1",
+    "postcss": "8.5.19",
     "tailwindcss": "3.4.17",
     "tsx": "4.19.2",
     "typescript": "5.7.3",
     "vitest": "3.0.4"
   },
   "pnpm": {
+    "overrides": {
+      "postcss": "8.5.19"
+    },
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "esbuild",
