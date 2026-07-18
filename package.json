@@ -22,7 +22,7 @@
     "db:migrate": "tsx src/storage/migrate.ts"
   },
   "dependencies": {
-    "next": "15.3.1",
+    "next": "15.5.20",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "zod": "3.24.2",
@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "3.2.0",
-    "@next/eslint-plugin-next": "15.3.1",
+    "@next/eslint-plugin-next": "15.5.20",
     "@playwright/test": "1.50.1",
     "@types/better-sqlite3": "7.6.12",
     "@types/node": "22.13.1",
@@ -42,7 +42,7 @@
     "cross-env": "7.0.3",
     "drizzle-kit": "0.30.4",
     "eslint": "9.19.0",
-    "eslint-config-next": "15.3.1",
+    "eslint-config-next": "15.5.20",
     "eslint-plugin-react-hooks": "5.1.0",
     "eslint-plugin-react": "7.37.4",
     "tailwindcss": "3.4.17",
