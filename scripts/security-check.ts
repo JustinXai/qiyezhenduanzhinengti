@@ -20,6 +20,7 @@
 // ============================================================================
 import { readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
+import { BANNED_TERMS } from "../tests/fixtures/banned-terms";
 
 const ALLOW_MARKER = "security-check:allow";
 
@@ -82,34 +83,9 @@ function scanSecrets(files: string[]): number {
 
 const CUSTOMER_VISIBLE_ROOTS = ["app/", "components/", "src/"];
 
-// docs/REPORT_CONTRACT.md §1 — 综合分只能叫「GEO可见度基础指数」,禁用这些别名。
-const BANNED_SCORE_ALIASES = [
-  "AI排名",
-  "AI推荐分",
-  "AI平台排名",
-  "企业经营分",
-  "市场权威指数",
-];
-
-// docs/PRODUCT_TRUTH_RULES.md §9 — 禁用营销/恐吓式文案。
-const BANNED_MARKETING_COPY = [
-  "提升AI推荐概率",
-  "显著提升",
-  "保证提升",
-  "转化为实际商机",
-  "快速获得客户",
-  "保证排名",
-  "保证流量",
-  "保证线索",
-  "保证收入",
-  "不优化就会失去市场",
-  "竞品正在抢走你的客户",
-];
-
-const BANNED_TERMS: { term: string; category: string }[] = [
-  ...BANNED_SCORE_ALIASES.map((term) => ({ term, category: "score-alias" })),
-  ...BANNED_MARKETING_COPY.map((term) => ({ term, category: "marketing-copy" })),
-];
+// Banned score aliases (docs/REPORT_CONTRACT.md §1) and marketing/恐吓 copy
+// (docs/PRODUCT_TRUTH_RULES.md §9) come from the shared single source of truth
+// so the gate and the vitest guard can never drift.
 
 function isCustomerVisible(file: string): boolean {
   return CUSTOMER_VISIBLE_ROOTS.some((root) => file.startsWith(root));
