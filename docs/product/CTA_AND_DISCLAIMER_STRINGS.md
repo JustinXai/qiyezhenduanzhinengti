@@ -7,6 +7,13 @@
 report 字段/常量）、Agent F（渲染层）、Agent B（Guard 校验字面量）、Agent G（禁用词/一致性
 扫描）。
 
+> **单一程序来源（Agent L，2026-07-18）**：本文件所列客户可见文案已集中到唯一程序常量
+> 文件 `src/product/customer-copy.ts`。守卫（`src/report/validation/cta-guard.ts`）与
+> 报告组件（`components/report/*`）均从该文件 import，不再各自硬编码。
+> `tests/product/customer-copy.test.ts` 逐字（去空白）校验「本文档 ↔ 程序常量」一致，
+> 任一方漂移即测试失败。**标点裁定**：客户可见中文文案统一使用**全角中文标点**
+> （，。；、：），与本文件逐字一致（含 OQ-1，见 §5）。
+
 ## 1. 主 / 次 CTA（REPORT_CONTRACT.md §8）
 
 - 主 CTA：`预约报告解读`
@@ -45,36 +52,24 @@ report 字段/常量）、Agent F（渲染层）、Agent B（Guard 校验字面�
   - `企业经营分`
   - `市场权威指数`
 
-## 5. demonstrationFix 固定免责声明 — ⚠️ 两份冻结文档字面量不一致，见下方说明
+## 5. demonstrationFix 固定免责声明 — ✅ OQ-1 已裁定为全角
 
-`docs/REPORT_CONTRACT.md` §5 原文（全角逗号 U+FF0C）：
+**权威字面量（全角逗号 U+FF0C，逐字）：**
 
 ```
 示范内容仅用于展示优化方向，正式发布前需结合企业真实材料确认。
 ```
 
-`src/contracts/index.ts` 的 `DemonstrationFix.disclaimer` zod 字面量（半角逗号 U+002C，
-Supervisor 独占文件，本 Agent 不得修改）：
+**OQ-1 裁定（Agent L，2026-07-18）**：逗号统一为**全角 `U+FF0C`**。落地：
+`src/contracts/index.ts` 的 `DemonstrationFix.disclaimer` `z.literal(...)` 已改为全角，
+与 `docs/REPORT_CONTRACT.md` §5 逐字对齐。此前 `index.ts` 为半角 `U+002C` 的历史不一致
+已消除。
 
-```
-示范内容仅用于展示优化方向,正式发布前需结合企业真实材料确认。
-```
-
-**这两个字符串逐字不相等**（第一个逗号全角 vs 半角）。任何 Agent 若从
-`REPORT_CONTRACT.md` 抄写此文案写入运行时代码，会与 `src/contracts/index.ts` 的
-`z.literal(...)` 校验永久不匹配。**在 Supervisor 裁定哪一个是权威版本之前，实现方必须
-以 `src/contracts/index.ts` 的半角逗号版本为准**（因为它是运行时强制校验的 schema），
-同时本条已记录为 OPEN_QUESTION，见 `docs/REQUIREMENTS_TRACEABILITY.md` 底部
-「Needs Supervisor 决策」OQ-1。
-
-**实现建议（避免再次踩坑）**：运行时代码不要手打这段中文，直接复用 Zod 字面量本身
-`DemonstrationFix.shape.disclaimer.value`，即可永远与 `src/contracts/index.ts` 保持逐字节
-一致。`src/fixtures/sample-report.ts` 已采用此写法（其 `FROZEN_DEMO_DISCLAIMER` 常量），
-Agent D 写入 report 字段、Agent B 校验字面量时都应照此，切勿从本文件或 `REPORT_CONTRACT.md`
-重打中文。
-
-**字节级核验记录（Agent A，2026-07-18）**：`index.ts` 中「方向」后的逗号为半角
-`U+002C`，`REPORT_CONTRACT.md` §5 中为全角 `U+FF0C`，两串其余码点完全一致，仅此一处不同。
+**实现规则（唯一正确写法）**：运行时代码与测试**不得手打**这段中文，一律复用
+Zod 字面量 `DemonstrationFix.shape.disclaimer.value`（`src/product/customer-copy.ts` 以
+`DEMONSTRATION_FIX_DISCLAIMER` 名再导出该值）。`src/fixtures/sample-report.ts`
+（`FROZEN_DEMO_DISCLAIMER`）与 `tests/security/banned-copy.test.ts` 均已采用此写法，
+故随 `z.literal` 全角化自动跟随，永远逐字节一致。
 
 ## 6. 竞品差距证据不足占位文案（REPORT_CONTRACT.md §3，逐字）
 

@@ -64,13 +64,15 @@ export const THIRTY_MINUTE_POINTS = [
 /** 综合分固定命名。 */
 export const OVERALL_SCORE_LABEL = "GEO可见度基础指数";
 
-/** 综合分禁用别名 — 不得出现在任何客户可见文案中。 */
+// 综合分禁用别名 — 不得出现在任何客户可见文案中。这是「检测清单」而非展示文案，
+// 故每行标注 `security-check:allow`，与 src/report/validation/cta-guard.ts 中的
+// BANNED_PHRASES 同理豁免 Agent G 的 banned-copy 扫描（scripts/security-check.ts）。
 export const BANNED_SCORE_ALIASES = [
-  "AI排名",
-  "AI推荐分",
-  "AI平台排名",
-  "企业经营分",
-  "市场权威指数",
+  "AI排名", // security-check:allow
+  "AI推荐分", // security-check:allow
+  "AI平台排名", // security-check:allow
+  "企业经营分", // security-check:allow
+  "市场权威指数", // security-check:allow
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -115,18 +117,21 @@ export const AI_SAMPLE_DISCLAIMER =
 // §9 — Banned marketing / coercion phrases (docs/PRODUCT_TRUTH_RULES.md §9).
 // ---------------------------------------------------------------------------
 
+// Detection list (not display copy); each line is exempted from the customer
+// banned-copy scan via the `security-check:allow` marker, exactly as
+// src/report/validation/cta-guard.ts is exempted by path.
 export const BANNED_MARKETING_PHRASES = [
-  "提升AI推荐概率",
-  "显著提升",
-  "保证提升",
-  "转化为实际商机",
-  "快速获得客户",
-  "保证排名",
-  "保证流量",
-  "保证线索",
-  "保证收入",
-  "不优化就会失去市场",
-  "竞品正在抢走你的客户",
+  "提升AI推荐概率", // security-check:allow
+  "显著提升", // security-check:allow
+  "保证提升", // security-check:allow
+  "转化为实际商机", // security-check:allow
+  "快速获得客户", // security-check:allow
+  "保证排名", // security-check:allow
+  "保证流量", // security-check:allow
+  "保证线索", // security-check:allow
+  "保证收入", // security-check:allow
+  "不优化就会失去市场", // security-check:allow
+  "竞品正在抢走你的客户", // security-check:allow
 ] as const;
 
 // ---------------------------------------------------------------------------

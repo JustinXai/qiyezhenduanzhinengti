@@ -49,3 +49,20 @@ Report + 单诊断流程**。
 
 Quick 和 Deep 只是阅读层级，不是用户提交时的诊断模式。用户不选择"快速分析"或
 "深度分析"。系统只运行一次完整、受预算控制的诊断。
+
+## 客户可见公开文案 — 单一程序来源（Agent L，2026-07-18）
+
+- 所有**冻结的客户可见文案**（主/次 CTA、CTA 说明段落、30 分钟解读会三点、综合分命名
+  「GEO可见度基础指数」及其禁用别名、竞品证据不足占位、评分覆盖度提示语、AI 样本免责
+  说明、禁用营销词、三阶段路线图阶段名）以及经 `.value` 再导出的 demonstrationFix 免责
+  声明，统一存放在唯一程序常量文件 **`src/product/customer-copy.ts`**。
+- 守卫（`src/report/validation/cta-guard.ts`）与报告组件（`components/report/*`）从该文件
+  import，**不得各自硬编码重打**。`tests/product/customer-copy.test.ts` 锁定
+  「文档 ↔ 常量一致 / 全角标点 / AI 四事实覆盖 / 消费方零重打」。
+- **标点裁定**：客户可见中文文案统一使用**全角中文标点**（，。；、：），与
+  `docs/product/CTA_AND_DISCLAIMER_STRINGS.md`（复制粘贴源）逐字一致。含 OQ-1：
+  demonstrationFix 免责声明逗号在其单一来源（`src/contracts/index.ts` 的 `z.literal`）
+  已定为全角 `U+FF0C`。
+- **AI 平台覆盖 / 测量免责 / CTA 承诺范围 / 评分命名 / 30 分钟解读内容 / GEO 服务责任
+  边界**等**商业含义**不由 Agent L 擅改；涉及的未冻结项以 `NEEDS_PRODUCT_OWNER_DECISION`
+  记于 `docs/REQUIREMENTS_TRACEABILITY.md` 的「Agent L 裁定表」（OQ-4/5/6/8 及 OQ-7 模板）。

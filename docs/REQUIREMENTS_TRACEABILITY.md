@@ -115,7 +115,7 @@ Agent（A–G）。目的：让任意 Agent 在动手前能一步定位「这条
 
 | 编号 | 事项 | 冲突/缺口位置 | 影响 Agent | 临时口径（待 Supervisor 确认） |
 |---|---|---|---|---|
-| **OQ-1** | demonstrationFix 免责声明逗号：全角 `U+FF0C` vs 半角 `U+002C` | `docs/REPORT_CONTRACT.md` §5（全角）↔ `src/contracts/index.ts` `DemonstrationFix.disclaimer` `z.literal`（半角），其余码点一致（Agent A 已逐字节核验） | B（校验）、D（写入）、F（渲染） | 以 `index.ts` 半角版本为运行时权威（它是强制 schema）；复用 `DemonstrationFix.shape.disclaimer.value`，勿从文档重打。请 Supervisor 决定是否把 `REPORT_CONTRACT.md` §5 改为半角以对齐 |
+| **OQ-1** ✅ 已裁定 | demonstrationFix 免责声明逗号：全角 `U+FF0C` vs 半角 `U+002C` | `docs/REPORT_CONTRACT.md` §5（全角）↔ `src/contracts/index.ts` `DemonstrationFix.disclaimer` `z.literal`（半角），其余码点一致（Agent A 已逐字节核验） | B（校验）、D（写入）、F（渲染） | **已裁定为全角 `U+FF0C`（Agent L，2026-07-18）**。落地：`src/contracts/index.ts` 的 `z.literal` 已改全角，与 `REPORT_CONTRACT.md` §5 对齐；`src/product/customer-copy.ts` 经 `DemonstrationFix.shape.disclaimer.value` 再导出；fixture 自动跟随；`tests/security/banned-copy.test.ts` 已改为断言 `.value` 而非重打字面量 |
 | **OQ-2** | Deep 视图 GEO 机会数量「3–5 个」与「不得固定数量强行填满」矛盾 | `docs/REPORT_CONTRACT.md`「Deep View」(3–5) ↔ `docs/REPORT_CONTRACT.md` §6 / `docs/PRODUCT_TRUTH_RULES.md` §4.10–4.11（按实数、不补满） | D（生成）、F（渲染） | 证据充分时最多展示 5 个、优先展示可信度高者；可信机会不足时按实际数量显示，不补满，即「≤5 且不强填」 |
 | **OQ-3** | 竞品差距的 Evidence 支持等级门槛未量化 | `docs/REPORT_CONTRACT.md` §3 仅定性「足够 Evidence / 达到语义支持要求」；`docs/PRODUCT_TRUTH_RULES.md` §4 的 1–3 条只覆盖核心问题/优势/机会，未列 `CompetitorGap` | B（Guard）、C（证据）、D（生成）、F | 暂比照优势口径：竞品差距至少 1 条 `DIRECT_SUPPORT` 或 2 条 `PARTIAL_SUPPORT`（`COMPETITOR_WEB_EVIDENCE`）方可展示，否则走占位文案 |
 | **OQ-4** | 竞品占位文案预设「已收到竞品输入」，用户完全未填竞品时的行为未定义 | `docs/REPORT_CONTRACT.md` §3、`docs/product/CTA_AND_DISCLAIMER_STRINGS.md` §6 | F（渲染）、E（编排） | 用户未提交任何竞品时直接隐藏模块（`competitorGapSummary.available=false` 但不显示预设「已收到竞品输入」文案）；仅在有输入而证据不足时显示占位文案 |
@@ -126,3 +126,28 @@ Agent（A–G）。目的：让任意 Agent 在动手前能一步定位「这条
 
 > 维护约定：Supervisor 裁定后，由 Agent A 把对应 OQ 行标注「已裁定 + 结论 + 落地位置」，
 > 并同步更新 `docs/product/` 相关小节；未裁定前实现方不得把临时口径当作冻结事实。
+
+---
+
+## Agent L 裁定表（产品公开文案冻结，2026-07-18）
+
+Agent L 负责「客户可见公开文案」的冻结与单一程序来源
+（`src/product/customer-copy.ts`）。下表逐项裁定 OQ-1..8。区分：**低风险文案裁定**
+（Agent L 直接裁定）、**无文案影响**（属生成/校验逻辑，Agent L 不裁定）、
+**NEEDS_PRODUCT_OWNER_DECISION**（涉及商业含义，Agent L 不自行决定）。
+
+| 编号 | Agent L 裁定 | 说明与落地 |
+|---|---|---|
+| **OQ-1** | ✅ **已裁定（全角 `U+FF0C`）** | 直接授权范围内。已改 `src/contracts/index.ts` `z.literal` 为全角；`src/product` 经 `.value` 再导出，组件/守卫/fixture/测试全部跟随。运行时权威 = Zod 字面量。 |
+| **OQ-2** | ➖ **无文案影响** | Deep GEO 机会「3–5 个」vs「不强填」是**数量/生成逻辑**，属 D（生成）/F（投影）/B（守卫），非公开文案。临时口径「≤5 且不强填」维持，Agent L 不裁定。 |
+| **OQ-3** | ➖ **无文案影响** | 竞品差距 Evidence 支持门槛未量化，属 **B 的语义守卫阈值**（配合 C/D），非文案。§6 占位文案本身已冻结并集中到 `src/product`。临时口径维持。 |
+| **OQ-4** | ⚠️ **NEEDS_PRODUCT_OWNER_DECISION** | 「用户完全未提交竞品」时：**隐藏模块**（OQ-4 临时口径）还是显示 F 现有的「本次未提供竞品，暂不做竞品比较。」另一句文案？两者是不同客户可见行为。§6「已收到竞品输入…」占位仅适用于「有输入但证据不足」，已冻结集中。F 的「未提供竞品」串暂未纳入冻结源，待裁定后决定隐藏或冻结。 |
+| **OQ-5** | ⚠️ **NEEDS_PRODUCT_OWNER_DECISION** | `overallScore=null`（覆盖度<70%）时首屏「GEO可见度基础指数」的展示串未冻结。现状 `components/report/score-card.tsx` 显示临时串「覆盖不足，暂不评分」（**非 UNKNOWN，是可读的临时文案，绝不显示 0**）。此串属「测量免责/评分命名」商业含义，Agent L 不定稿；裁定后集中到 `src/product` 并按全角标点冻结。 |
+| **OQ-6** | ⚠️ **NEEDS_PRODUCT_OWNER_DECISION** | 服务方品牌名「凡间AI」是否为最终对客名。Agent L 已按要求逐字保留于 `THIRTY_MINUTE_POINTS`，并集中到 `src/product`——一旦裁定改名，只改一处即全局生效。 |
+| **OQ-7** | 🟡 **部分（文案片段已冻结，模板待定）** | `measurementStatusSummary` 的**汇总模板**是 F 的运行时组合逻辑（+ 待产品定稿模板）。其引用的 §7 提示语串（全 ESTIMATED / 存在未测得）已冻结为 `SCORE_HINT_ALL_ESTIMATED` / `SCORE_HINT_SOME_UNMEASURED` 并集中到 `src/product`。模板本身 = NEEDS_PRODUCT_OWNER_DECISION。 |
+| **OQ-8** | ⚠️ **NEEDS_PRODUCT_OWNER_DECISION** | 两句 §7 提示语共存时显示哪条/是否都显示，属产品展示规则。两句串本身已冻结集中（同 OQ-7）。临时口径（两句都显示）维持至裁定；Agent L 不裁定共存规则。 |
+
+> 落地位置汇总：所有已冻结的客户可见文案常量集中于 `src/product/customer-copy.ts`，
+> 由 `tests/product/customer-copy.test.ts` 锁定「文档↔常量一致 / 全角标点 / AI 四事实
+> 覆盖 / 消费方零重打」。`docs/product/CTA_AND_DISCLAIMER_STRINGS.md` 与
+> `docs/PROJECT_FREEZE.md` 已标注单一来源与全角标点裁定。
