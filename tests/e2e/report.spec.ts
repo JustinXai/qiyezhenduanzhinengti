@@ -12,7 +12,11 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { BANNED_TERMS } from "../fixtures/banned-terms";
 
-const QUICK_MODULE_TESTIDS = Array.from({ length: 8 }, (_, i) => `quick-module-${i + 1}`);
+// Round-5.1: modules are keyed + dynamic (empty modules are omitted, numbering
+// stays contiguous). The rich e2e mock scenario renders all eight.
+const QUICK_MODULE_TESTIDS = ["summary", "ai", "competitor", "issues", "fix", "geo", "roadmap", "cta"].map(
+  (k) => `quick-module-${k}`,
+);
 
 /** Create a diagnosis through the real API and return its public report path. */
 async function createReportPath(request: APIRequestContext): Promise<string> {
@@ -35,7 +39,7 @@ async function createReportPath(request: APIRequestContext): Promise<string> {
 }
 
 test.describe("Quick report page (end-to-end)", () => {
-  test("renders all 8 fixed Quick modules", async ({ page, request }) => {
+  test("renders all Quick modules of the rich scenario", async ({ page, request }) => {
     await page.goto(await createReportPath(request));
     for (const testid of QUICK_MODULE_TESTIDS) {
       await expect(page.getByTestId(testid), `${testid} should be visible`).toBeVisible();

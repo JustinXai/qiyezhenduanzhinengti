@@ -100,9 +100,9 @@ describe("QuickReport rendering", () => {
   });
 
   it("exposes the e2e data-testid hooks (Agent G contract)", () => {
-    const html = renderQuick(); // sample has a demonstrationFix -> module 5 present
-    for (let i = 1; i <= 8; i += 1) {
-      expect(html).toContain(`data-testid="quick-module-${i}"`);
+    const html = renderQuick(); // sample has a demonstrationFix -> fix module present
+    for (const key of ["summary", "ai", "competitor", "issues", "fix", "geo", "roadmap", "cta"]) {
+      expect(html).toContain(`data-testid="quick-module-${key}"`);
     }
     expect(html).toContain('data-testid="primary-cta"');
     expect(html).toContain('data-testid="secondary-cta"');
@@ -115,12 +115,14 @@ describe("QuickReport rendering", () => {
     expect(html).toContain(">63<"); // composite value rendered inside the headline
   });
 
-  it("keeps quick-module-5 numbering fixed even when it is hidden", () => {
+  it("omits the fix module when hidden and keeps numbering contiguous", () => {
     const html = renderQuick(buildSampleReport({ demonstrationFix: null }));
-    expect(html).not.toContain('data-testid="quick-module-5"');
-    // Later modules keep their contract numbers.
-    expect(html).toContain('data-testid="quick-module-6"');
-    expect(html).toContain('data-testid="quick-module-8"');
+    expect(html).not.toContain('data-testid="quick-module-fix"');
+    // Later modules still render, and no visible chip number is skipped: with
+    // the fix hidden the sample renders 7 modules numbered 1..7.
+    expect(html).toContain('data-testid="quick-module-geo"');
+    expect(html).toContain('data-testid="quick-module-cta"');
+    expect(html).not.toContain(">8</span>");
   });
 });
 

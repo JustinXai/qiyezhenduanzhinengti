@@ -13,6 +13,13 @@ import { z } from "zod";
 export const REPORT_CONTRACT_VERSION = "1.0.0";
 export const SCORE_CONTRACT_VERSION = "1.0.0";
 
+// V1 public reports are Simplified-Chinese ONLY (Round-5.1 中文成交版). The
+// language is a frozen literal — no user form, URL parameter or front-end
+// switch can change it. `.default()` keeps previously stored canonical JSON
+// (written before this field existed) parseable on read.
+export const ReportLanguage = z.literal("zh-CN");
+export type ReportLanguage = z.infer<typeof ReportLanguage>;
+
 // ---------------------------------------------------------------------------
 // Evidence
 // ---------------------------------------------------------------------------
@@ -35,6 +42,10 @@ export type EvidenceSupportLevel = z.infer<typeof EvidenceSupportLevel>;
 export const ClaimType = z.enum(["DIAGNOSTIC_INFERENCE", "UNVERIFIED_HYPOTHESIS"]);
 export type ClaimType = z.infer<typeof ClaimType>;
 
+/** Evidence source tier (Round-5.1 §六): A企业中文官方 B全球官方 C中文媒体/机构 D电商 E社区问答. */
+export const EvidenceSourceTier = z.enum(["A", "B", "C", "D", "E"]);
+export type EvidenceSourceTier = z.infer<typeof EvidenceSourceTier>;
+
 export const EvidenceItem = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -45,6 +56,11 @@ export const EvidenceItem = z.object({
   fetchedAt: z.string(),
   snippet: z.string(),
   url: z.string().url(),
+  // Round-5.1 registry metadata (optional → rows/reports written earlier parse).
+  /** Detected content language of title+snippet ("zh" | "other"). */
+  language: z.enum(["zh", "other"]).optional(),
+  /** Source tier per the frozen中文证据 priority ladder. */
+  sourceTier: EvidenceSourceTier.optional(),
 });
 export type EvidenceItem = z.infer<typeof EvidenceItem>;
 
@@ -206,6 +222,8 @@ export const CompanyProfile = z.object({
 export const DiagnosisReport = z.object({
   reportContractVersion: z.literal(REPORT_CONTRACT_VERSION),
   scoreContractVersion: z.literal(SCORE_CONTRACT_VERSION),
+  /** Frozen public-report language (zh-CN only in V1); defaulted for pre-field rows. */
+  reportLanguage: ReportLanguage.default("zh-CN"),
   diagnosisId: z.string(),
   publicToken: z.string(),
   generatedAt: z.string(),
@@ -227,15 +245,29 @@ export type DiagnosisReport = z.infer<typeof DiagnosisReport>;
 // never separately generated or scored. See docs/ARCHITECTURE.md.
 // ---------------------------------------------------------------------------
 
+/** Weight share of each measurement status over the frozen dimension weights. */
+export const MeasurementComposition = z.object({
+  measuredWeight: z.number().min(0).max(1),
+  estimatedWeight: z.number().min(0).max(1),
+  insufficientWeight: z.number().min(0).max(1),
+  providerFailedWeight: z.number().min(0).max(1),
+});
+export type MeasurementComposition = z.infer<typeof MeasurementComposition>;
+
 export const QuickReportViewModel = z.object({
   diagnosisId: z.string(),
   publicToken: z.string(),
+  reportLanguage: ReportLanguage.default("zh-CN"),
   brandName: z.string(),
   reportDate: z.string(),
   headlineConclusion: z.string(),
   overallScore: z.number().nullable(),
   scoreCoverage: z.number(),
   measurementStatusSummary: z.string(),
+  /** §八 transparency: 实测/公开网页估算/证据不足/暂未测得 weight shares. */
+  measurementComposition: MeasurementComposition,
+  /** Frozen disclaimer when估算 outweighs实测; null otherwise. */
+  estimationNotice: z.string().nullable(),
   topStrength: Strength.nullable(),
   topIssue: CoreIssue.nullable(),
   topOpportunity: GeoOpportunity.nullable(),
@@ -276,6 +308,15 @@ export const EvidenceViewModel = z.object({
       fetchedAt: true,
       snippet: true,
       url: true,
+    }).extend({
+      // Round-5.1 中文成交版: the original title/snippet may stay in their source
+      // language, but every item carries a Chinese customer summary + Chinese
+      // labels so the public Evidence view never leans on internal enums.
+      // Optional at the SCHEMA level (guard fixtures build minimal items); the
+      // ChinesePublicReportGuard requires them on every real projection.
+      summaryZh: z.string().optional(),
+      supportLabel: z.string().optional(),
+      sourceTypeLabel: z.string().optional(),
     }),
   ),
 });

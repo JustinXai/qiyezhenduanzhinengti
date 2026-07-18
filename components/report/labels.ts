@@ -40,11 +40,12 @@ export const DIMENSION_WEIGHT_LABELS: Record<ScoreDimensionKey, string> = {
   aiVisibility: "15%",
 };
 
+// Round-5.1 §四 frozen public mappings.
 export const MEASUREMENT_STATUS_LABELS: Record<MeasurementStatus, string> = {
   MEASURED: "实测",
-  ESTIMATED: "估算",
+  ESTIMATED: "公开网页估算",
   INSUFFICIENT_EVIDENCE: "证据不足",
-  PROVIDER_FAILED: "采集失败",
+  PROVIDER_FAILED: "暂未测得",
 };
 
 export const SOURCE_TYPE_LABELS: Record<EvidenceSourceType, string> = {
@@ -53,12 +54,24 @@ export const SOURCE_TYPE_LABELS: Record<EvidenceSourceType, string> = {
   COMPETITOR_WEB_EVIDENCE: "竞品公开证据",
 };
 
+// UNSUPPORTED never renders publicly (the presentation service filters those
+// items out); the entry exists only for type-completeness.
 export const SUPPORT_LEVEL_LABELS: Record<EvidenceSupportLevel, string> = {
   DIRECT_SUPPORT: "直接支持",
   PARTIAL_SUPPORT: "部分支持",
-  CONTEXT_ONLY: "仅背景",
-  UNSUPPORTED: "未支持",
+  CONTEXT_ONLY: "背景参考",
+  UNSUPPORTED: "背景参考",
 };
+
+/** Internal authority levels → Chinese public labels (OWNED/MEDIA are internal). */
+export const AUTHORITY_LEVEL_LABELS: Record<string, string> = {
+  OWNED: "企业自有",
+  MEDIA: "第三方媒体",
+};
+
+export function authorityLabel(level: string): string {
+  return AUTHORITY_LEVEL_LABELS[level] ?? "公开来源";
+}
 
 export const ACCURACY_LABELS: Record<AIVisibilityAccuracy, string> = {
   ACCURATE: "准确",

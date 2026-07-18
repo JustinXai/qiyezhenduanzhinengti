@@ -208,6 +208,7 @@ export function buildClaimsPrompt(
     "2) claimType: 证据直接支撑的推断用DIAGNOSTIC_INFERENCE;合理但证据不足的假设用UNVERIFIED_HYPOTHESIS(最多1条);",
     "3) 负面表述必须限定范围(\"本次检查的公开页面中未发现X\"),禁止绝对化(\"完全没有/不存在\");",
     "4) strengths最多2条;coreIssues最多3条;geoOpportunities最多3条;不足不硬凑;",
+    "4b) 每条geoOpportunity必须包含sourceIssueId,取值为其来源问题在coreIssues数组中的位置编号(第1条为\"iss_1\",第2条为\"iss_2\",以此类推),并写明它解决的customerQuestion;不能对应任何coreIssue的机会不要输出;",
     `5) ${competitorRule}`,
     "6) demonstrationFix: 仅当某个coreIssue可以用一个内容资产示范修复时给出(fixType: ENTITY_DESCRIPTION/FAQ_EXAMPLE/BEFORE_AFTER_STRUCTURE),否则为null;before/after描述结构而非虚构事实;customerConfirmationNeeded写明需要企业确认的真实口径。",
     "",

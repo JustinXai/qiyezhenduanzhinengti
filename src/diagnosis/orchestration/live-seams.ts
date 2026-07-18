@@ -34,6 +34,7 @@ import {
 } from "../../runtime/diagnosis-input";
 import { planSearchQueries } from "../search/query-planner";
 import { normalizeEvidence } from "../evidence/normalize";
+import { curateEvidence } from "../evidence/tiering";
 import { resolveCompetitors } from "../competitors/resolve";
 import { createMockCompetitorSearch } from "../competitors/mock-search";
 import type { CompetitorResolution } from "../competitors/types";
@@ -271,7 +272,9 @@ export function createLiveEvidencePipeline(
       for (const e of data.resolutionEvidence) {
         if (!byId.has(e.id)) byId.set(e.id, e);
       }
-      const evidence = [...byId.values()];
+      // Round-5.1 §六: same curation pass as the real pipeline (language + tier
+      // annotation, dedup, domain caps) so mock canaries exercise it too.
+      const evidence = curateEvidence([...byId.values()]).evidence;
       // Supply the measurement boundary from the executed query plan + the
       // controlled first-party crawl scope; the verifier uses it to bound
       // negative/missing claims (authority-based support is deleted entirely).

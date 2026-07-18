@@ -74,6 +74,9 @@ export function assembleReport(input: AssembleReportInput): AssembleReportResult
   const draft = {
     reportContractVersion: REPORT_CONTRACT_VERSION,
     scoreContractVersion: SCORE_CONTRACT_VERSION,
+    // Frozen V1 public-report language (Round-5.1): stamped by the assembler,
+    // never taken from user input.
+    reportLanguage: "zh-CN" as const,
     diagnosisId: input.identity.diagnosisId,
     publicToken: input.identity.publicToken,
     generatedAt: input.identity.generatedAt,

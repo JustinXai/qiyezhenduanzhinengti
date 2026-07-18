@@ -133,6 +133,7 @@ describe("buildReportFromStageOutputs → assembleReport → DiagnosisReport.par
         geoOpportunities: res.report.geoOpportunities,
         competitorGaps: res.report.competitorGaps,
         demonstrationFix: res.report.demonstrationFix,
+        dropped: [],
       },
       evidence: res.report.evidence,
     });

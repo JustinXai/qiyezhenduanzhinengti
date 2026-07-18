@@ -17,8 +17,27 @@ import type {
   ClaimEvidenceRelation,
   EvidenceCoverage,
 } from "../../contracts/claim-evidence";
+import type {
+  ClaimPruneReasonCode,
+  DroppedClaimRecord,
+} from "../../contracts/claim-reason-codes";
 import type { GuardRuleCode } from "../../contracts/guard-types";
 import { evidenceGuard } from "./evidence-guard";
+
+/** Map a prunable guard rule (+violation text) onto a §七 reason code. */
+function reasonCodeFor(rule: GuardRuleCode, message: string): ClaimPruneReasonCode {
+  if (/coverage|边界|覆盖/i.test(message)) return "COVERAGE_NOT_ESTABLISHED";
+  if (rule === "TRUTH_4_4_CONTEXT_ONLY_INSUFFICIENT") return "INSUFFICIENT_INDEPENDENT_SUPPORT";
+  return "INSUFFICIENT_INDEPENDENT_SUPPORT";
+}
+
+function kindOfClaimId(id: string): string {
+  if (id.startsWith("str_")) return "strength";
+  if (id.startsWith("iss_")) return "coreIssue";
+  if (id.startsWith("geo_")) return "geoOpportunity";
+  if (id.startsWith("gap_")) return "competitorGap";
+  return "claim";
+}
 
 const PRUNABLE_RULES: ReadonlySet<GuardRuleCode> = new Set([
   "TRUTH_4_1_CORE_ISSUE_NEEDS_DIRECT_SUPPORT",
@@ -31,6 +50,8 @@ export interface PruneResult {
   report: DiagnosisReport;
   /** Claim ids removed because their verified support was insufficient. */
   prunedClaimIds: string[];
+  /** Round-5.1 §七: why each claim was pruned (content-yield diagnostics). */
+  pruned: DroppedClaimRecord[];
 }
 
 function removeClaims(report: DiagnosisReport, ids: Set<string>): DiagnosisReport {
@@ -50,19 +71,29 @@ export function pruneUnsupportedClaims(
 ): PruneResult {
   let current = report;
   const pruned = new Set<string>();
+  const records = new Map<string, DroppedClaimRecord>();
   // Iterate: removing a claim can never create a new support violation, but the
   // loop is capped defensively.
   for (let i = 0; i < 8; i += 1) {
     const res = evidenceGuard({ report: current, relations, coverage });
     if (res.ok) break;
-    const ids = new Set(
-      res.violations
-        .filter((v) => PRUNABLE_RULES.has(v.rule) && typeof v.claimId === "string")
-        .map((v) => v.claimId as string),
+    const prunable = res.violations.filter(
+      (v) => PRUNABLE_RULES.has(v.rule) && typeof v.claimId === "string",
     );
+    const ids = new Set(prunable.map((v) => v.claimId as string));
     if (ids.size === 0) break; // only hard-block violations remain — leave them
+    for (const v of prunable) {
+      const id = v.claimId as string;
+      if (!records.has(id)) {
+        records.set(id, {
+          kind: kindOfClaimId(id),
+          ref: id,
+          reasonCode: reasonCodeFor(v.rule, v.message),
+        });
+      }
+    }
     for (const id of ids) pruned.add(id);
     current = removeClaims(current, ids);
   }
-  return { report: current, prunedClaimIds: [...pruned] };
+  return { report: current, prunedClaimIds: [...pruned], pruned: [...records.values()] };
 }

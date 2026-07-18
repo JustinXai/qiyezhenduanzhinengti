@@ -30,6 +30,12 @@ export {
 } from "./cross-field-guard";
 
 export {
+  chinesePublicReportGuard,
+  type ChineseGuardResult,
+  type ChineseGuardViolation,
+} from "./chinese-public-report-guard";
+
+export {
   ctaGuard,
   countQuickVisibleChars,
   BANNED_PHRASES,

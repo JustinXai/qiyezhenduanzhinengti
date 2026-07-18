@@ -70,5 +70,5 @@ export function ClaimTypeBadge({
  * the count only; the actual items live in the Evidence view.
  */
 export function EvidenceTag({ count }: { count: number }) {
-  return <Badge tone="info">Evidence · {count}</Badge>;
+  return <Badge tone="info">证据 · {count}</Badge>;
 }

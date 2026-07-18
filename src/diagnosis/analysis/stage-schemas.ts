@@ -89,6 +89,12 @@ export const CoreIssueStageItem = ClaimStageBase.extend({ fixDirection: z.string
 export const GeoOpportunityStageItem = ClaimStageBase.extend({
   customerQuestion: z.string(),
   contentGap: z.string(),
+  /**
+   * Round-5.1 §七: the published issue this opportunity answers. Optional in the
+   * wire schema (older mocks/checkpoints), but when present it MUST resolve to a
+   * built core issue or the opportunity is dropped (INVALID_EVIDENCE_REFERENCE).
+   */
+  sourceIssueId: z.string().optional(),
 });
 export const CompetitorGapStageItem = z.object({
   competitorName: z.string(),
@@ -97,6 +103,8 @@ export const CompetitorGapStageItem = z.object({
 });
 export const DemonstrationFixStageItem = z.object({
   fixType: DemonstrationFixType,
+  /** §七: the published issue the fix demonstrates (validated when present). */
+  sourceIssueId: z.string().optional(),
   currentIssue: z.string(),
   suggestedAssetType: z.string(),
   before: z.string(),

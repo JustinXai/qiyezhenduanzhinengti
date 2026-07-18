@@ -35,6 +35,7 @@ import {
 } from "../../security/crawler/guarded-crawler";
 import { planSearchQueries } from "../search/query-planner";
 import { normalizeEvidence } from "../evidence/normalize";
+import { curateEvidence } from "../evidence/tiering";
 import { resolveCompetitors } from "../competitors/resolve";
 import type { CompetitorResolution } from "../competitors/types";
 import {
@@ -401,12 +402,18 @@ export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): Evid
       const byId = new Map<string, EvidenceItem>();
       for (const e of base) byId.set(e.id, e);
       for (const e of data.resolutionEvidence) if (!byId.has(e.id)) byId.set(e.id, e);
-      const evidence = [...byId.values()];
+      // Round-5.1 §六: language + sourceTier annotation, near-duplicate merge and
+      // marketplace/community domain caps — official pages are never evicted.
+      const curated = curateEvidence([...byId.values()]);
+      const evidence = curated.evidence;
       const coverage = deriveCoverage({
         evidence,
         firstPartyDomains: data.companyDomains,
         executedQueries: data.executedQueries,
       });
+      // The per-item language/sourceTier annotations flow into the canonical
+      // report, so distribution stats stay derivable downstream without a
+      // side-channel (curated.stats is also unit-tested directly).
       return { evidence, coverage };
     },
   };

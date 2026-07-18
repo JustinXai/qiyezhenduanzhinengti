@@ -1,6 +1,7 @@
 import type { EvidenceViewModel } from "../../src/contracts";
 import {
   MEASUREMENT_STATUS_LABELS,
+  authorityLabel,
   formatDate,
 } from "./labels";
 import { SourceTypeBadge, SupportLevelBadge } from "./badges";
@@ -36,6 +37,7 @@ export function EvidenceList({ items }: { items: readonly EvidenceItemView[] }) 
               <span className="hidden shrink-0 text-xs text-neutral-400 group-open:inline">收起</span>
             </summary>
             <div className="space-y-1.5 px-3 pb-3 text-xs text-neutral-600">
+              {item.summaryZh && <p className="font-medium text-neutral-800">{item.summaryZh}</p>}
               <p className="text-neutral-700">{item.snippet}</p>
               <dl className="grid grid-cols-2 gap-1">
                 <div>
@@ -44,7 +46,7 @@ export function EvidenceList({ items }: { items: readonly EvidenceItemView[] }) 
                 </div>
                 <div>
                   <dt className="inline text-neutral-400">权威等级:</dt>{" "}
-                  <dd className="inline">{item.authorityLevel}</dd>
+                  <dd className="inline">{authorityLabel(item.authorityLevel)}</dd>
                 </div>
                 <div>
                   <dt className="inline text-neutral-400">获取时间:</dt>{" "}

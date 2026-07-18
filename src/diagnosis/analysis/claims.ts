@@ -22,6 +22,7 @@ import type {
   GeoOpportunity,
   Strength,
 } from "../../contracts";
+import type { DroppedClaimRecord } from "../../contracts/claim-reason-codes";
 import { parseStageJson, type StageParseResult } from "../../providers/deepseek";
 import { indexEvidence, resolveEvidenceIds, type EvidenceIndex } from "./evidence-index";
 import { ClaimsStageOutput } from "./stage-schemas";
@@ -37,6 +38,13 @@ export interface ClaimsResult {
   geoOpportunities: GeoOpportunity[];
   competitorGaps: CompetitorGap[];
   demonstrationFix: DemonstrationFixModel | null;
+  /** Round-5.1 §七: why candidates were dropped (content-yield diagnostics). */
+  dropped: DroppedClaimRecord[];
+}
+
+/** NO ids at all vs. ids that all failed to resolve — different diagnoses. */
+function dropReasonForEvidence(raw: readonly string[]): DroppedClaimRecord["reasonCode"] {
+  return raw.length === 0 ? "NO_VALID_EVIDENCE" : "INVALID_EVIDENCE_REFERENCE";
 }
 
 function buildStrengths(
@@ -81,11 +89,30 @@ function buildCoreIssues(
 function buildGeoOpportunities(
   items: ClaimsStageOutput["geoOpportunities"],
   index: EvidenceIndex,
+  issueIds: ReadonlySet<string>,
+  dropped: DroppedClaimRecord[],
 ): GeoOpportunity[] {
   const out: GeoOpportunity[] = [];
   items.forEach((item) => {
     const evidenceIds = resolveEvidenceIds(item.evidenceIds, index);
-    if (evidenceIds.length === 0) return;
+    if (evidenceIds.length === 0) {
+      dropped.push({
+        kind: "geoOpportunity",
+        ref: item.statement.slice(0, 40),
+        reasonCode: dropReasonForEvidence(item.evidenceIds),
+      });
+      return;
+    }
+    // §七: a declared source issue must resolve to a BUILT core issue; an
+    // opportunity hanging off a dropped/unknown issue is not publishable.
+    if (item.sourceIssueId !== undefined && !issueIds.has(item.sourceIssueId)) {
+      dropped.push({
+        kind: "geoOpportunity",
+        ref: item.statement.slice(0, 40),
+        reasonCode: "INVALID_EVIDENCE_REFERENCE",
+      });
+      return;
+    }
     out.push({
       id: `geo_${out.length + 1}`,
       claimType: item.claimType,
@@ -120,10 +147,28 @@ function buildCompetitorGaps(
 function buildDemonstrationFix(
   item: ClaimsStageOutput["demonstrationFix"],
   index: EvidenceIndex,
+  issueIds: ReadonlySet<string>,
+  dropped: DroppedClaimRecord[],
 ): DemonstrationFixModel | null {
   if (item === null) return null;
   const evidenceIds = resolveEvidenceIds(item.evidenceIds, index);
-  if (evidenceIds.length === 0) return null; // hide the module rather than fabricate
+  if (evidenceIds.length === 0) {
+    dropped.push({
+      kind: "demonstrationFix",
+      ref: item.currentIssue.slice(0, 40),
+      reasonCode: dropReasonForEvidence(item.evidenceIds),
+    });
+    return null; // hide the module rather than fabricate
+  }
+  // §七: the demonstration fix must originate from a PUBLISHED issue.
+  if (item.sourceIssueId !== undefined && !issueIds.has(item.sourceIssueId)) {
+    dropped.push({
+      kind: "demonstrationFix",
+      ref: item.currentIssue.slice(0, 40),
+      reasonCode: "INVALID_EVIDENCE_REFERENCE",
+    });
+    return null;
+  }
   return {
     id: "demo_1",
     fixType: item.fixType,
@@ -148,14 +193,58 @@ export function buildClaims(
 
   const index = indexEvidence(evidence);
   const s = parsed.value;
+  const dropped: DroppedClaimRecord[] = [];
+
+  const strengths = buildStrengths(s.strengths, index);
+  if (strengths.length < s.strengths.length) {
+    for (const item of s.strengths) {
+      if (resolveEvidenceIds(item.evidenceIds, index).length === 0) {
+        dropped.push({
+          kind: "strength",
+          ref: item.statement.slice(0, 40),
+          reasonCode: dropReasonForEvidence(item.evidenceIds),
+        });
+      }
+    }
+  }
+  const coreIssues = buildCoreIssues(s.coreIssues, index);
+  if (coreIssues.length < s.coreIssues.length) {
+    for (const item of s.coreIssues) {
+      if (resolveEvidenceIds(item.evidenceIds, index).length === 0) {
+        dropped.push({
+          kind: "coreIssue",
+          ref: item.statement.slice(0, 40),
+          reasonCode: dropReasonForEvidence(item.evidenceIds),
+        });
+      }
+    }
+  }
+  // The stage output declares issue links positionally ("iss_1"…), which is the
+  // id scheme buildCoreIssues assigns — so linkage is validated on BUILT ids.
+  const issueIds = new Set(coreIssues.map((i) => i.id));
+
+  const competitorGaps = buildCompetitorGaps(s.competitorGaps, index);
+  if (competitorGaps.length < s.competitorGaps.length) {
+    for (const item of s.competitorGaps) {
+      if (resolveEvidenceIds(item.evidenceIds, index).length === 0) {
+        dropped.push({
+          kind: "competitorGap",
+          ref: item.competitorName,
+          reasonCode: "COMPETITOR_NOT_RESOLVED",
+        });
+      }
+    }
+  }
+
   return {
     ok: true,
     value: {
-      strengths: buildStrengths(s.strengths, index),
-      coreIssues: buildCoreIssues(s.coreIssues, index),
-      geoOpportunities: buildGeoOpportunities(s.geoOpportunities, index),
-      competitorGaps: buildCompetitorGaps(s.competitorGaps, index),
-      demonstrationFix: buildDemonstrationFix(s.demonstrationFix, index),
+      strengths,
+      coreIssues,
+      geoOpportunities: buildGeoOpportunities(s.geoOpportunities, index, issueIds, dropped),
+      competitorGaps,
+      demonstrationFix: buildDemonstrationFix(s.demonstrationFix, index, issueIds, dropped),
+      dropped,
     },
   };
 }

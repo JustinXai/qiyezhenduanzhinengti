@@ -73,10 +73,28 @@ function clean(value: string | undefined | null): string {
 // resolver trusts real search evidence only). See src/diagnosis/competitors/.
 // ---------------------------------------------------------------------------
 
+/**
+ * Frozen Round-5.1 evidence-language policy: Chinese queries are the primary
+ * evidence source; English queries exist ONLY for official-identity
+ * confirmation and official-fact fallback (never as the main evidence base).
+ */
+export const ZH_CN_QUERY_POLICY = "ZH_CN_PRIMARY_WITH_OFFICIAL_FALLBACK" as const;
+
+/** True when a competitor name is pure ASCII (an international brand form). */
+function isAsciiName(name: string): boolean {
+  return /^[\x20-\x7e]+$/.test(name);
+}
+
 /** Pure: the official-domain-resolution query strings for one competitor name. */
 export function buildCompetitorDomainQueries(name: string): string[] {
   const n = clean(name);
   if (!n) return [];
+  // International (ASCII) brands resolve best through their English official
+  // site; Chinese search often surfaces marketplaces instead of the brand's
+  // own domain (Round-5 canary: GoPro unresolved via "GoPro 官网").
+  if (isAsciiName(n)) {
+    return [`${n} official website`, `${n} 官网`, `${n} 官方网站`];
+  }
   return [`${n} 官网`, `${n} 官方网站`, `${n} official site`];
 }
 
@@ -131,6 +149,15 @@ export function planSearchQueries(
     }
   }
 
+  // --- 信任证据 / 渠道 / 社区 (Round-5.1 §五 中文桶 6/8/9) -------------------
+  // Chinese trust, marketplace and community buckets so the domestic web is the
+  // PRIMARY evidence source (ZH_CN_PRIMARY_WITH_OFFICIAL_FALLBACK).
+  if (brand) {
+    push(`${brand} 案例 资质 认证`, "BRAND_DIRECT");
+    push(`${brand} 旗舰店`, "BRAND_DIRECT");
+    push(`${brand} 知乎 评测`, "BRAND_DIRECT");
+  }
+
   // --- 购买决策 (PURCHASE_DECISION) ----------------------------------------
   if (region && industry) {
     push(`${region} ${industry} 供应商 推荐`, "PURCHASE_DECISION");
@@ -142,6 +169,7 @@ export function planSearchQueries(
   }
   if (industry) {
     push(`${industry} 选型 对比 注意事项`, "PURCHASE_DECISION");
+    push(`${industry} 行业 媒体 报道`, "PURCHASE_DECISION");
   }
   for (const question of profile.unresolvedQuestions ?? []) {
     push(question, "PURCHASE_DECISION");

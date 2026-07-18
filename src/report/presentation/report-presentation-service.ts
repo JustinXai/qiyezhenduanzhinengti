@@ -27,6 +27,10 @@ import type {
   Strength,
 } from "../../contracts";
 import { sanitizeEvidenceUrl } from "./evidence-url";
+import {
+  computeMeasurementComposition,
+  estimationNoticeFor,
+} from "./measurement-composition";
 
 // `CompetitorGap` is exported from contracts only as a Zod value; derive the
 // element type from the Canonical report to avoid duplicating the shape.
@@ -200,12 +204,26 @@ const DIMENSION_LABEL: Record<(typeof SCORE_DIMENSION_ORDER)[number], string> = 
   aiVisibility: "AI 可见度",
 };
 
+// Round-5.1 §四 frozen public mappings — internal enums NEVER surface raw.
 const MEASUREMENT_LABEL = {
   MEASURED: "实测",
-  ESTIMATED: "估算",
+  ESTIMATED: "公开网页估算",
   INSUFFICIENT_EVIDENCE: "证据不足",
-  PROVIDER_FAILED: "采集失败",
+  PROVIDER_FAILED: "暂未测得",
 } as const;
+
+/** Public Chinese labels for evidence support levels (UNSUPPORTED is never public). */
+const SUPPORT_PUBLIC_LABEL: Record<Exclude<EvidenceSupportLevel, "UNSUPPORTED">, string> = {
+  DIRECT_SUPPORT: "直接支持",
+  PARTIAL_SUPPORT: "部分支持",
+  CONTEXT_ONLY: "背景参考",
+};
+
+const SOURCE_TYPE_PUBLIC_LABEL: Record<EvidenceItem["sourceType"], string> = {
+  FIRST_PARTY_EVIDENCE: "企业官方来源",
+  OBSERVED_WEB_EVIDENCE: "公开网络来源",
+  COMPETITOR_WEB_EVIDENCE: "竞品官方来源",
+};
 
 function buildMeasurementStatusSummary(report: DiagnosisReport): string {
   const counts = new Map<keyof typeof MEASUREMENT_LABEL, number>();
@@ -241,7 +259,8 @@ function buildHeadlineConclusion(
   const clauses = [`『${brand}』当前 GEO可见度基础指数为 ${Math.round(overall)} 分(覆盖率 ${coveragePct}%)`];
   if (topStrength) clauses.push(`已具备优势:${topStrength.statement}`);
   if (topIssue) clauses.push(`最需优先处理:${topIssue.statement}`);
-  return `${clauses.join(";")}。`;
+  // Round-5.1 §四: unified full-width Chinese punctuation in composed prose.
+  return `${clauses.join("；")}。`;
 }
 
 // ---------------------------------------------------------------------------
@@ -305,15 +324,20 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
   const topIssue = rankedIssues[0] ?? null;
   const topOpportunity = rankedOpportunities[0] ?? null;
 
+  const composition = computeMeasurementComposition(report.scores);
+
   return {
     diagnosisId: report.diagnosisId,
     publicToken: report.publicToken,
+    reportLanguage: report.reportLanguage,
     brandName: report.companyProfile.brandName,
     reportDate: report.generatedAt,
     headlineConclusion: buildHeadlineConclusion(report, topStrength, topIssue),
     overallScore: report.scores.overallScore,
     scoreCoverage: report.scores.scoreCoverage,
     measurementStatusSummary: buildMeasurementStatusSummary(report),
+    measurementComposition: composition,
+    estimationNotice: estimationNoticeFor(composition),
     topStrength,
     topIssue,
     topOpportunity,
@@ -343,19 +367,33 @@ export function toDeepReportViewModel(report: DiagnosisReport): DeepReportViewMo
   };
 }
 
+/** Chinese customer summary for one evidence item (title/snippet keep原语言). */
+function buildEvidenceSummaryZh(item: EvidenceItem): string {
+  const source = SOURCE_TYPE_PUBLIC_LABEL[item.sourceType];
+  const support =
+    item.supportLevel === "UNSUPPORTED" ? "背景参考" : SUPPORT_PUBLIC_LABEL[item.supportLevel];
+  return `来自 ${item.sourceDomain} 的${source},在本报告中作为${support}证据使用。`;
+}
+
 export function toEvidenceViewModel(report: DiagnosisReport): EvidenceViewModel {
   return {
-    items: report.evidence.map((item) => ({
-      id: item.id,
-      title: item.title,
-      sourceDomain: item.sourceDomain,
-      sourceType: item.sourceType,
-      authorityLevel: item.authorityLevel,
-      supportLevel: item.supportLevel,
-      fetchedAt: item.fetchedAt,
-      snippet: item.snippet,
-      url: sanitizeEvidenceUrl(item.url),
-    })),
+    items: report.evidence
+      // §四: UNSUPPORTED never surfaces in the public evidence list.
+      .filter((item) => item.supportLevel !== "UNSUPPORTED")
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        sourceDomain: item.sourceDomain,
+        sourceType: item.sourceType,
+        authorityLevel: item.authorityLevel,
+        supportLevel: item.supportLevel,
+        fetchedAt: item.fetchedAt,
+        snippet: item.snippet,
+        url: sanitizeEvidenceUrl(item.url),
+        summaryZh: buildEvidenceSummaryZh(item),
+        supportLabel: SUPPORT_PUBLIC_LABEL[item.supportLevel as Exclude<EvidenceSupportLevel, "UNSUPPORTED">],
+        sourceTypeLabel: SOURCE_TYPE_PUBLIC_LABEL[item.sourceType],
+      })),
   };
 }
 

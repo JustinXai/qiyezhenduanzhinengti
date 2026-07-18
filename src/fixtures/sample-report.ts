@@ -34,6 +34,7 @@ const FROZEN_DEMO_DISCLAIMER = DemonstrationFix.shape.disclaimer.value;
 const SAMPLE: DiagnosisReportType = {
   reportContractVersion: REPORT_CONTRACT_VERSION,
   scoreContractVersion: SCORE_CONTRACT_VERSION,
+  reportLanguage: "zh-CN",
   diagnosisId: "diag_sample_0001",
   publicToken: "tok_sample_0001",
   generatedAt: "2026-07-18T00:00:00.000Z",

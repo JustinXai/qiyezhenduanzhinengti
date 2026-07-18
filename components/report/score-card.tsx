@@ -1,4 +1,4 @@
-import type { ScoreBlock } from "../../src/contracts";
+import type { MeasurementComposition, ScoreBlock } from "../../src/contracts";
 import { SCORE_DIMENSION_WEIGHTS } from "../../src/contracts";
 import {
   DIMENSION_LABELS,
@@ -13,14 +13,17 @@ import { Badge } from "./badges";
 interface ScoreHeadlineProps {
   overallScore: number | null;
   scoreCoverage: number;
+  /** Round-5.1 §八: 实测/公开网页估算 weight shares shown next to coverage. */
+  composition?: MeasurementComposition;
 }
 
 /**
  * The composite index headline (Quick module 1). Renders the frozen name
  * "GEO可见度基础指数". A null score (coverage < 70%) is shown as "暂不评分",
- * never as 0.
+ * never as 0. Coverage is always accompanied by the measurement composition
+ * (never a bare "覆盖率100%").
  */
-export function ScoreHeadline({ overallScore, scoreCoverage }: ScoreHeadlineProps) {
+export function ScoreHeadline({ overallScore, scoreCoverage, composition }: ScoreHeadlineProps) {
   const hasScore = overallScore !== null;
   return (
     // data-testid="geo-index" wraps the whole composite-index headline (frozen
@@ -37,7 +40,19 @@ export function ScoreHeadline({ overallScore, scoreCoverage }: ScoreHeadlineProp
           <span className="text-lg font-semibold text-neutral-200">覆盖不足,暂不评分</span>
         )}
       </div>
-      <p className="mt-2 text-xs text-neutral-400">评分覆盖率 {formatPercent(scoreCoverage)}</p>
+      <p className="mt-2 text-xs text-neutral-400">
+        有效评分覆盖率 {formatPercent(scoreCoverage)}
+        {composition && (
+          <span data-testid="measurement-composition">
+            {" · 实测 "}
+            {formatPercent(composition.measuredWeight)}
+            {" · 公开网页估算 "}
+            {formatPercent(composition.estimatedWeight)}
+            {composition.insufficientWeight > 0 && ` · 证据不足 ${formatPercent(composition.insufficientWeight)}`}
+            {composition.providerFailedWeight > 0 && ` · 暂未测得 ${formatPercent(composition.providerFailedWeight)}`}
+          </span>
+        )}
+      </p>
     </div>
   );
 }

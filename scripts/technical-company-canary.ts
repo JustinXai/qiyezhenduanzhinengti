@@ -27,8 +27,9 @@ import { parseServerEnv } from "../src/runtime/server-env";
 import { technicalCanaryAuthorized } from "../src/runtime/create-runtime";
 import { TECHNICAL_COMPANY_CANARY_V1 } from "../src/diagnosis/orchestration/real-seams";
 import { assertUrlAllowed } from "../src/security/crawler/ssrf-guard";
-import { countQuickVisibleChars } from "../src/report/validation";
+import { chinesePublicReportGuard, countQuickVisibleChars } from "../src/report/validation";
 import { presentReport } from "../src/report/presentation";
+import { DiagnosisReport as DiagnosisReportSchema } from "../src/contracts";
 import type { DiagnosisReport } from "../src/contracts";
 import { findBannedTerms } from "../tests/fixtures/banned-terms";
 
@@ -369,6 +370,27 @@ function runTrustChecks(report: DiagnosisReport, publicJson: string): TrustCheck
     report.demonstrationFix === null || report.demonstrationFix.evidenceIds.length > 0,
     report.demonstrationFix === null ? "null (allowed)" : "has evidence",
   );
+
+  // Round-5.1 中文成交版 checks over the SAME persisted canonical report.
+  const views = presentReport(report);
+  push("report-language-zh-cn", report.reportLanguage === "zh-CN", String(report.reportLanguage));
+  const zh = chinesePublicReportGuard(views);
+  push(
+    "chinese-public-report-guard",
+    zh.ok,
+    zh.ok ? "clean" : zh.violations.map((v) => `${v.rule}@${v.field}`).slice(0, 3).join(","),
+  );
+  const comp = views.quick.measurementComposition;
+  push(
+    "measurement-composition-present",
+    Math.round((comp.measuredWeight + comp.estimatedWeight + comp.insufficientWeight + comp.providerFailedWeight) * 100) === 100,
+    `实测${Math.round(comp.measuredWeight * 100)}%·估算${Math.round(comp.estimatedWeight * 100)}%`,
+  );
+  push(
+    "estimation-notice-when-estimated-dominates",
+    comp.estimatedWeight <= comp.measuredWeight || views.quick.estimationNotice !== null,
+    views.quick.estimationNotice ? "notice shown" : "not required",
+  );
   return checks;
 }
 
@@ -604,6 +626,9 @@ function readStoredRun(): StoredRun {
       .prepare("SELECT canonical_json cj FROM reports WHERE diagnosis_id = ?")
       .get(row.id) as { cj: string } | undefined;
     if (!rep) fail("STORAGE_FAILURE", "no stored report for the diagnosis");
+    // Re-validate through the CONTRACT (same defense-in-depth as the API read
+    // path) so schema defaults — e.g. reportLanguage on pre-field rows — apply.
+    const parsedReport = DiagnosisReportSchema.parse(JSON.parse(rep.cj));
     const checkpoints = (
       db
         .prepare("SELECT stage, completed_at t FROM analysis_checkpoints WHERE diagnosis_id = ? ORDER BY t")
@@ -620,7 +645,7 @@ function readStoredRun(): StoredRun {
       status: row.status,
       createdAtSec: row.c,
       updatedAtSec: row.u,
-      report: JSON.parse(rep.cj) as DiagnosisReport,
+      report: parsedReport,
       checkpoints,
       usageTimes,
     };

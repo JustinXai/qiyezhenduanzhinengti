@@ -48,9 +48,12 @@ test.describe("Round-3 canaries (page, 390px, MOCK)", () => {
       industry: "工业自动化设备",
     });
     await page.goto(path);
-    for (let i = 1; i <= 4; i += 1) {
-      await expect(page.getByTestId(`quick-module-${i}`)).toBeVisible();
+    for (const key of ["summary", "ai", "issues"]) {
+      await expect(page.getByTestId(`quick-module-${key}`)).toBeVisible();
     }
+    // No competitor was provided → the module is omitted entirely (Round-5.1
+    // 空模块不保留空壳), never rendered as an empty shell.
+    await expect(page.getByTestId("quick-module-competitor")).toHaveCount(0);
     await expect(page.getByTestId("geo-index")).toContainText("GEO可见度基础指数");
     await expect(page.getByTestId("primary-cta")).toContainText("预约报告解读");
     await assertNoLeakOrBannedCopy(await page.locator("body").innerText());
@@ -62,7 +65,7 @@ test.describe("Round-3 canaries (page, 390px, MOCK)", () => {
       brandName: "金丝雀乙",
     });
     await page.goto(path);
-    await expect(page.getByTestId("quick-module-1")).toBeVisible();
+    await expect(page.getByTestId("quick-module-summary")).toBeVisible();
     const body = await page.locator("body").innerText();
     // The unbounded negative claim must NOT appear as a customer-facing fact.
     expect(body).not.toContain("缺少面向采购决策的验收说明");
@@ -76,7 +79,7 @@ test.describe("Round-3 canaries (page, 390px, MOCK)", () => {
       competitors: ["星辰科技"],
     });
     await page.goto(path);
-    const module3 = page.getByTestId("quick-module-3");
+    const module3 = page.getByTestId("quick-module-competitor");
     await expect(module3).toBeVisible();
     await expect(module3).toContainText("证据不足");
     await assertNoLeakOrBannedCopy(await page.locator("body").innerText());
