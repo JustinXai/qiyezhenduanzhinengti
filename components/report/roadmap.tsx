@@ -1,22 +1,25 @@
 // 三阶段路线图 (docs/REPORT_CONTRACT.md §7). Client version shows phase GOALS
 // and expected outcomes only — never weekly tasks, hours, material lists,
-// pricing, acceptance criteria or a paid SOW.
+// pricing, acceptance criteria or a paid SOW. The frozen phase-goal names come
+// from the single product-copy source; the outcome prose is presentation UI.
+
+import { ROADMAP_PHASE_GOALS } from "../../src/product/customer-copy";
 
 const PHASES = [
   {
     phase: "阶段一",
-    goal: "统一品牌与业务表达",
+    goal: ROADMAP_PHASE_GOALS[0],
     outcome: "让客户与 AI 在首屏就能准确理解企业是谁、为谁解决什么问题。",
   },
   {
     phase: "阶段二",
-    goal: "覆盖高意向客户问题",
-    outcome: "围绕采购决策补齐结构化内容,减少高意向客户在比价阶段的信息缺口。",
+    goal: ROADMAP_PHASE_GOALS[1],
+    outcome: "围绕采购决策补齐结构化内容，减少高意向客户在比价阶段的信息缺口。",
   },
   {
     phase: "阶段三",
-    goal: "持续测试和更新",
-    outcome: "定期复测 AI 问答与内容表现,按证据持续调整,而非一次性交付。",
+    goal: ROADMAP_PHASE_GOALS[2],
+    outcome: "定期复测 AI 问答与内容表现，按证据持续调整，而非一次性交付。",
   },
 ] as const;
 

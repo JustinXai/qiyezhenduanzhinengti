@@ -14,28 +14,24 @@
 
 import type { DiagnosisReport, QuickReportViewModel } from "../../contracts";
 import type { GuardResult, GuardViolation } from "../../contracts/guard-types";
+import {
+  BANNED_MARKETING_PHRASES,
+  PRIMARY_CTA_LABEL,
+  SECONDARY_CTA_LABEL,
+} from "../../product/customer-copy";
 
-/** docs/REPORT_CONTRACT.md §8 — frozen CTA labels. */
-export const PRIMARY_CTA_LABEL = "预约报告解读";
-export const SECONDARY_CTA_LABEL = "获取企业GEO优化方案";
+/**
+ * docs/REPORT_CONTRACT.md §8 — frozen CTA labels. Sourced from the single
+ * product-copy module (src/product/customer-copy.ts) so the guard validates
+ * the exact literals the UI renders. Re-exported for existing importers.
+ */
+export { PRIMARY_CTA_LABEL, SECONDARY_CTA_LABEL };
 
 /** docs/REPORT_CONTRACT.md — Quick target ~1800 visible CJK characters. */
 export const QUICK_CHARACTER_BUDGET = 1800;
 
-/** docs/PRODUCT_TRUTH_RULES.md §9 — banned marketing phrases. */
-export const BANNED_PHRASES: readonly string[] = [
-  "提升AI推荐概率",
-  "显著提升",
-  "保证提升",
-  "转化为实际商机",
-  "快速获得客户",
-  "保证排名",
-  "保证流量",
-  "保证线索",
-  "保证收入",
-  "不优化就会失去市场",
-  "竞品正在抢走你的客户",
-];
+/** docs/PRODUCT_TRUTH_RULES.md §9 — banned marketing phrases (single source). */
+export const BANNED_PHRASES: readonly string[] = BANNED_MARKETING_PHRASES;
 
 export interface CtaGuardInput {
   report: DiagnosisReport;

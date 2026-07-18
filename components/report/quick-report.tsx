@@ -8,6 +8,7 @@ import { DemonstrationFixCard } from "./demonstration-fix";
 import { Roadmap } from "./roadmap";
 import { CtaSection } from "./cta-section";
 import { formatDate } from "./labels";
+import { PRIMARY_CTA_LABEL } from "../../src/product/customer-copy";
 
 interface QuickReportProps {
   vm: QuickReportViewModel;
@@ -48,7 +49,7 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
               data-testid="primary-cta"
               className="flex-1 rounded-lg bg-neutral-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
             >
-              预约报告解读
+              {PRIMARY_CTA_LABEL}
             </button>
             <button
               type="button"

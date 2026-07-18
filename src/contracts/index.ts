@@ -173,7 +173,11 @@ export const DemonstrationFix = z.object({
   geoTeamDeliverable: z.string(),
   evidenceIds: z.array(z.string()).min(1),
   disclaimer: z.literal(
-    "示范内容仅用于展示优化方向,正式发布前需结合企业真实材料确认。",
+    // OQ-1 (Agent L, docs/REQUIREMENTS_TRACEABILITY.md): full-width comma
+    // 「，」U+FF0C, aligning this single source of truth with
+    // docs/REPORT_CONTRACT.md §5. Consumers must read it via
+    // `DemonstrationFix.shape.disclaimer.value`, never retype it.
+    "示范内容仅用于展示优化方向，正式发布前需结合企业真实材料确认。",
   ),
 });
 export type DemonstrationFix = z.infer<typeof DemonstrationFix>;
