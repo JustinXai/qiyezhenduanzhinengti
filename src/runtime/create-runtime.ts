@@ -8,11 +8,14 @@
 //     seams from ./live-seams (real Agent C/D code, deterministic mock providers,
 //     no network, no provider cost). The Claim–Evidence verifier defaults to the
 //     deterministic (zero provider call) strategy inside the state machine.
-//   REAL: must pass a preflight (required provider config + explicit canary
-//     authorization). It NEVER silently falls back to MOCK; when it cannot be
-//     satisfied it throws a typed error (REAL_PROVIDER_NOT_AUTHORIZED /
-//     PROVIDER_CANARY_REQUIRED). Real Bocha/DeepSeek execution is NOT enabled in
-//     this pre-real-sample build.
+//   REAL (Round-5): requires the full preflight — provider config PLUS the
+//     independent server-side TECHNICAL_COMPANY_CANARY_AUTHORIZED=true switch
+//     with DIAGNOSIS_SMOKE_MODE=false. All three come ONLY from server env;
+//     no request field, query parameter or page input can enable them. When
+//     satisfied, the real seams (real Bocha + guarded crawler + real DeepSeek,
+//     frozen TECHNICAL_COMPANY_CANARY_V1 budget) are injected. It NEVER falls
+//     back to MOCK; an unsatisfied preflight throws a typed error
+//     (REAL_PROVIDER_NOT_AUTHORIZED / TECHNICAL_COMPANY_CANARY_NOT_AUTHORIZED).
 
 import { openMigratedDatabase } from "../storage/migrate";
 import { SqliteStorageAdapter } from "../storage/sqlite-adapter";
@@ -20,6 +23,7 @@ import {
   createLiveEvidencePipeline,
   createLiveReportProducer,
 } from "../diagnosis/orchestration/live-seams";
+import { createRealSeams } from "../diagnosis/orchestration/real-seams";
 import type {
   EvidencePipeline,
   ReportProducer,
@@ -34,6 +38,7 @@ export type ProviderMode = "MOCK" | "REAL";
 export const PROVIDER_ERROR = {
   NOT_AUTHORIZED: "REAL_PROVIDER_NOT_AUTHORIZED",
   CANARY_REQUIRED: "PROVIDER_CANARY_REQUIRED",
+  TECHNICAL_CANARY_NOT_AUTHORIZED: "TECHNICAL_COMPANY_CANARY_NOT_AUTHORIZED",
 } as const;
 
 export class ProviderModeError extends Error {
@@ -66,10 +71,22 @@ export function resolveProviderMode(env: Env = process.env): ProviderMode {
 const REAL_REQUIRED_KEYS = ["BOCHA_API_KEY", "DEEPSEEK_API_KEY"] as const;
 
 /**
- * Real-provider preflight. Returns null when real mode could proceed; otherwise a
+ * The independent full-diagnosis authorization switch (Round-5). Provider-canary
+ * authorization does NOT imply full-diagnosis authorization: a real diagnosis
+ * additionally requires TECHNICAL_COMPANY_CANARY_AUTHORIZED=true and
+ * DIAGNOSIS_SMOKE_MODE=false, both read ONLY from controlled server env —
+ * never from a request body, query string, header or page parameter.
+ */
+export function technicalCanaryAuthorized(env: Env = process.env): boolean {
+  const authorized =
+    (env.TECHNICAL_COMPANY_CANARY_AUTHORIZED ?? "").trim().toLowerCase() === "true";
+  const smokeOff = (env.DIAGNOSIS_SMOKE_MODE ?? "").trim().toLowerCase() === "false";
+  return authorized && smokeOff;
+}
+
+/**
+ * Real-provider preflight. Returns null when real mode may proceed; otherwise a
  * typed error. It NEVER returns mock providers as a fallback.
- * This build: real execution is not authorized, so a fully-configured real mode
- * still stops at PROVIDER_CANARY_REQUIRED.
  */
 export function realProviderPreflight(env: Env = process.env): ProviderModeError | null {
   const missing = REAL_REQUIRED_KEYS.filter((k) => !(env[k] && env[k]!.trim().length > 0));
@@ -77,16 +94,19 @@ export function realProviderPreflight(env: Env = process.env): ProviderModeError
     return new ProviderModeError(
       PROVIDER_ERROR.NOT_AUTHORIZED,
       `REAL provider mode is missing required configuration: ${missing.join(", ")}. ` +
-        "Real Bocha/DeepSeek runs are not authorized in this build.",
+        "Real Bocha/DeepSeek runs are not authorized without it.",
     );
   }
-  // Configured, but real execution still requires an authorized provider-canary
-  // phase that this build does not enable — never silently downgrade to mock.
-  return new ProviderModeError(
-    PROVIDER_ERROR.CANARY_REQUIRED,
-    "REAL provider mode requires an authorized provider-canary phase, which is not " +
-      "enabled in this pre-real-sample build.",
-  );
+  if (!technicalCanaryAuthorized(env)) {
+    // Configured, but the independent full-diagnosis switch is off — never
+    // silently downgrade to mock.
+    return new ProviderModeError(
+      PROVIDER_ERROR.TECHNICAL_CANARY_NOT_AUTHORIZED,
+      "REAL full diagnosis requires the server-side TECHNICAL_COMPANY_CANARY_AUTHORIZED=true " +
+        "switch with DIAGNOSIS_SMOKE_MODE=false.",
+    );
+  }
+  return null;
 }
 
 /** Select the evidence pipeline + report producer for a provider mode. */
@@ -95,8 +115,11 @@ export function buildProviders(
   env: Env = process.env,
 ): { evidence: EvidencePipeline; producer: ReportProducer } {
   if (mode === "REAL") {
+    const preflightError = realProviderPreflight(env);
     // Fail loud with a typed error; do NOT fall back to mock providers.
-    throw realProviderPreflight(env) ?? new ProviderModeError(PROVIDER_ERROR.CANARY_REQUIRED, "REAL not enabled.");
+    if (preflightError) throw preflightError;
+    const real = createRealSeams(env as NodeJS.ProcessEnv);
+    return { evidence: real.evidence, producer: real.producer };
   }
   // Explicit MOCK-MODE injection — deterministic scenario providers only.
   return {
