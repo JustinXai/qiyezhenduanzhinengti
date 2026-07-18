@@ -95,6 +95,10 @@ export const GeoOpportunityStageItem = ClaimStageBase.extend({
    * built core issue or the opportunity is dropped (INVALID_EVIDENCE_REFERENCE).
    */
   sourceIssueId: z.string().optional(),
+  /** §八 lineage: concrete GEO-implementable action (not "多发内容"). */
+  recommendedAction: z.string().optional(),
+  /** §八 lineage: why this is the FIRST thing to do. */
+  priorityReason: z.string().optional(),
 });
 export const CompetitorGapStageItem = z.object({
   competitorName: z.string(),

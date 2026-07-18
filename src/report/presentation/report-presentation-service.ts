@@ -31,6 +31,12 @@ import {
   computeMeasurementComposition,
   estimationNoticeFor,
 } from "./measurement-composition";
+import {
+  ZH_LANGUAGE_LABEL,
+  ZH_MEASUREMENT_LABEL,
+  ZH_SOURCE_TYPE_LABEL,
+  ZH_SUPPORT_LABEL,
+} from "./zh-labels";
 
 // `CompetitorGap` is exported from contracts only as a Zod value; derive the
 // element type from the Canonical report to avoid duplicating the shape.
@@ -204,26 +210,11 @@ const DIMENSION_LABEL: Record<(typeof SCORE_DIMENSION_ORDER)[number], string> = 
   aiVisibility: "AI 可见度",
 };
 
-// Round-5.1 §四 frozen public mappings — internal enums NEVER surface raw.
-const MEASUREMENT_LABEL = {
-  MEASURED: "实测",
-  ESTIMATED: "公开网页估算",
-  INSUFFICIENT_EVIDENCE: "证据不足",
-  PROVIDER_FAILED: "暂未测得",
-} as const;
-
-/** Public Chinese labels for evidence support levels (UNSUPPORTED is never public). */
-const SUPPORT_PUBLIC_LABEL: Record<Exclude<EvidenceSupportLevel, "UNSUPPORTED">, string> = {
-  DIRECT_SUPPORT: "直接支持",
-  PARTIAL_SUPPORT: "部分支持",
-  CONTEXT_ONLY: "背景参考",
-};
-
-const SOURCE_TYPE_PUBLIC_LABEL: Record<EvidenceItem["sourceType"], string> = {
-  FIRST_PARTY_EVIDENCE: "企业官方来源",
-  OBSERVED_WEB_EVIDENCE: "公开网络来源",
-  COMPETITOR_WEB_EVIDENCE: "竞品官方来源",
-};
+// Round-5.1 §四/§五 frozen public mappings — imported from the SINGLE program
+// source (./zh-labels); no surface maintains its own translation table.
+const MEASUREMENT_LABEL = ZH_MEASUREMENT_LABEL;
+const SUPPORT_PUBLIC_LABEL = ZH_SUPPORT_LABEL;
+const SOURCE_TYPE_PUBLIC_LABEL = ZH_SOURCE_TYPE_LABEL;
 
 function buildMeasurementStatusSummary(report: DiagnosisReport): string {
   const counts = new Map<keyof typeof MEASUREMENT_LABEL, number>();
@@ -358,6 +349,9 @@ export function toDeepReportViewModel(report: DiagnosisReport): DeepReportViewMo
     publicToken: report.publicToken,
     companyProfile: report.companyProfile,
     scores: report.scores,
+    // §八: Deep shows the SAME composition Quick shows — projected once here,
+    // never recomputed by the front-end.
+    measurementComposition: computeMeasurementComposition(report.scores),
     aiVisibilityTests: validAiTests,
     strengths: rankClaims(report.strengths, index),
     coreIssues: rankClaims(report.coreIssues, index),
@@ -393,6 +387,8 @@ export function toEvidenceViewModel(report: DiagnosisReport): EvidenceViewModel 
         summaryZh: buildEvidenceSummaryZh(item),
         supportLabel: SUPPORT_PUBLIC_LABEL[item.supportLevel as Exclude<EvidenceSupportLevel, "UNSUPPORTED">],
         sourceTypeLabel: SOURCE_TYPE_PUBLIC_LABEL[item.sourceType],
+        // 中文来源 / 英文官方补充 — only when the registry recorded a language.
+        ...(item.language ? { languageLabel: ZH_LANGUAGE_LABEL[item.language] } : {}),
       })),
   };
 }

@@ -45,6 +45,10 @@ import {
   computeMeasurementComposition,
   estimationNoticeFor,
 } from "../src/report/presentation/measurement-composition";
+import {
+  ZH_SOURCE_TYPE_LABEL,
+  zhSupportLabel,
+} from "../src/report/presentation/zh-labels";
 
 let step = 0;
 function ok(msg: string): void {
@@ -200,19 +204,6 @@ function projectDeep(report: DiagnosisReportType): DeepReportViewModelType {
   };
 }
 
-const SMOKE_SOURCE_LABEL = {
-  FIRST_PARTY_EVIDENCE: "企业官方来源",
-  OBSERVED_WEB_EVIDENCE: "公开网络来源",
-  COMPETITOR_WEB_EVIDENCE: "竞品官方来源",
-} as const;
-
-const SMOKE_SUPPORT_LABEL = {
-  DIRECT_SUPPORT: "直接支持",
-  PARTIAL_SUPPORT: "部分支持",
-  CONTEXT_ONLY: "背景参考",
-  UNSUPPORTED: "背景参考", // UNSUPPORTED never renders publicly; smoke maps safe
-} as const;
-
 function projectEvidence(report: DiagnosisReportType): EvidenceViewModelType {
   return {
     items: report.evidence.map((e) => ({
@@ -225,9 +216,10 @@ function projectEvidence(report: DiagnosisReportType): EvidenceViewModelType {
       fetchedAt: e.fetchedAt,
       snippet: e.snippet,
       url: e.url,
-      summaryZh: `来自 ${e.sourceDomain} 的${SMOKE_SOURCE_LABEL[e.sourceType]},在本报告中作为${SMOKE_SUPPORT_LABEL[e.supportLevel]}证据使用。`,
-      supportLabel: SMOKE_SUPPORT_LABEL[e.supportLevel],
-      sourceTypeLabel: SMOKE_SOURCE_LABEL[e.sourceType],
+      // Labels come from the SINGLE zh source (§五) — no smoke-local table.
+      summaryZh: `来自 ${e.sourceDomain} 的${ZH_SOURCE_TYPE_LABEL[e.sourceType]},在本报告中作为${zhSupportLabel(e.supportLevel)}证据使用。`,
+      supportLabel: zhSupportLabel(e.supportLevel),
+      sourceTypeLabel: ZH_SOURCE_TYPE_LABEL[e.sourceType],
     })),
   };
 }

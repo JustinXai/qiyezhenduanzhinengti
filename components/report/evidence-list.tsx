@@ -31,6 +31,11 @@ export function EvidenceList({ items }: { items: readonly EvidenceItemView[] }) 
                 <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
                   <SourceTypeBadge type={item.sourceType} />
                   <SupportLevelBadge level={item.supportLevel} />
+                  {item.languageLabel && (
+                    <span className="inline-flex items-center rounded-full bg-neutral-50 px-2 py-0.5 text-[11px] font-medium text-neutral-500">
+                      {item.languageLabel}
+                    </span>
+                  )}
                 </span>
               </span>
               <span className="shrink-0 text-xs text-neutral-400 group-open:hidden">展开</span>

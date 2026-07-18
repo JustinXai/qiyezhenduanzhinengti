@@ -61,6 +61,10 @@ export const EvidenceItem = z.object({
   language: z.enum(["zh", "other"]).optional(),
   /** Source tier per the frozen中文证据 priority ladder. */
   sourceTier: EvidenceSourceTier.optional(),
+  /** Canonical host after www/trailing-dot normalization (dedupe basis). */
+  normalizedDomain: z.string().optional(),
+  /** Deterministic merge key (normalizedDomain + normalized title head). */
+  dedupeKey: z.string().optional(),
 });
 export type EvidenceItem = z.infer<typeof EvidenceItem>;
 
@@ -168,6 +172,14 @@ export type Strength = z.infer<typeof Strength>;
 export const GeoOpportunity = ClaimBase.extend({
   customerQuestion: z.string(),
   contentGap: z.string(),
+  // Round-5.1 §八 opportunity lineage. Optional so pre-field canonical rows
+  // still parse; NEW generations populate them (prompt + builder enforce).
+  /** The published core issue this opportunity answers ("iss_N"). */
+  sourceIssueId: z.string().optional(),
+  /** Concrete, GEO-implementable action (not a generic "多发内容" line). */
+  recommendedAction: z.string().optional(),
+  /** Why this is worth doing FIRST (ties back to evidence + business impact). */
+  priorityReason: z.string().optional(),
 });
 export type GeoOpportunity = z.infer<typeof GeoOpportunity>;
 
@@ -287,6 +299,8 @@ export const DeepReportViewModel = z.object({
   publicToken: z.string(),
   companyProfile: CompanyProfile,
   scores: ScoreBlock,
+  /** §八: same composition as Quick (projected once, displayed consistently). */
+  measurementComposition: MeasurementComposition.optional(),
   aiVisibilityTests: z.array(AIVisibilityTest),
   strengths: z.array(Strength),
   coreIssues: z.array(CoreIssue),
@@ -317,6 +331,8 @@ export const EvidenceViewModel = z.object({
       summaryZh: z.string().optional(),
       supportLabel: z.string().optional(),
       sourceTypeLabel: z.string().optional(),
+      /** 中文来源 / 英文官方补充 (from the recorded evidence language). */
+      languageLabel: z.string().optional(),
     }),
   ),
 });

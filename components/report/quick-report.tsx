@@ -45,13 +45,15 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
           <p className="text-xs text-neutral-500">报告日期 {formatDate(vm.reportDate)}</p>
         </div>
 
+        {/* §十 固定决策顺序: 1.一句话结论 → 2.评分与测量构成 → 问题/机会 → CTA */}
+        <p className="text-sm font-medium leading-relaxed text-neutral-900">{vm.headlineConclusion}</p>
+
         <ScoreHeadline
           overallScore={vm.overallScore}
           scoreCoverage={vm.scoreCoverage}
           composition={vm.measurementComposition}
         />
 
-        <p className="text-sm leading-relaxed text-neutral-800">{vm.headlineConclusion}</p>
         <p className="text-xs text-neutral-500">{vm.measurementStatusSummary}</p>
         {vm.estimationNotice && (
           <p

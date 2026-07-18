@@ -121,6 +121,10 @@ function buildGeoOpportunities(
       customerQuestion: item.customerQuestion,
       contentGap: item.contentGap,
       evidenceIds,
+      // §八 lineage — carried into the canonical report when the stage supplied it.
+      ...(item.sourceIssueId !== undefined ? { sourceIssueId: item.sourceIssueId } : {}),
+      ...(item.recommendedAction !== undefined ? { recommendedAction: item.recommendedAction } : {}),
+      ...(item.priorityReason !== undefined ? { priorityReason: item.priorityReason } : {}),
     });
   });
   return out;

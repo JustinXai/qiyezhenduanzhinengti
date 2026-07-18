@@ -156,6 +156,11 @@ export function planSearchQueries(
     push(`${brand} 案例 资质 认证`, "BRAND_DIRECT");
     push(`${brand} 旗舰店`, "BRAND_DIRECT");
     push(`${brand} 知乎 评测`, "BRAND_DIRECT");
+    push(`${brand} 售后 服务 保障`, "BRAND_DIRECT");
+    push(`${brand} 渠道 经销 合作`, "BRAND_DIRECT");
+  }
+  if (productOrService) {
+    push(`${productOrService} 使用场景`, "PURCHASE_DECISION");
   }
 
   // --- 购买决策 (PURCHASE_DECISION) ----------------------------------------

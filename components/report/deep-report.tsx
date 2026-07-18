@@ -42,6 +42,16 @@ export function DeepReport({ vm }: { vm: DeepReportViewModel }) {
       </Section>
 
       <Section title="五项评分" subtitle="权重固定,分数直接来自诊断,不在展示层重算">
+        {vm.measurementComposition && (
+          <p data-testid="deep-composition" className="mb-3 rounded-lg bg-neutral-50 p-2.5 text-xs text-neutral-600">
+            测量构成:实测 {Math.round(vm.measurementComposition.measuredWeight * 100)}% ·
+            公开网页估算 {Math.round(vm.measurementComposition.estimatedWeight * 100)}%
+            {vm.measurementComposition.insufficientWeight > 0 &&
+              ` · 证据不足 ${Math.round(vm.measurementComposition.insufficientWeight * 100)}%`}
+            {vm.measurementComposition.providerFailedWeight > 0 &&
+              ` · 暂未测得 ${Math.round(vm.measurementComposition.providerFailedWeight * 100)}%`}
+          </p>
+        )}
         <ScoreBreakdown scores={vm.scores} />
       </Section>
 

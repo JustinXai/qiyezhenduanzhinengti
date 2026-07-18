@@ -69,6 +69,8 @@ export function OpportunityItem({ opportunity }: { opportunity: GeoOpportunity }
       <Row term="客户在问">{opportunity.customerQuestion}</Row>
       <Row term="内容空位">{opportunity.contentGap}</Row>
       <Row term="业务影响">{opportunity.businessImpact}</Row>
+      {opportunity.recommendedAction && <Row term="建议动作">{opportunity.recommendedAction}</Row>}
+      {opportunity.priorityReason && <Row term="优先理由">{opportunity.priorityReason}</Row>}
     </CardShell>
   );
 }

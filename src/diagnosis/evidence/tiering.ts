@@ -14,7 +14,7 @@
 // distribution (§六 统计) without any provider call.
 // ============================================================================
 
-import type { EvidenceItem, EvidenceSourceTier } from "../../contracts";
+import type { DiagnosisReport, EvidenceItem, EvidenceSourceTier } from "../../contracts";
 
 /** Well-known Chinese marketplace domains (tier D; capped at 2 items each). */
 export const MARKETPLACE_DOMAINS = [
@@ -89,6 +89,19 @@ function normalizeTitle(title: string): string {
     .slice(0, 60);
 }
 
+/** Canonical host: lowercase, strip one leading www. and any trailing dot. */
+export function normalizeDomain(host: string): string {
+  let h = host.trim().toLowerCase();
+  if (h.endsWith(".")) h = h.slice(0, -1);
+  if (h.startsWith("www.")) h = h.slice(4);
+  return h;
+}
+
+/** Deterministic merge key: normalizedDomain + normalized title head. */
+export function dedupeKeyOf(item: Pick<EvidenceItem, "sourceDomain" | "title">): string {
+  return `${normalizeDomain(item.sourceDomain)}::${normalizeTitle(item.title)}`;
+}
+
 export interface EvidenceCurationStats {
   before: number;
   after: number;
@@ -115,7 +128,13 @@ const DOMAIN_CAP = 2;
 export function curateEvidence(items: readonly EvidenceItem[]): CuratedEvidence {
   const annotated = items.map((item) => {
     const language = detectLanguage(`${item.title} ${item.snippet}`);
-    return { ...item, language, sourceTier: classifyTier(item, language) };
+    return {
+      ...item,
+      language,
+      sourceTier: classifyTier(item, language),
+      normalizedDomain: normalizeDomain(item.sourceDomain),
+      dedupeKey: dedupeKeyOf(item),
+    };
   });
 
   const seenTitleByDomain = new Set<string>();
@@ -125,7 +144,7 @@ export function curateEvidence(items: readonly EvidenceItem[]): CuratedEvidence 
   let cappedByDomain = 0;
 
   for (const item of annotated) {
-    const titleKey = `${item.sourceDomain}::${normalizeTitle(item.title)}`;
+    const titleKey = item.dedupeKey;
     if (normalizeTitle(item.title).length > 0 && seenTitleByDomain.has(titleKey)) {
       duplicatesMerged += 1; // same-domain near-identical title → merged away
       continue;
@@ -163,5 +182,42 @@ export function curateEvidence(items: readonly EvidenceItem[]): CuratedEvidence 
       chineseCount,
       englishOfficialFallbackCount,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Content-yield statistics (§七) — computed over a CANONICAL report.
+// ---------------------------------------------------------------------------
+
+export interface ContentYieldStats {
+  evidenceTotal: number;
+  evidenceUsedByClaims: number;
+  unusedEvidenceCount: number;
+  /** used-by-published-claims / total (after dedup). Never inflated by deletion. */
+  contentYieldRate: number;
+  opportunityCount: number;
+  demonstrationFixCount: number;
+}
+
+/** Which evidence actually backs the PUBLISHED claims of a report. */
+export function computeContentYield(report: DiagnosisReport): ContentYieldStats {
+  const used = new Set<string>();
+  const claimSets = [
+    ...report.strengths.map((c) => c.evidenceIds),
+    ...report.coreIssues.map((c) => c.evidenceIds),
+    ...report.geoOpportunities.map((c) => c.evidenceIds),
+    ...report.competitorGaps.map((c) => c.evidenceIds),
+    ...(report.demonstrationFix ? [report.demonstrationFix.evidenceIds] : []),
+  ];
+  for (const ids of claimSets) for (const id of ids) used.add(id);
+  const usedInReport = report.evidence.filter((e) => used.has(e.id)).length;
+  const total = report.evidence.length;
+  return {
+    evidenceTotal: total,
+    evidenceUsedByClaims: usedInReport,
+    unusedEvidenceCount: total - usedInReport,
+    contentYieldRate: total === 0 ? 0 : Math.round((usedInReport / total) * 1000) / 1000,
+    opportunityCount: report.geoOpportunities.length,
+    demonstrationFixCount: report.demonstrationFix ? 1 : 0,
   };
 }
