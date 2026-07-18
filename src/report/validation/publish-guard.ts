@@ -13,6 +13,10 @@
 // ============================================================================
 
 import type { DiagnosisReport } from "../../contracts";
+import type {
+  ClaimEvidenceRelation,
+  EvidenceCoverage,
+} from "../../contracts/claim-evidence";
 import type { GuardResult } from "../../contracts/guard-types";
 import { combineGuardResults } from "../../contracts/guard-types";
 import { evidenceGuard } from "./evidence-guard";
@@ -25,6 +29,13 @@ import { ctaGuard } from "./cta-guard";
 
 export interface PublishGuardInput {
   report: DiagnosisReport;
+  /**
+   * Verified Claim–Evidence relations — the SOLE basis for the §4 support
+   * decision (ROUND-3). Produced by the ClaimEvidenceVerifier stage.
+   */
+  relations: readonly ClaimEvidenceRelation[];
+  /** The run's measurement boundary — required to gate negative/missing claims. */
+  coverage: EvidenceCoverage;
   /** Optional Quick/Deep/Evidence projections to validate alongside the report. */
   viewModels?: ReportViewModels;
   /** Optional CTA labels to check against the frozen literals. */
@@ -32,10 +43,10 @@ export interface PublishGuardInput {
 }
 
 export function publishGuard(input: PublishGuardInput): GuardResult {
-  const { report, viewModels, cta } = input;
+  const { report, relations, coverage, viewModels, cta } = input;
 
   const results: GuardResult[] = [
-    evidenceGuard(report),
+    evidenceGuard({ report, relations, coverage }),
     crossFieldGuard(report),
     ctaGuard({ report, quick: viewModels?.quick, cta }),
   ];

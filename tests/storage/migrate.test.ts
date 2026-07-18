@@ -15,6 +15,7 @@ describe("schema-driven migrate", () => {
       .sort();
     expect(names).toEqual([
       "analysis_checkpoints",
+      "claim_evidence_relations",
       "diagnosis_requests",
       "evidence",
       "provider_usage",
@@ -44,6 +45,7 @@ describe("schema-driven migrate", () => {
       .all() as { name: string }[];
     expect(rows.map((r) => r.name)).toEqual([
       "analysis_checkpoints",
+      "claim_evidence_relations",
       "diagnosis_requests",
       "evidence",
       "provider_usage",

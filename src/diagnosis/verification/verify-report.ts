@@ -21,11 +21,19 @@ import { classifyPolarity } from "./classify";
 import { clampVerdict } from "./clamp";
 import type { VerifiableClaim, VerifierStrategy, VerifyReportResult } from "./types";
 
-/** Reduce every claim-bearing entity in the report to a VerifiableClaim. */
+/** Reduce every claim-bearing entity in the report to a VerifiableClaim.
+ *
+ * Defensive against a not-yet-canonically-validated report (verification runs
+ * before the VALIDATING_REPORT Zod parse in the state machine): a malformed
+ * report simply yields no claims, and the canonical parse catches the shape. */
 export function extractVerifiableClaims(report: DiagnosisReport): VerifiableClaim[] {
   const claims: VerifiableClaim[] = [];
+  const coreIssues = Array.isArray(report.coreIssues) ? report.coreIssues : [];
+  const strengths = Array.isArray(report.strengths) ? report.strengths : [];
+  const geoOpportunities = Array.isArray(report.geoOpportunities) ? report.geoOpportunities : [];
+  const competitorGaps = Array.isArray(report.competitorGaps) ? report.competitorGaps : [];
 
-  for (const c of report.coreIssues) {
+  for (const c of coreIssues) {
     claims.push({
       id: c.id,
       kind: "coreIssue",
@@ -33,7 +41,7 @@ export function extractVerifiableClaims(report: DiagnosisReport): VerifiableClai
       candidateEvidenceIds: [...c.evidenceIds],
     });
   }
-  for (const s of report.strengths) {
+  for (const s of strengths) {
     claims.push({
       id: s.id,
       kind: "strength",
@@ -41,7 +49,7 @@ export function extractVerifiableClaims(report: DiagnosisReport): VerifiableClai
       candidateEvidenceIds: [...s.evidenceIds],
     });
   }
-  for (const g of report.geoOpportunities) {
+  for (const g of geoOpportunities) {
     claims.push({
       id: g.id,
       kind: "geoOpportunity",
@@ -49,7 +57,7 @@ export function extractVerifiableClaims(report: DiagnosisReport): VerifiableClai
       candidateEvidenceIds: [...g.evidenceIds],
     });
   }
-  for (const gap of report.competitorGaps) {
+  for (const gap of competitorGaps) {
     claims.push({
       id: gap.id,
       kind: "competitorGap",
@@ -72,7 +80,8 @@ export interface VerifyReportInput {
  */
 export async function verifyReport(input: VerifyReportInput): Promise<VerifyReportResult> {
   const { report, coverage, strategy } = input;
-  const evidenceById = new Map<string, EvidenceItem>(report.evidence.map((e) => [e.id, e]));
+  const evidenceList = Array.isArray(report.evidence) ? report.evidence : [];
+  const evidenceById = new Map<string, EvidenceItem>(evidenceList.map((e) => [e.id, e]));
   const claims = extractVerifiableClaims(report);
 
   const relations: ClaimEvidenceRelation[] = [];

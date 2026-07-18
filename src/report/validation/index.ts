@@ -17,7 +17,11 @@ export {
   type AIVisibilityComputation,
 } from "./ai-visibility-calculator";
 
-export { evidenceGuard, DUPLICATE_OPPORTUNITY_THRESHOLD } from "./evidence-guard";
+export {
+  evidenceGuard,
+  DUPLICATE_OPPORTUNITY_THRESHOLD,
+  type EvidenceGuardInput,
+} from "./evidence-guard";
 
 export {
   crossFieldGuard,

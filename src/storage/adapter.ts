@@ -11,6 +11,9 @@ export type DiagnosisStatus =
   | "CRAWLING"
   | "NORMALIZING_EVIDENCE"
   | "ANALYZING"
+  // Round-3: structured Claim–Evidence semantic verification, between ANALYZING
+  // and VALIDATING_REPORT. See docs/ARCHITECTURE.md state machine.
+  | "CLAIM_EVIDENCE_VERIFICATION"
   | "VALIDATING_REPORT"
   | "READY"
   | "FAILED";
@@ -53,6 +56,25 @@ export interface SaveReportInput {
 }
 
 export interface StoredReport extends SaveReportInput {
+  createdAt: Date;
+}
+
+// Round-3 additive: persisted Claim–Evidence relations (traceability — 职责 9).
+export interface ClaimEvidenceRelationRecordInput {
+  id: string;
+  diagnosisId: string;
+  claimId: string;
+  claimKind: string;
+  evidenceId: string;
+  supportLevel: string;
+  confidence: number;
+  justification: string | null;
+  basis: string;
+  verifierMode: string;
+  verifierVersion: string;
+}
+
+export interface ClaimEvidenceRelationRecord extends ClaimEvidenceRelationRecordInput {
   createdAt: Date;
 }
 
@@ -107,6 +129,12 @@ export interface StorageAdapter {
   // -- provider_usage ---------------------------------------------------------
   recordProviderUsage(input: ProviderUsageInput): Promise<void>;
   getProviderUsage(diagnosisId: string): Promise<ProviderUsageRecord[]>;
+
+  // -- claim_evidence_relations (Round-3, OPTIONAL) ---------------------------
+  // Optional so existing/alternative backends (in-memory test doubles) remain
+  // valid without implementing them; the state machine calls them only if present.
+  saveClaimEvidenceRelations?(items: ClaimEvidenceRelationRecordInput[]): Promise<void>;
+  getClaimEvidenceRelations?(diagnosisId: string): Promise<ClaimEvidenceRelationRecord[]>;
 
   // -- analysis_checkpoints ---------------------------------------------------
   saveCheckpoint(checkpoint: {

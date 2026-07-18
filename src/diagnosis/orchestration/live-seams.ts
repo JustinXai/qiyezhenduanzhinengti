@@ -13,19 +13,20 @@
 //                      normalized evidence ids) → buildReportFromStageOutputs (D)
 //                      ⇒ canonical DiagnosisReport (Zod-validated by D)
 //
-// SUPPORT-LEVEL SEAM (review item): C's normalizeEvidence conservatively marks
-// every item CONTEXT_ONLY ("不虚假精度"), but Agent B's §4 guard requires claims
-// to cite DIRECT_SUPPORT evidence. In a real run the DeepSeek analysis assesses
-// per-claim support; nothing in the current C/D code assigns it. Until that
-// assessment stage exists, `assessSupport` here stands in for it: first-party
-// and competitor own-domain pages that back a published claim are marked
-// DIRECT_SUPPORT; observed third-party mentions stay CONTEXT_ONLY. Whether this
-// belongs in Agent D's analysis is an open review question (see final report).
+// SUPPORT-LEVEL (ROUND-3): the old `assessSupport` seam is DELETED. It upgraded
+// first-party / competitor own-domain pages to DIRECT_SUPPORT purely from source
+// authority — exactly the "authority == semantic support" shortcut that Round-3
+// forbids. Evidence now keeps C's conservative CONTEXT_ONLY source default, and
+// per-claim semantic support is decided by the ClaimEvidenceVerifier stage in the
+// state machine (src/diagnosis/verification), never here. This seam also supplies
+// the run's EvidenceCoverage (measurement boundary) so negative/missing claims
+// can be bounded to "本次已检查的公开页面中未发现……".
 // ============================================================================
 
 import type { WebSearchProvider, WebSearchResultItem } from "../../providers/types";
 import type { StructuredCompletionProvider } from "../../providers/types";
 import type { EvidenceItem } from "../../contracts";
+import { deriveCoverage } from "../../contracts/claim-evidence";
 import type { DiagnosisInput } from "../../runtime/diagnosis-input";
 import { planSearchQueries } from "../search/query-planner";
 import { normalizeEvidence } from "../evidence/normalize";
@@ -142,6 +143,7 @@ interface SearchData {
   results: WebSearchResultItem[];
   companyDomains: string[];
   competitorDomains: string[];
+  executedQueries: string[];
 }
 
 export function createLiveEvidencePipeline(
@@ -174,6 +176,7 @@ export function createLiveEvidencePipeline(
         results,
         companyDomains: host ? [host] : [],
         competitorDomains: [SCENARIO_COMPETITOR_HOST],
+        executedQueries: planned.map((p) => p.query),
       };
       return {
         data,
@@ -198,21 +201,17 @@ export function createLiveEvidencePipeline(
         companyDomains: data.companyDomains,
         competitorDomains: data.competitorDomains,
       });
-      return { evidence };
+      // Supply the measurement boundary from the executed query plan + the
+      // controlled first-party crawl scope; the verifier uses it to bound
+      // negative/missing claims (deleted authority-based support entirely).
+      const coverage = deriveCoverage({
+        evidence,
+        firstPartyDomains: data.companyDomains,
+        executedQueries: data.executedQueries,
+      });
+      return { evidence, coverage };
     },
   };
-}
-
-// ---------------------------------------------------------------------------
-// Support-level assessment seam (see file header).
-// ---------------------------------------------------------------------------
-
-function assessSupport(evidence: readonly EvidenceItem[]): EvidenceItem[] {
-  return evidence.map((e) =>
-    e.sourceType === "OBSERVED_WEB_EVIDENCE"
-      ? e
-      : { ...e, supportLevel: "DIRECT_SUPPORT" as const },
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -412,7 +411,9 @@ function createScenarioDeepSeekProvider(
 export function createLiveReportProducer(clock: () => Date = () => new Date()): ReportProducer {
   return {
     async produce(ctx: ReportProducerContext): Promise<ReportProducerResult> {
-      const evidence = assessSupport(ctx.evidence);
+      // Evidence keeps its conservative source-property support default; per-claim
+      // semantic support is decided later by the ClaimEvidenceVerifier stage.
+      const evidence = ctx.evidence;
       const deepseek = createScenarioDeepSeekProvider(evidence, ctx.input);
 
       const stageNames = ["company_profile", "dimension_signals", "ai_visibility", "claims"] as const;

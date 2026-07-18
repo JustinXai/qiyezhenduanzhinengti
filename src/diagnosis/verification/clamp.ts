@@ -76,12 +76,14 @@ export function clampVerdict(
       };
     }
     if (source === "FIRST_PARTY_EVIDENCE" && inScope) {
-      // The page is part of the checked enterprise surface; its absence of the
-      // asserted content is bounded evidence for the negative claim.
+      // The page is part of the checked enterprise surface; that scope membership
+      // (NOT its content overlap or authority) is what bounds the negative claim:
+      // "本次已检查的公开页面中未发现所述内容". Coverage-backed support is capped
+      // at PARTIAL — a bounded absence is never DIRECT proof.
       return {
-        supportLevel: min(raw.supportLevel, "PARTIAL_SUPPORT"),
+        supportLevel: "PARTIAL_SUPPORT",
         basis: "MEASUREMENT_BOUNDARY",
-        confidence: Math.min(raw.confidence, 0.7),
+        confidence: 0.6,
         justification:
           "负面/缺失型 Claim 由受控官网抓取范围内的首方页面提供边界支持:本次已检查的公开页面中未发现所述内容。",
       };

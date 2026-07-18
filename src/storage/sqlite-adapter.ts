@@ -9,6 +9,8 @@ import { randomUUID } from "node:crypto";
 import type { SqliteDatabase } from "./migrate";
 import { createSchema, openDatabase } from "./migrate";
 import type {
+  ClaimEvidenceRelationRecord,
+  ClaimEvidenceRelationRecordInput,
   DiagnosisRequestRecord,
   DiagnosisStatus,
   EvidenceRecord,
@@ -73,6 +75,21 @@ interface ProviderUsageRow {
 
 interface CheckpointRow {
   output_json: string;
+}
+
+interface ClaimEvidenceRelationRow {
+  id: string;
+  diagnosis_id: string;
+  claim_id: string;
+  claim_kind: string;
+  evidence_id: string;
+  support_level: string;
+  confidence: number;
+  justification: string | null;
+  basis: string;
+  verifier_mode: string;
+  verifier_version: string;
+  created_at: number;
 }
 
 export interface SqliteStorageAdapterOptions {
@@ -299,6 +316,78 @@ export class SqliteStorageAdapter implements StorageAdapter {
       retryCount: row.retry_count,
       errorCode: row.error_code,
       costEstimate: row.cost_estimate,
+      createdAt: fromDbTime(row.created_at),
+    }));
+  }
+
+  // -- claim_evidence_relations -----------------------------------------------
+
+  async saveClaimEvidenceRelations(
+    items: ClaimEvidenceRelationRecordInput[],
+  ): Promise<void> {
+    if (items.length === 0) return;
+    const stmt = this.db.prepare(
+      `INSERT INTO claim_evidence_relations
+         (id, diagnosis_id, claim_id, claim_kind, evidence_id, support_level,
+          confidence, justification, basis, verifier_mode, verifier_version, created_at)
+       VALUES
+         (@id, @diagnosis_id, @claim_id, @claim_kind, @evidence_id, @support_level,
+          @confidence, @justification, @basis, @verifier_mode, @verifier_version, @created_at)
+       ON CONFLICT(id) DO UPDATE SET
+         diagnosis_id = excluded.diagnosis_id,
+         claim_id = excluded.claim_id,
+         claim_kind = excluded.claim_kind,
+         evidence_id = excluded.evidence_id,
+         support_level = excluded.support_level,
+         confidence = excluded.confidence,
+         justification = excluded.justification,
+         basis = excluded.basis,
+         verifier_mode = excluded.verifier_mode,
+         verifier_version = excluded.verifier_version,
+         created_at = excluded.created_at`,
+    );
+    const ts = toDbTime(this.now());
+    const insertAll = this.db.transaction((rows: ClaimEvidenceRelationRecordInput[]) => {
+      for (const it of rows) {
+        stmt.run({
+          id: it.id,
+          diagnosis_id: it.diagnosisId,
+          claim_id: it.claimId,
+          claim_kind: it.claimKind,
+          evidence_id: it.evidenceId,
+          support_level: it.supportLevel,
+          confidence: it.confidence,
+          justification: it.justification,
+          basis: it.basis,
+          verifier_mode: it.verifierMode,
+          verifier_version: it.verifierVersion,
+          created_at: ts,
+        });
+      }
+    });
+    insertAll(items);
+  }
+
+  async getClaimEvidenceRelations(
+    diagnosisId: string,
+  ): Promise<ClaimEvidenceRelationRecord[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM claim_evidence_relations WHERE diagnosis_id = ? ORDER BY claim_id, evidence_id`,
+      )
+      .all(diagnosisId) as ClaimEvidenceRelationRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      diagnosisId: row.diagnosis_id,
+      claimId: row.claim_id,
+      claimKind: row.claim_kind,
+      evidenceId: row.evidence_id,
+      supportLevel: row.support_level,
+      confidence: row.confidence,
+      justification: row.justification,
+      basis: row.basis,
+      verifierMode: row.verifier_mode,
+      verifierVersion: row.verifier_version,
       createdAt: fromDbTime(row.created_at),
     }));
   }
