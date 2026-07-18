@@ -62,8 +62,38 @@ tokens appear here or in any tracked file.
 lint 0 errors · typecheck · **558 tests** · build · smoke:mock · security:check
 (198 files, SSRF 52/52) · e2e 16/16 · `pnpm audit --prod` **0 vulnerabilities**.
 
+## Night-pass additions (Round-5.1 §一–§十九 autonomous completion)
+
+- **Single label source (§五):** `src/report/presentation/zh-labels.ts` — the
+  presentation service, React components and smoke projections all import it;
+  no second translation table exists.
+- **Opportunity lineage (§八):** canonical `GeoOpportunity` carries optional
+  `sourceIssueId` / `recommendedAction` / `priorityReason` (prompt-required for
+  new generations; builders validate linkage against BUILT issues).
+- **Evidence registry (§七):** items now also record `normalizedDomain` +
+  `dedupeKey`; `computeContentYield` reports evidenceUsedByClaims /
+  unusedEvidenceCount / contentYieldRate (defined as used-by-published-claims ÷
+  after-dedup total; never inflated by deleting evidence).
+- **Deep composition (§十一):** Deep shows the SAME projected composition line
+  (`deep-composition` testid); evidence items carry 中文来源/英文官方补充 labels.
+- **Quick §十 order:** first-screen order is now 结论 → 评分与构成 → 问题/机会 → CTA.
+- **More Chinese buckets (§六):** 售后/渠道/使用场景/行业媒体 queries added.
+- **Chinese Conversion Review (§十四):** 20 deterministic product checks
+  (`src/report/validation/chinese-conversion-review.ts`).
+- **Full-chain canaries (§十三):** A/B/C now run API → state machine → REAL
+  planner/tiering/builders → verification → publish guard → SQLite → GET →
+  presentation → guard → review, zero network — all three reach READY, with the
+  linked opportunity published in A.
+- **verify-only re-run:** 15/15 trust checks; screenshots (incl. 1440px desktop)
+  at `E:\\企业诊断智能体_private\\chinese-conversion-hardening-v1`; provider usage
+  14→14; diagnosis count unchanged (1); quick 669 chars; views ~1ms.
+- **Legacy-canonical boundary (§十二):** the stored Insta360 report has no
+  language/tier annotations and no opportunity lineage — classified case B
+  (needs the next REAL generation); history was NOT modified.
+
 ## Boundaries
 
 verify-only proves presentation + projection only — it does NOT prove the new
 Chinese queries/prompts against live providers. That requires the separately
-authorized second Insta360 real diagnosis (not run in this round). main untouched.
+authorized second Insta360 real diagnosis (not run in this round). Mock中文
+Canary 不构成真实企业验证。main untouched.

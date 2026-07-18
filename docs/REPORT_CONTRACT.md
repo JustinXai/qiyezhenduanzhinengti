@@ -82,3 +82,10 @@ Provider 调用细节、Checkpoint、联系人和手机号。
 ## Evidence View
 
 见 [PRODUCT_TRUTH_RULES.md](PRODUCT_TRUTH_RULES.md) §6。
+
+
+## Round-5.1 中文语言契约
+
+公开报告语言冻结 zh-CN;测量构成(实测/公开网页估算)必须与覆盖率同屏展示;
+Quick 模块动态渲染(空模块省略、编号连续、标题随实际数量)。详见
+[CHINESE_REPORT_CONTRACT.md](CHINESE_REPORT_CONTRACT.md)。

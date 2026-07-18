@@ -70,3 +70,10 @@
 
 后续每个 Agent 在自己的 `agent-output/<agent-name>/CHECKPOINT.md` 中新增台账条目，
 并由 Supervisor 汇总同步回本文件的关键决策部分（非逐条照抄）。
+
+- [2026-07-19] KNOWN Round-5.1 中文成交版:zh-CN 契约冻结、中文公开 Guard、
+  ZH_CN_PRIMARY_WITH_OFFICIAL_FALLBACK 查询策略、证据分层去重、机会血统与
+  reasonCode、测量构成展示;三条全链 Mock 中文 Canary(API→…→Guard)全绿;
+  verify-only 复核已存 Insta360 报告 15/15,零 Provider 调用、零新 Diagnosis。
+  Mock Canary 不构成真实企业验证;中文查询/Prompt 的真实链路需下一次授权的
+  Insta360 真实诊断确认。(来源: Supervisor Round-5.1)

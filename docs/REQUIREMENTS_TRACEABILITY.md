@@ -151,3 +151,17 @@ Agent L 负责「客户可见公开文案」的冻结与单一程序来源
 > 由 `tests/product/customer-copy.test.ts` 锁定「文档↔常量一致 / 全角标点 / AI 四事实
 > 覆盖 / 消费方零重打」。`docs/product/CTA_AND_DISCLAIMER_STRINGS.md` 与
 > `docs/PROJECT_FREEZE.md` 已标注单一来源与全角标点裁定。
+
+
+## Round-5.1 中文成交版追溯
+
+| 要求 | 落地 |
+| --- | --- |
+| zh-CN 公开语言冻结 | `src/contracts/index.ts` ReportLanguage + 装配器盖章 |
+| 中文公开 Guard | `src/report/validation/chinese-public-report-guard.ts` |
+| 产品级确定性检查(20项) | `src/report/validation/chinese-conversion-review.ts` |
+| 中文查询策略 | `src/diagnosis/search/query-planner.ts` ZH_CN_PRIMARY_WITH_OFFICIAL_FALLBACK |
+| 证据分层/去重/统计 | `src/diagnosis/evidence/tiering.ts` |
+| 机会血统 + reasonCode | `src/contracts/claim-reason-codes.ts`、`src/diagnosis/analysis/claims.ts` |
+| 测量构成 | `src/report/presentation/measurement-composition.ts` |
+| 全链中文 Canary | `tests/canary/chinese-full-chain-canary.test.ts` |

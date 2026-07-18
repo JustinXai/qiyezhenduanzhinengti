@@ -116,3 +116,6 @@ security:check(SSRF strict)/ test:e2e **16**(含 3 Canary)/ audit + audit --prod
 - `rebuild-vertical-slice-v1` — 第一轮 Mock Vertical Slice 全部 Gate 通过后
 - `rebuild-live-seams-v1` — 真实接缝切片(Round-3 基线,`b0e36dd`)
 - `rebuild-pre-real-sample-v1` — Round-3 真实样本前加固完成(指向最终 integration HEAD)
+- `rebuild-provider-canary-v1` — Round-4B 真实 Provider Canary 双 PASS(`522d8c0`)
+- `rebuild-technical-company-canary-v1` — Round-5 单企业真实诊断 PASS(integration `9777e7c`)
+- `rebuild-chinese-conversion-hardening-v1` — Round-5.1 中文成交版硬化(分支最终 HEAD)

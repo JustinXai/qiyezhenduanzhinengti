@@ -398,7 +398,10 @@ function runTrustChecks(report: DiagnosisReport, publicJson: string): TrustCheck
 // Screenshots (Playwright over the OFFICIAL rendered pages).
 // ---------------------------------------------------------------------------
 
-async function captureScreens(reportUrl: string): Promise<{ mobileOverflow: boolean }> {
+async function captureScreens(
+  reportUrl: string,
+  outDir: string = PRIVATE_DIR,
+): Promise<{ mobileOverflow: boolean }> {
   const { chromium } = await import("@playwright/test");
   const browser = await chromium.launch();
   let mobileOverflow = false;
@@ -406,31 +409,31 @@ async function captureScreens(reportUrl: string): Promise<{ mobileOverflow: bool
     // Quick, mobile 390px.
     const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await mobile.goto(reportUrl, { waitUntil: "networkidle" });
-    await mobile.screenshot({ path: join(PRIVATE_DIR, "quick-mobile.png"), fullPage: true });
+    await mobile.screenshot({ path: join(outDir, "quick-mobile.png"), fullPage: true });
     mobileOverflow = await mobile.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
     await mobile.close();
 
-    // Desktop.
-    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    // Desktop 1440px (Round-5.1 §三).
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     await page.goto(reportUrl, { waitUntil: "networkidle" });
-    await page.screenshot({ path: join(PRIVATE_DIR, "quick-desktop.png"), fullPage: true });
+    await page.screenshot({ path: join(outDir, "quick-desktop.png"), fullPage: true });
 
     // exact:true — the Quick view also has a "查看完整诊断" CTA button.
     await page.getByRole("button", { name: "完整诊断", exact: true }).click();
     await page.waitForTimeout(300);
-    await page.screenshot({ path: join(PRIVATE_DIR, "deep-desktop.png"), fullPage: true });
+    await page.screenshot({ path: join(outDir, "deep-desktop.png"), fullPage: true });
 
     await page.getByRole("button", { name: "证据", exact: true }).click();
     await page.waitForTimeout(300);
     const first = page.locator("details summary").first();
     if (await first.count()) await first.click();
     await page.waitForTimeout(200);
-    await page.screenshot({ path: join(PRIVATE_DIR, "evidence-drawer.png"), fullPage: true });
+    await page.screenshot({ path: join(outDir, "evidence-drawer.png"), fullPage: true });
 
     await page.emulateMedia({ media: "print" });
-    await page.screenshot({ path: join(PRIVATE_DIR, "print-preview.png"), fullPage: true });
+    await page.screenshot({ path: join(outDir, "print-preview.png"), fullPage: true });
     await page.close();
   } finally {
     await browser.close();
@@ -714,7 +717,9 @@ async function verifyOnly(): Promise<void> {
 
     const trust = runTrustChecks(report, publicBody);
     const reportUrl = `${BASE}/report/${stored.publicToken}`;
-    const { mobileOverflow } = await captureScreens(reportUrl);
+    const artifactDir = process.env.CANARY_ARTIFACT_DIR || PRIVATE_DIR;
+    mkdirSync(artifactDir, { recursive: true });
+    const { mobileOverflow } = await captureScreens(reportUrl, artifactDir);
     note(`screenshots captured; mobileOverflow=${mobileOverflow}`);
 
     const usageAfter = totalUsageCalls();

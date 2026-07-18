@@ -67,3 +67,13 @@ Playwright / pnpm / SQLite / Drizzle ORM / Cheerio / p-limit。单仓库单体�
 持久化最少包括：`diagnosis_requests`、`evidence`、`reports`、`provider_usage`、
 `analysis_checkpoints`（见 `src/storage/schema.ts`）。通过 `StorageAdapter`
 （`src/storage/adapter.ts`）隔离数据库实现。禁止用散乱 JSON 文件作为正式运行状态。
+
+
+## Round-5.1 中文成交版补充
+
+公开报告语言冻结为 zh-CN(见 `docs/CHINESE_REPORT_CONTRACT.md`)。证据在
+NORMALIZING_EVIDENCE 阶段经过语言检测、来源分层(A–E)与去重
+(`src/diagnosis/evidence/tiering.ts`,见 `docs/CHINESE_EVIDENCE_POLICY.md`),
+公开投影经 `ChinesePublicReportGuard` 与 `chineseConversionReview`
+(`src/report/validation/`)双重确定性检查。公开标签的唯一程序来源为
+`src/report/presentation/zh-labels.ts`。
