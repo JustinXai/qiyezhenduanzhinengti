@@ -1,0 +1,50 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# next.js
+.next/
+out/
+build/
+dist/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# databases
+*.sqlite
+*.sqlite3
+*.db
+data/
+*.db-journal
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# testing
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# real provider artifacts / private runs (never commit)
+agent-output/**/PROVIDER_RESPONSE*
+real-samples/
+**/*.private.*
+E:/企业诊断智能体_private/
+
+# editor / os
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# misc
+*.tsbuildinfo
+.turbo/
+.claude/settings.local.json
