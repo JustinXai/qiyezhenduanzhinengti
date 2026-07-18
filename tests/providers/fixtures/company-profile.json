@@ -1,0 +1,11 @@
+{
+  "brandName": "示例智能装备",
+  "industry": "工业自动化设备",
+  "productOrService": "面向中小制造企业的柔性装配线与售后运维服务",
+  "targetRegion": "华东地区",
+  "competitors": ["竞品甲自动化", "竞品乙智造"],
+  "unresolvedQuestions": [
+    "官网未明确说明典型交付周期",
+    "缺少可验证的第三方资质或案例佐证"
+  ]
+}
