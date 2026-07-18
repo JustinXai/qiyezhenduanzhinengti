@@ -36,6 +36,11 @@ export {
 } from "./chinese-public-report-guard";
 
 export {
+  chineseConversionReview,
+  type ReviewCheck,
+} from "./chinese-conversion-review";
+
+export {
   ctaGuard,
   countQuickVisibleChars,
   BANNED_PHRASES,
