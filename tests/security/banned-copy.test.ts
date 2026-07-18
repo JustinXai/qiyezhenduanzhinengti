@@ -11,6 +11,7 @@
 // Imports the shared canonical fixture read-only (never forks its shape).
 // ============================================================================
 import { describe, expect, it } from "vitest";
+import { DemonstrationFix } from "../../src/contracts";
 import { SAMPLE_DIAGNOSIS_REPORT, buildSampleReport } from "../../src/fixtures/sample-report";
 import { BANNED_TERMS, findBannedTerms } from "../fixtures/banned-terms";
 
@@ -112,8 +113,10 @@ describe("Quick 8-module backing data — canonical report", () => {
     if (fix !== null) {
       expect(["ENTITY_DESCRIPTION", "FAQ_EXAMPLE", "BEFORE_AFTER_STRUCTURE"]).toContain(fix.fixType);
       expect(fix.evidenceIds.length).toBeGreaterThanOrEqual(1);
-      // Frozen disclaimer must be present verbatim.
-      expect(fix.disclaimer).toBe("示范内容仅用于展示优化方向,正式发布前需结合企业真实材料确认。");
+      // Frozen disclaimer must be present verbatim. Assert against the single
+      // source of truth (the Zod literal) rather than retyping it, so this test
+      // follows OQ-1 (full-width comma) automatically. — Agent L seam.
+      expect(fix.disclaimer).toBe(DemonstrationFix.shape.disclaimer.value);
     }
   });
 

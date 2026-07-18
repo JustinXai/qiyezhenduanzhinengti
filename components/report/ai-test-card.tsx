@@ -1,6 +1,7 @@
 import type { AIVisibilityTest } from "../../src/contracts";
 import { ACCURACY_LABELS, RECOMMENDATION_LABELS } from "./labels";
 import { Badge } from "./badges";
+import { AI_SAMPLE_DISCLAIMER } from "../../src/product/customer-copy";
 
 const CATEGORY_LABELS: Record<AIVisibilityTest["questionCategory"], string> = {
   PURCHASE_DECISION: "采购决策",
@@ -35,12 +36,15 @@ export function AiTestCard({ test }: { test: AIVisibilityTest }) {
   );
 }
 
-/** The mandatory framing note reused wherever AI samples are shown. */
+/**
+ * The mandatory framing note (docs/PRODUCT_TRUTH_RULES.md §8) reused wherever AI
+ * samples are shown. Text comes from the single product-copy source and covers
+ * the four required facts (locked by tests/product/customer-copy.test.ts).
+ */
 export function AiSampleDisclaimer() {
   return (
     <p className="mt-2 rounded-lg bg-neutral-50 p-2.5 text-[11px] leading-relaxed text-neutral-500">
-      以下为当前模型、当前时间、当前问题集下的诊断样本,用于观察 AI 如何谈论企业;
-      不是豆包 / 元宝 / Kimi 等多平台监测,也不代表全网 AI 推荐率或市场份额。
+      {AI_SAMPLE_DISCLAIMER}
     </p>
   );
 }

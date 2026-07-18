@@ -8,6 +8,7 @@ import type {
   MeasurementStatus,
   ScoreDimensionKey,
 } from "../../src/contracts";
+import { OVERALL_SCORE_LABEL } from "../../src/product/customer-copy";
 
 // These enums are exported from contracts only as Zod values; derive the string
 // unions from the AIVisibilityTest shape rather than duplicating them.
@@ -16,8 +17,11 @@ type AIVisibilityRecommendationStrength = NonNullable<
   AIVisibilityTest["recommendationStrength"]
 >;
 
-/** Frozen name for the composite score (docs/REPORT_CONTRACT.md §1). */
-export const OVERALL_SCORE_LABEL = "GEO可见度基础指数";
+/**
+ * Frozen name for the composite score (docs/REPORT_CONTRACT.md §1). Re-exported
+ * from the single product-copy source (src/product/customer-copy.ts).
+ */
+export { OVERALL_SCORE_LABEL };
 
 export const DIMENSION_LABELS: Record<ScoreDimensionKey, string> = {
   companyClarity: "企业清晰度",
