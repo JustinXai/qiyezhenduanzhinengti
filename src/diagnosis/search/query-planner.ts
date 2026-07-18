@@ -20,13 +20,19 @@
 
 import type { z } from "zod";
 import type { CompanyProfile } from "../../contracts";
+import type { CompetitorResolution } from "../competitors/types";
 
 export type CompanyProfileInput = z.infer<typeof CompanyProfile>;
 
 export type QueryCategory =
   | "BRAND_DIRECT"
   | "PURCHASE_DECISION"
-  | "COMPETITOR_COMPARISON";
+  | "COMPETITOR_COMPARISON"
+  // Dedicated intent for identifying a competitor's OFFICIAL domain. Only
+  // emitted by the domain-resolution helpers below — never mixed into the
+  // default `planSearchQueries` output, so the main plan's ordering stays the
+  // three canonical intents.
+  | "COMPETITOR_DOMAIN_RESOLUTION";
 
 export interface PlannedQuery {
   /** The literal search string sent to the web-search provider. */
@@ -42,12 +48,55 @@ export interface QueryPlanOptions {
    * every planned query is returned.
    */
   maxTotal?: number;
+  /**
+   * Competitor domain resolutions (Agent I). When supplied, competitor-
+   * comparison queries for a CONFIRMED competitor (USER_CONFIRMED / RESOLVED)
+   * are additionally scoped to its official domain (`site:<domain> ...`), so
+   * the search pulls the competitor's own pages instead of relying on the
+   * name alone. Absent this option, behaviour is byte-identical to before.
+   */
+  competitorResolutions?: readonly CompetitorResolution[];
 }
 
 /** Collapse internal whitespace and trim; returns "" for nullish input. */
 function clean(value: string | undefined | null): string {
   if (typeof value !== "string") return "";
   return value.replace(/\s+/g, " ").trim();
+}
+
+// ---------------------------------------------------------------------------
+// Official-domain resolution queries (Agent I).
+//
+// These phrase the search used to DISCOVER a competitor's official website. We
+// only ever ask the search provider to point us at the site — we never derive a
+// host by concatenating the name with ".com" (that fabrication is banned; the
+// resolver trusts real search evidence only). See src/diagnosis/competitors/.
+// ---------------------------------------------------------------------------
+
+/** Pure: the official-domain-resolution query strings for one competitor name. */
+export function buildCompetitorDomainQueries(name: string): string[] {
+  const n = clean(name);
+  if (!n) return [];
+  return [`${n} 官网`, `${n} 官方网站`, `${n} official site`];
+}
+
+/**
+ * Pure: planned COMPETITOR_DOMAIN_RESOLUTION queries for a list of competitor
+ * names. Order-preserving, de-duplicated, blank names skipped.
+ */
+export function planCompetitorDomainResolutionQueries(
+  names: readonly string[],
+): PlannedQuery[] {
+  const seen = new Set<string>();
+  const out: PlannedQuery[] = [];
+  for (const name of names) {
+    for (const q of buildCompetitorDomainQueries(name)) {
+      if (seen.has(q)) continue;
+      seen.add(q);
+      out.push({ query: q, category: "COMPETITOR_DOMAIN_RESOLUTION" });
+    }
+  }
+  return out;
 }
 
 /**
@@ -99,6 +148,15 @@ export function planSearchQueries(
   }
 
   // --- 竞品对比 (COMPETITOR_COMPARISON) ------------------------------------
+  // Index resolutions by cleaned name so we can scope queries to a competitor's
+  // confirmed official domain when one is known.
+  const resolvedDomainByName = new Map<string, string>();
+  for (const r of options.competitorResolutions ?? []) {
+    const key = clean(r.name);
+    if (key && r.resolvedDomain && !resolvedDomainByName.has(key)) {
+      resolvedDomainByName.set(key, r.resolvedDomain);
+    }
+  }
   for (const rawCompetitor of profile.competitors ?? []) {
     const competitor = clean(rawCompetitor);
     if (!competitor) continue;
@@ -106,6 +164,13 @@ export function planSearchQueries(
       push(`${brand} 和 ${competitor} 对比`, "COMPETITOR_COMPARISON");
     }
     push(`${competitor} 怎么样`, "COMPETITOR_COMPARISON");
+    // When we have a confirmed official domain, also pull the competitor's own
+    // pages directly. Only added when resolutions are supplied, so the default
+    // plan is unchanged.
+    const domain = resolvedDomainByName.get(competitor);
+    if (domain) {
+      push(`site:${domain}`, "COMPETITOR_COMPARISON");
+    }
   }
 
   // --- Order-preserving de-duplication (key = category + query) ------------

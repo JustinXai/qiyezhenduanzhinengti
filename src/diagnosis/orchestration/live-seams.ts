@@ -27,8 +27,15 @@ import type { WebSearchProvider, WebSearchResultItem } from "../../providers/typ
 import type { StructuredCompletionProvider } from "../../providers/types";
 import type { EvidenceItem } from "../../contracts";
 import type { DiagnosisInput } from "../../runtime/diagnosis-input";
+import {
+  competitorInputWebsite,
+  competitorNames,
+} from "../../runtime/diagnosis-input";
 import { planSearchQueries } from "../search/query-planner";
 import { normalizeEvidence } from "../evidence/normalize";
+import { resolveCompetitors } from "../competitors/resolve";
+import { createMockCompetitorSearch } from "../competitors/mock-search";
+import type { CompetitorResolution } from "../competitors/types";
 import {
   buildReportFromStageOutputs,
   type ReportIdentity,
@@ -46,6 +53,10 @@ import type {
   StageResult,
 } from "./state-machine";
 
+// Host used ONLY to build a mock competitor page in the scenario search
+// results below. It is NOT a classification shortcut — whether this page counts
+// as competitor evidence now depends entirely on competitor RESOLUTION (Agent I),
+// exactly like a real search result would.
 const SCENARIO_COMPETITOR_HOST = "competitor-demo.example.net";
 const SCENARIO_OBSERVED_HOST = "industry-news.example.org";
 const MOCK_MODEL = "deepseek-v4-flash";
@@ -141,17 +152,37 @@ export function createScenarioBochaProvider(): WebSearchProvider {
 interface SearchData {
   results: WebSearchResultItem[];
   companyDomains: string[];
+  /** Confirmed competitor hosts from resolution (was a hard-coded constant). */
   competitorDomains: string[];
+  /** Canonical evidence gathered while resolving competitor domains. */
+  resolutionEvidence: EvidenceItem[];
+  /** Full per-competitor resolution audit (every input, never dropped). */
+  resolutions: CompetitorResolution[];
 }
 
 export function createLiveEvidencePipeline(
   bocha: WebSearchProvider = createScenarioBochaProvider(),
+  competitorSearch: WebSearchProvider = createMockCompetitorSearch(),
 ): EvidencePipeline {
   return {
     async search(ctx: EvidenceStageContext): Promise<StageResult> {
       const { input } = ctx;
       const host = hostOf(input.website);
-      // Run Agent C's real query planner over a profile built from the request.
+
+      // --- Competitor entity & official-domain resolution (Agent I) ----------
+      // Replaces the old hard-coded SCENARIO_COMPETITOR_HOST: every named
+      // competitor is resolved to an auditable status; only CONFIRMED domains
+      // (USER_CONFIRMED / RESOLVED) become competitor evidence.
+      const resolution = await resolveCompetitors(input.competitors, {
+        search: competitorSearch,
+      });
+      const resolutionSearchCalls = resolution.resolutions.filter(
+        (r) => r.providedDomain === null,
+      ).length;
+
+      // Run Agent C's real query planner over a profile built from the request,
+      // feeding it the resolutions so confirmed competitors get domain-scoped
+      // comparison queries.
       const planned = planSearchQueries(
         {
           brandName: resolvedBrand(input),
@@ -159,10 +190,10 @@ export function createLiveEvidencePipeline(
           industry: input.industry ?? "",
           productOrService: input.productOrService ?? "",
           targetRegion: input.targetRegion ?? "",
-          competitors: input.competitors ?? [],
+          competitors: competitorNames(input.competitors),
           unresolvedQuestions: [],
         },
-        { maxTotal: 12 },
+        { maxTotal: 12, competitorResolutions: resolution.resolutions },
       );
       // One mock provider call carries the whole scenario; tag the site so the
       // mock returns first-party results on the request's host.
@@ -173,12 +204,17 @@ export function createLiveEvidencePipeline(
       const data: SearchData = {
         results,
         companyDomains: host ? [host] : [],
-        competitorDomains: [SCENARIO_COMPETITOR_HOST],
+        competitorDomains: resolution.resolvedDomains,
+        resolutionEvidence: resolution.evidence,
+        resolutions: resolution.resolutions,
       };
-      return {
-        data,
-        usage: [{ provider: "bocha", stage: "SEARCHING", callCount: Math.max(1, planned.length) }],
-      };
+      const usage = [
+        { provider: "bocha", stage: "SEARCHING", callCount: Math.max(1, planned.length) },
+      ];
+      if (resolutionSearchCalls > 0) {
+        usage.push({ provider: "bocha", stage: "SEARCHING", callCount: resolutionSearchCalls });
+      }
+      return { data, usage };
     },
 
     async crawl(_ctx, searchResult: StageResult): Promise<StageResult> {
@@ -194,11 +230,18 @@ export function createLiveEvidencePipeline(
 
     async normalize(_ctx, crawlResult: StageResult): Promise<NormalizedEvidenceResult> {
       const data = crawlResult.data as SearchData;
-      const evidence = normalizeEvidence(data.results, {
+      const base = normalizeEvidence(data.results, {
         companyDomains: data.companyDomains,
         competitorDomains: data.competitorDomains,
       });
-      return { evidence };
+      // Merge resolution evidence (competitor official pages) into the set,
+      // de-duplicated by id so nothing double-counts.
+      const byId = new Map<string, EvidenceItem>();
+      for (const e of base) byId.set(e.id, e);
+      for (const e of data.resolutionEvidence) {
+        if (!byId.has(e.id)) byId.set(e.id, e);
+      }
+      return { evidence: [...byId.values()] };
     },
   };
 }
@@ -225,18 +268,71 @@ function byType(evidence: readonly EvidenceItem[], type: EvidenceItem["sourceTyp
   return evidence.filter((e) => e.sourceType === type);
 }
 
+/** Bare host of a (schema-validated) competitor website URL. */
+function competitorHost(website: string): string | null {
+  try {
+    const h = new URL(website).hostname.toLowerCase();
+    return h.startsWith("www.") ? h.slice(4) : h;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pick the confirmed competitor a gap should be attributed to, using ONLY the
+ * request input + evidence classification (no hidden resolution state). Prefers
+ * a user-supplied website whose host matches a competitor-evidence domain, so
+ * the gap is labelled with the right entity.
+ */
+function pickConfirmedCompetitor(
+  input: DiagnosisInput,
+  competitorEvidence: readonly EvidenceItem[],
+): { name: string; evidenceId: string } | null {
+  if (competitorEvidence.length === 0) return null;
+  for (const c of input.competitors ?? []) {
+    const website = competitorInputWebsite(c);
+    if (!website) continue;
+    const host = competitorHost(website);
+    const ev = host ? competitorEvidence.find((e) => e.sourceDomain === host) : undefined;
+    if (ev) return { name: typeof c === "string" ? c : c.name, evidenceId: ev.id };
+  }
+  const names = competitorNames(input.competitors);
+  const first = competitorEvidence[0]!;
+  return { name: names[0] ?? first.sourceDomain, evidenceId: first.id };
+}
+
+/**
+ * Competitor gaps for the scenario claims stage. Emits a gap ONLY when a
+ * competitor domain was actually confirmed (COMPETITOR_WEB_EVIDENCE present).
+ * Unconfirmed competitors produce NO deterministic gap — see PRODUCT_TRUTH_RULES
+ * ("无法确认→不得生成确定性竞品差距").
+ */
+function scenarioCompetitorGaps(
+  evidence: readonly EvidenceItem[],
+  input: DiagnosisInput,
+): Array<{ competitorName: string; gapStatement: string; evidenceIds: string[] }> {
+  const pick = pickConfirmedCompetitor(input, byType(evidence, "COMPETITOR_WEB_EVIDENCE"));
+  if (!pick) return [];
+  return [
+    {
+      competitorName: pick.name,
+      gapStatement:
+        "竞品官网公开展示了交付周期与验收标准,本企业官网暂未提供同类信息",
+      evidenceIds: [pick.evidenceId],
+    },
+  ];
+}
+
 function scenarioStageOutput(
   stage: string,
   evidence: readonly EvidenceItem[],
   input: DiagnosisInput,
 ): unknown {
   const first = byType(evidence, "FIRST_PARTY_EVIDENCE");
-  const competitor = byType(evidence, "COMPETITOR_WEB_EVIDENCE");
   const observed = byType(evidence, "OBSERVED_WEB_EVIDENCE");
   const brand = resolvedBrand(input);
   // Stable id pickers with graceful fallback when a bucket is short.
   const fp = (i: number): string => (first[i] ?? first[0] ?? evidence[0])?.id ?? "";
-  const compId = (competitor[0] ?? evidence[0])?.id ?? "";
   const obsId = (observed[0] ?? evidence[0])?.id ?? "";
 
   switch (stage) {
@@ -246,7 +342,7 @@ function scenarioStageOutput(
         industry: input.industry ?? "通用行业",
         productOrService: input.productOrService ?? "核心产品与服务",
         targetRegion: input.targetRegion ?? "全国",
-        competitors: input.competitors ?? [],
+        competitors: competitorNames(input.competitors),
         unresolvedQuestions: ["官网未明确说明典型交付周期", "缺少可验证的第三方资质佐证"],
       };
     case "dimension_signals":
@@ -370,13 +466,8 @@ function scenarioStageOutput(
             evidenceIds: [fp(2)],
           },
         ],
-        competitorGaps: [
-          {
-            competitorName: (input.competitors && input.competitors[0]) || "同类竞品",
-            gapStatement: "竞品公开展示了交付周期与验收标准,本企业官网暂未提供同类信息",
-            evidenceIds: [compId],
-          },
-        ],
+        // Gated on confirmed competitor evidence — empty when nothing resolved.
+        competitorGaps: scenarioCompetitorGaps(evidence, input),
         demonstrationFix: {
           fixType: "FAQ_EXAMPLE",
           currentIssue: "官网缺少面向采购决策的常见问题解答",
@@ -438,7 +529,7 @@ export function createLiveReportProducer(clock: () => Date = () => new Date()): 
       const profileInput: CompanyProfileInput = {
         website: ctx.input.website,
         providedBrandName: ctx.input.brandName,
-        providedCompetitors: ctx.input.competitors,
+        providedCompetitors: competitorNames(ctx.input.competitors),
       };
       const aiVisibilityInput: AiVisibilityInput = {
         brandName: resolvedBrand(ctx.input),
