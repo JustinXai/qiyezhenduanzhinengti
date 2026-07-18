@@ -40,6 +40,7 @@ import type {
   ProviderUsageRecord,
 } from "../src/storage/adapter";
 import { findBannedTerms } from "../tests/fixtures/banned-terms";
+import { loadEnvironment } from "../src/runtime/load-environment";
 
 let step = 0;
 function ok(msg: string): void {
@@ -215,6 +216,8 @@ function collectStrings(value: unknown, acc: string[] = []): string[] {
 }
 
 async function main(): Promise<void> {
+  // Shared env loader before any process.env read (this smoke stays MOCK-only).
+  loadEnvironment();
   const smokeMode = process.env.DIAGNOSIS_SMOKE_MODE ?? "(unset)";
   console.log(`[smoke:mock] starting mock vertical slice (DIAGNOSIS_SMOKE_MODE=${smokeMode})`);
 
