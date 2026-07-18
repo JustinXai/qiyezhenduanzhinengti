@@ -63,13 +63,6 @@ function indexEvidence(report: DiagnosisReport): EvidenceIndex {
   return map;
 }
 
-const SUPPORT_STRENGTH: Record<EvidenceSupportLevel, number> = {
-  DIRECT_SUPPORT: 3,
-  PARTIAL_SUPPORT: 2,
-  CONTEXT_ONLY: 1,
-  UNSUPPORTED: 0,
-};
-
 function countSupport(
   evidenceIds: readonly string[],
   index: EvidenceIndex,
