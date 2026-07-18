@@ -45,18 +45,45 @@ Round-1 首次派发(同日更早)全 7 Agent 并行撞 session limit、带未�
 smoke:mock / security:check / **test:e2e 10**(mobile+desktop 真端到端)。远程
 `origin/integration` HEAD 与本地一致。
 
-## 待 review 决策(等待人工验收)
+## Round-3 Pre-Real-Sample Hardening(已完成)
 
-1. **支持等级评估归属(重要)**:C 的 `normalizeEvidence` 保守输出 `CONTEXT_ONLY`,B §4 要求
-   claim 引 `DIRECT_SUPPORT`。当前 C/D 代码无人负责"按 claim 判定支持等级"。本轮由
-   `live-seams.ts` 的 `assessSupport` 桩代之(首方/竞品自有页判 DIRECT)。**是否应下沉到
-   Agent D 的分析阶段(由 DeepSeek 评估)?**
-2. **竞品名→域名解析**(C 遗留①):`CompanyProfile` 只有竞品名;本轮 EvidencePipeline 用
-   固定场景域名。真实样本前需补名→域名解析。
-3. **SSRF strict**:G 的 token 词表与 C 的数值 IP 实现未对齐;对齐后开 `SECURITY_CHECK_SSRF_STRICT=1`。
-4. **OQ-1..8** 产品文案裁定(免责声明标点等,见 `docs/REQUIREMENTS_TRACEABILITY.md`)。
-5. **升级 `next@15.3.1`**(CVE-2025-66478)。
-6. 本轮**未合入 main**(按指令);integration 分支为当前有效交付。
+基线 tag `rebuild-live-seams-v1` @ `b0e36dd`。5 个 Agent(H/I/J/K/L)并行交付并按
+L→H→I→J→K→Supervisor 顺序集成。**Round-2 的 5 项待 review 全部被本轮解决:**
+
+1. ✅ **支持等级评估归属** → Agent H:`assessSupport` 桩已删除。新增
+   `CLAIM_EVIDENCE_VERIFICATION` 阶段 + `ClaimEvidenceRelation`;链路变为
+   `C(来源属性)→ D(候选 Claim+Links)→ ClaimEvidenceVerifier(判语义支持)→ B(确定性 Guard)`。
+   模型输出不再直接决定 READY;负面/缺失 Claim 需 EvidenceCoverage 测量边界。
+2. ✅ **竞品名→域名解析** → Agent I:`CompetitorResolution`
+   (USER_CONFIRMED/RESOLVED/AMBIGUOUS/NOT_FOUND/INVALID_DOMAIN);删除固定场景竞品域名;
+   不拼接 `.com`;歧义不生成确定性差距;每个竞品状态可审计不静默丢弃。
+3. ✅ **SSRF strict** → Agent J:grep 关键词 Gate 改为**真实行为测试**(52 对抗用例),
+   默认 strict-on;并修复了一个真实 slowloris-body DoS 缺陷。
+4. ✅ **OQ-1..8 文案** → Agent L:单一程序来源 `src/product/customer-copy.ts`;OQ-1 免责声明
+   改全角逗号;OQ-4/5/6/8 标 `NEEDS_PRODUCT_OWNER_DECISION`(见 `REQUIREMENTS_TRACEABILITY.md`)。
+5. ✅ **Next 升级** → Agent K:`15.3.1 → 15.5.20`(未上 16),清 CVE-2025-66478 等 24 项 Next 漏洞。
+
+Supervisor 接缝:显式 **Provider Mode**(`mock` 注入场景 provider;`real` 抛错,本轮禁止真实调用);
+3 个 Canary(A DIRECT / B 负面无 coverage 拒绝 / C 歧义竞品无差距)走完整链路。
+
+**八项回归(Supervisor 实测)**:lint ✅ / typecheck ✅ / test ✅ **475** / build ✅ /
+smoke:mock ✅ / security:check ✅(SSRF 行为 Gate strict-on)/ test:e2e ✅ **10** / audit(见下)。
+
+## Round-3 待 review / 待办(等待人工验收,尚未 READY_FOR_REAL_SAMPLE)
+
+1. **竞品解析状态可见性**:`CompanyProfile.competitors` 仍为 `string[]`,解析状态
+   (RESOLVED/AMBIGUOUS/…)未落入 Canonical 报告或持久化,仅在 pipeline 内。若需对客/审计可见,
+   需契约决策。
+2. **OQ-4/5/6/8** 待产品负责人裁定(竞品占位显示、null 综合分首屏串、品牌名「凡间AI」、
+   measurementStatusSummary 模板、两句提示共存规则)。
+3. **`pnpm audit` 残留 10 项**:critical/high 均在 dev/build/test 工具链
+   (vitest/playwright/esbuild/postcss/eslint-plugin-kit);另 `drizzle-orm` 一个 high
+   SQL-injection(查询构造器,本仓存储走 better-sqlite3 参数化,drizzle 仅用于迁移 DDL)。
+   均 Round-3 范围外,建议后续按 lane 升级。
+4. **真实 Verifier / 真实 Provider** 仅实现接口,未激活(`PROVIDER_MODE=real` 抛错)。
+5. 本轮**未合入 main**(按前文反复强调的约束);main 合并待人工明确授权。
+
+下一阶段目标:`READY_FOR_PROVIDER_CANARY`(不是 `READY_FOR_REAL_SAMPLE`)。
 
 ## 抗中断纪律（每个 Agent 必须遵守）
 
