@@ -13,10 +13,15 @@
 // Do NOT fork this shape into per-agent samples. Import it read-only:
 //   import { SAMPLE_DIAGNOSIS_REPORT, buildSampleReport } from "../../src/fixtures/sample-report";
 //
-// Numbers here are formula-consistent with docs/SCORE_CONTRACT.md so B's
-// cross-field guard passes without adjustment:
-//   scoreCoverage = 1.0 (all five dimensions have a non-null score)
-//   overallScore  = 0.20*72 + 0.20*65 + 0.25*55 + 0.20*60 + 0.15*40 = 59.15
+// Numbers here are formula-consistent with docs/SCORE_CONTRACT.md AND satisfy
+// Agent B's semantic guards (evidence support levels, cross-field, CTA):
+//   aiVisibility is null/INSUFFICIENT — only 2 VALID AI tests exist and
+//     PRODUCT_TRUTH_RULES §8 requires >=3 VALID before the dimension is scored.
+//   scoreCoverage = 0.85 (the four scored dimensions' weights: .20+.20+.25+.20)
+//   overallScore  = (72*.20 + 65*.20 + 55*.25 + 60*.20) / 0.85 = 62.53
+//   every core issue / strength / opportunity cites DIRECT_SUPPORT evidence
+//     (PRODUCT_TRUTH_RULES §4); CONTEXT_ONLY evidence backs only score
+//     dimensions and AI tests, never a claim.
 // The frozen demonstrationFix disclaimer is read from the Zod literal itself
 // (never retyped) to stay byte-exact with src/contracts/index.ts.
 // ============================================================================
@@ -70,13 +75,13 @@ const SAMPLE: DiagnosisReportType = {
       evidenceIds: ["ev_observed_news"],
     },
     aiVisibility: {
-      score: 40,
-      measurementStatus: "MEASURED",
-      confidence: 0.6,
-      evidenceIds: ["ev_observed_news"],
+      score: null,
+      measurementStatus: "INSUFFICIENT_EVIDENCE",
+      confidence: 0,
+      evidenceIds: [],
     },
-    overallScore: 59.15,
-    scoreCoverage: 1,
+    overallScore: 62.53,
+    scoreCoverage: 0.85,
   },
   aiVisibilityTests: [
     {
@@ -139,7 +144,7 @@ const SAMPLE: DiagnosisReportType = {
       claimType: "DIAGNOSTIC_INFERENCE",
       statement: "第三方可验证的信任证据不足",
       businessImpact: "AI 与客户都难以确认企业资质,削弱推荐意愿",
-      evidenceIds: ["ev_observed_news"],
+      evidenceIds: ["ev_first_about"],
       fixDirection: "整理可公开的资质、案例与媒体报道并结构化呈现",
     },
     {
@@ -174,7 +179,7 @@ const SAMPLE: DiagnosisReportType = {
       claimType: "DIAGNOSTIC_INFERENCE",
       statement: "沉淀真实交付案例的结构化描述",
       businessImpact: "为 AI 提供可引用的实体事实,提升被准确提及的概率",
-      evidenceIds: ["ev_observed_news"],
+      evidenceIds: ["ev_first_about"],
       customerQuestion: "这家供应商有没有类似我们规模的成功案例?",
       contentGap: "缺少可公开、可验证的案例结构化内容",
     },
@@ -210,7 +215,7 @@ const SAMPLE: DiagnosisReportType = {
       sourceDomain: "example-equip.com",
       sourceType: "FIRST_PARTY_EVIDENCE",
       authorityLevel: "OWNED",
-      supportLevel: "PARTIAL_SUPPORT",
+      supportLevel: "DIRECT_SUPPORT",
       fetchedAt: "2026-07-18T00:00:00.000Z",
       snippet: "公司成立于华东地区,专注工业自动化装备。",
       url: "https://example-equip.com/about",
@@ -221,7 +226,7 @@ const SAMPLE: DiagnosisReportType = {
       sourceDomain: "example-equip.com",
       sourceType: "FIRST_PARTY_EVIDENCE",
       authorityLevel: "OWNED",
-      supportLevel: "PARTIAL_SUPPORT",
+      supportLevel: "DIRECT_SUPPORT",
       fetchedAt: "2026-07-18T00:00:00.000Z",
       snippet: "柔性装配线产品参数与应用场景介绍。",
       url: "https://example-equip.com/products",

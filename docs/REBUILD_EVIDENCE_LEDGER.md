@@ -41,5 +41,17 @@
   一律不 push（远程推送由 Supervisor 审核后统一处理）、Mock 接缝对齐共享 fixture。
   (来源: 本次 Supervisor 会话 DELIVERY_BOARD)
 
+- [2026-07-18] KNOWN 初版共享 fixture 只过了 Zod 形状、未过语义 Guard（播种时 Guard 尚未
+  存在）。Agent B 实现 Guard 后发现 `SAMPLE_DIAGNOSIS_REPORT` 违反 PRODUCT_TRUTH_RULES
+  §4（核心问题/机会引用 PARTIAL/CONTEXT_ONLY 证据,共 5 条)且 `aiVisibility.score=40`
+  与 §8 冲突(仅 2 个 VALID 测试)。Supervisor 已修正:first-party about/product 证据
+  升为 `DIRECT_SUPPORT`、iss_2/geo_2 改引 DIRECT 证据、`aiVisibility` 置为
+  null/INSUFFICIENT(coverage→0.85、overallScore→62.53)。已用 B 的真实 `publishGuard`
+  验证 `ok:true`。(来源: Agent B Round-1 反馈 + Supervisor 复核)
+- [2026-07-18] TODO 集成待办:B 的「记录 5 违规码」pin 测试需随 fixture 修正翻转为断言
+  `ok:true`;D 的 report-generation 锚点数字需从 59.15/coverage 1.0 更新为
+  62.53/0.85;C↔E 的 EvidencePipeline 接缝、D↔E 的 ReportProducer 接缝需焊接;
+  竞品名→域名解析步骤(C 的遗留①)待补。
+
 后续每个 Agent 在自己的 `agent-output/<agent-name>/CHECKPOINT.md` 中新增台账条目，
 并由 Supervisor 汇总同步回本文件的关键决策部分（非逐条照抄）。
