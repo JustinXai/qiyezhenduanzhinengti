@@ -35,13 +35,28 @@ smoke:mock(7 步 mock 全链)/ security:check。构建路由:`/`、`/api/diagnos
 Round-1 首次派发(同日更早)全 7 Agent 并行撞 session limit、带未提交改动被掐断,几乎
 无落盘。本轮以「抗中断纪律」纠正,全部落盘且集成绿。
 
-## 集成后待办(下一轮 wiring / 真实样本前)
+## Round-2 真实接缝焊接(已完成,`6976804`)
 
-- 焊接真实接缝:F 的 `loadReport`→E 的 API;E 的 `ReportProducer`→D 的组装器;
-  E/C 的 `EvidencePipeline`;D 的 score 接缝→B 的 `computeScoreBlock`。
-- B 竞品名→域名解析(C 遗留①);G 的 SSRF token 词表对齐 C 实现后开 `SECURITY_CHECK_SSRF_STRICT=1`。
-- 产品裁定 OQ-1..8(免责声明标点等,见 `docs/REQUIREMENTS_TRACEABILITY.md`)。
-- 升级 `next@15.3.1`(CVE-2025-66478)。
+表单提交 → `POST /api/diagnoses` → 状态机(真实 C 搜索规划+证据归一化,真实 D 阶段分析+
+报告组装,B 的 `publishGuard`)→ SQLite 存储 → `GET`/报告页(F)完整跑通,**Provider 层
+全 mock**(无真实博查/DeepSeek、无网络、无真实 diagnosis)。前端不再自读 fixture。
+
+**七项 Gate 全绿(Supervisor 实测)**:typecheck / lint / test **300** / build /
+smoke:mock / security:check / **test:e2e 10**(mobile+desktop 真端到端)。远程
+`origin/integration` HEAD 与本地一致。
+
+## 待 review 决策(等待人工验收)
+
+1. **支持等级评估归属(重要)**:C 的 `normalizeEvidence` 保守输出 `CONTEXT_ONLY`,B §4 要求
+   claim 引 `DIRECT_SUPPORT`。当前 C/D 代码无人负责"按 claim 判定支持等级"。本轮由
+   `live-seams.ts` 的 `assessSupport` 桩代之(首方/竞品自有页判 DIRECT)。**是否应下沉到
+   Agent D 的分析阶段(由 DeepSeek 评估)?**
+2. **竞品名→域名解析**(C 遗留①):`CompanyProfile` 只有竞品名;本轮 EvidencePipeline 用
+   固定场景域名。真实样本前需补名→域名解析。
+3. **SSRF strict**:G 的 token 词表与 C 的数值 IP 实现未对齐;对齐后开 `SECURITY_CHECK_SSRF_STRICT=1`。
+4. **OQ-1..8** 产品文案裁定(免责声明标点等,见 `docs/REQUIREMENTS_TRACEABILITY.md`)。
+5. **升级 `next@15.3.1`**(CVE-2025-66478)。
+6. 本轮**未合入 main**(按指令);integration 分支为当前有效交付。
 
 ## 抗中断纪律（每个 Agent 必须遵守）
 
