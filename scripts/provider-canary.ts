@@ -43,6 +43,7 @@ import {
 import { parseStageJson } from "../src/providers/deepseek/stage-schema";
 import { assertUrlAllowed } from "../src/security/crawler/ssrf-guard";
 import { normalizeEvidence } from "../src/diagnosis/evidence/normalize";
+import { loadEnvironment } from "../src/runtime/load-environment";
 import type { WebSearchResultItem } from "../src/providers/types";
 
 // ---------------------------------------------------------------------------
@@ -701,6 +702,9 @@ function redactUnknown(value: unknown): unknown {
 }
 
 async function main(): Promise<void> {
+  // CLI tools must load .env.local/.env via the shared loader BEFORE reading env.
+  // Process-explicit switches (PROVIDER_MODE etc.) always win over the file.
+  loadEnvironment();
   const env = process.env as Env;
   const privateDir = env.CANARY_PRIVATE_DIR || DEFAULT_PRIVATE_DIR;
   mkdirSync(privateDir, { recursive: true });
