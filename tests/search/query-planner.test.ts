@@ -1,9 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCompetitorDomainQueries,
+  planCompetitorDomainResolutionQueries,
   planSearchQueries,
   type CompanyProfileInput,
 } from "../../src/diagnosis/search/query-planner";
+import type { CompetitorResolution } from "../../src/diagnosis/competitors/types";
 import { SAMPLE_DIAGNOSIS_REPORT } from "../../src/fixtures/sample-report";
+
+function resolution(overrides: Partial<CompetitorResolution> = {}): CompetitorResolution {
+  return {
+    name: "竞品甲自动化",
+    providedDomain: null,
+    resolvedDomain: "jia-auto.example.com",
+    status: "RESOLVED",
+    confidence: 0.8,
+    evidenceIds: [],
+    resolutionReason: "test",
+    candidateDomains: [],
+    ...overrides,
+  };
+}
 
 function makeProfile(overrides: Partial<CompanyProfileInput> = {}): CompanyProfileInput {
   return {
@@ -37,7 +54,12 @@ describe("planSearchQueries", () => {
 
   it("orders brand-direct before purchase-decision before competitor-comparison", () => {
     const queries = planSearchQueries(makeProfile());
-    const order = { BRAND_DIRECT: 0, PURCHASE_DECISION: 1, COMPETITOR_COMPARISON: 2 };
+    const order = {
+      BRAND_DIRECT: 0,
+      PURCHASE_DECISION: 1,
+      COMPETITOR_COMPARISON: 2,
+      COMPETITOR_DOMAIN_RESOLUTION: 3,
+    };
     const ranks = queries.map((q) => order[q.category]);
     const sorted = [...ranks].sort((x, y) => x - y);
     expect(ranks).toEqual(sorted);
@@ -110,5 +132,53 @@ describe("planSearchQueries", () => {
     const queries = planSearchQueries(SAMPLE_DIAGNOSIS_REPORT.companyProfile);
     expect(queries.length).toBeGreaterThan(0);
     expect(queries.every((q) => typeof q.query === "string" && q.query.length > 0)).toBe(true);
+  });
+
+  it("default output is unchanged when no resolutions are supplied (backward compatible)", () => {
+    const withOpt = planSearchQueries(makeProfile(), { competitorResolutions: [] });
+    const without = planSearchQueries(makeProfile());
+    expect(withOpt).toEqual(without);
+    // Never emits COMPETITOR_DOMAIN_RESOLUTION in the default plan.
+    expect(without.some((q) => q.category === "COMPETITOR_DOMAIN_RESOLUTION")).toBe(false);
+  });
+
+  it("adds a domain-scoped query for a CONFIRMED competitor", () => {
+    const queries = planSearchQueries(makeProfile(), {
+      competitorResolutions: [resolution({ name: "竞品甲自动化", resolvedDomain: "jia-auto.example.com" })],
+    });
+    const strings = queries.map((q) => q.query);
+    expect(strings).toContain("site:jia-auto.example.com");
+    // Name-based comparison queries are still present.
+    expect(strings).toContain("示例智能装备 和 竞品甲自动化 对比");
+  });
+
+  it("does not add a domain-scoped query for an UNCONFIRMED competitor", () => {
+    const queries = planSearchQueries(makeProfile({ competitors: ["竞品甲自动化"] }), {
+      competitorResolutions: [
+        resolution({ name: "竞品甲自动化", status: "NOT_FOUND", resolvedDomain: null }),
+      ],
+    });
+    expect(queries.some((q) => q.query.startsWith("site:"))).toBe(false);
+  });
+});
+
+describe("buildCompetitorDomainQueries", () => {
+  it("phrases official-domain queries without concatenating a domain", () => {
+    const qs = buildCompetitorDomainQueries("大疆 DJI");
+    expect(qs).toEqual(["大疆 DJI 官网", "大疆 DJI 官方网站", "大疆 DJI official site"]);
+    // Crucially never fabricates a host like "大疆dji.com".
+    expect(qs.some((q) => q.includes(".com"))).toBe(false);
+  });
+
+  it("returns nothing for a blank name", () => {
+    expect(buildCompetitorDomainQueries("  ")).toEqual([]);
+  });
+});
+
+describe("planCompetitorDomainResolutionQueries", () => {
+  it("tags queries as COMPETITOR_DOMAIN_RESOLUTION and de-duplicates across names", () => {
+    const planned = planCompetitorDomainResolutionQueries(["GoPro", "GoPro", "  "]);
+    expect(planned.every((q) => q.category === "COMPETITOR_DOMAIN_RESOLUTION")).toBe(true);
+    expect(planned).toHaveLength(3); // one GoPro, blank skipped, dedup applied
   });
 });

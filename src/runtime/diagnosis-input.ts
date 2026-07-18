@@ -7,6 +7,36 @@
 
 import { z } from "zod";
 
+// ---------------------------------------------------------------------------
+// Competitor input (Agent I) — accepts either a bare NAME string or an object
+// carrying the name plus a user-supplied official website. Both forms coexist
+// in the same array, and a plain string[] payload stays valid unchanged
+// (backward compatible with round-1/2 callers).
+//
+//   competitors: ["GoPro", { name: "大疆", website: "https://www.dji.com" }]
+//
+// The website here is the competitor's OWN official site as asserted by the
+// user; it is later re-validated by the competitor resolver (SSRF / URL guard)
+// before any trust is placed in it. See src/diagnosis/competitors/.
+// ---------------------------------------------------------------------------
+
+export const CompetitorInputObjectSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    /** User-asserted official website for this competitor (optional). */
+    website: z.string().url().max(2000).optional(),
+  })
+  .strict();
+
+export type CompetitorInputObject = z.infer<typeof CompetitorInputObjectSchema>;
+
+export const CompetitorInputSchema = z.union([
+  z.string().min(1).max(200),
+  CompetitorInputObjectSchema,
+]);
+
+export type CompetitorInput = z.infer<typeof CompetitorInputSchema>;
+
 export const DiagnosisInputSchema = z
   .object({
     website: z.string().url(),
@@ -14,12 +44,48 @@ export const DiagnosisInputSchema = z
     industry: z.string().min(1).max(200).optional(),
     productOrService: z.string().min(1).max(1000).optional(),
     targetRegion: z.string().min(1).max(200).optional(),
-    competitors: z.array(z.string().min(1).max(200)).max(20).optional(),
+    // Backward compatible: a string[] still validates because each element
+    // matches the string branch of CompetitorInputSchema.
+    competitors: z.array(CompetitorInputSchema).max(20).optional(),
     notes: z.string().max(2000).optional(),
   })
   .strict();
 
 export type DiagnosisInput = z.infer<typeof DiagnosisInputSchema>;
+
+/** The name of a competitor input regardless of which form it took. */
+export function competitorInputName(c: CompetitorInput): string {
+  return (typeof c === "string" ? c : c.name).trim();
+}
+
+/** The user-supplied website of a competitor input, or undefined. */
+export function competitorInputWebsite(c: CompetitorInput): string | undefined {
+  if (typeof c === "string") return undefined;
+  const w = c.website?.trim();
+  return w && w.length > 0 ? w : undefined;
+}
+
+/**
+ * Project a mixed competitor list down to bare, de-duplicated names.
+ *
+ * Kept here (not in the resolver) so the many string[]-only consumers
+ * (query planner profile, company-profile merge, scenario stage output) can
+ * stay unchanged while callers upgrade to the richer object form.
+ */
+export function competitorNames(
+  competitors: readonly CompetitorInput[] | undefined,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of competitors ?? []) {
+    const name = competitorInputName(c);
+    if (name.length > 0 && !seen.has(name)) {
+      seen.add(name);
+      out.push(name);
+    }
+  }
+  return out;
+}
 
 export interface DiagnosisInputIssue {
   path: string;
