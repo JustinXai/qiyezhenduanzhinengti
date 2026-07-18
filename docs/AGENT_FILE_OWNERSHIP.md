@@ -13,12 +13,17 @@ playwright.config.*
 drizzle.config.*
 AGENTS.md
 src/contracts/index.ts
+src/fixtures/            # 共享 Canonical Report 样例锚点，各 Agent 只读引用，不得修改
 docs/DELIVERY_BOARD.md
 docs/AGENT_FILE_OWNERSHIP.md
 ```
 
 Agent 需要新增依赖时，只能创建 `agent-output/<agent-name>/DEPENDENCIES.md` 提出申请，
 由 Supervisor 统一添加。
+
+`src/fixtures/sample-report.ts` 导出唯一权威样例 `SAMPLE_DIAGNOSIS_REPORT` 与
+`buildSampleReport(overrides)`。所有 Agent 在 Mock 接缝处对着它编码/断言，禁止另建
+不兼容的样例 report 形状。
 
 ## Agent A — 产品冻结与需求追踪
 
