@@ -1,5 +1,9 @@
 # SECURITY_INVARIANTS
 
+> **Round-3**:SSRF 由 **strict-on 行为 Gate** 强制(`scripts/security-check.ts`
+> 驱动真实 crawler 跑 52 条对抗用例,非源码关键词匹配),`pnpm security:check`
+> 默认 strict;修复了 slowloris-body 超时 DoS。Provider Mode `REAL` 未授权抛错。
+
 ## Crawler SSRF 防护（Agent C，`src/security/crawler/`）
 
 必须阻止请求以下目标：

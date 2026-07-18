@@ -41,6 +41,8 @@ export {
 
 export { publishGuard, type PublishGuardInput } from "./publish-guard";
 
+export { pruneUnsupportedClaims, type PruneResult } from "./prune-claims";
+
 // Re-export the shared guard result plumbing for convenience.
 export {
   combineGuardResults,

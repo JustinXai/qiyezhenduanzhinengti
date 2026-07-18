@@ -53,5 +53,20 @@
   62.53/0.85;C↔E 的 EvidencePipeline 接缝、D↔E 的 ReportProducer 接缝需焊接;
   竞品名→域名解析步骤(C 的遗留①)待补。
 
+- [2026-07-18] DECISION Round-3:语义支持从 EvidenceItem 全局属性分离为
+  `ClaimEvidenceRelation`(逐 (Claim,Evidence) pair);新增 `CLAIM_EVIDENCE_VERIFICATION`
+  阶段;`clampVerdict` 强制来源/极性/coverage 前置,模型判 DIRECT 不满足前置即降级;
+  首方/竞品自动 DIRECT 桩删除。(来源: Agent H + Supervisor)
+- [2026-07-18] DECISION Round-3:负面/缺失 Claim 需 EvidenceCoverage 测量边界
+  (`boundaryEstablished = 首方范围内页面≥1 且 已执行查询≥1`),无 coverage 者由
+  `pruneUnsupportedClaims` 验证后移除,报告在其它内容可信时仍 READY;硬拦截(§4.5/4.6/4.8)
+  不剪枝。(来源: Supervisor §六)
+- [2026-07-18] DECISION Round-3:Provider Mode `MOCK`/`REAL` 显式受控,仅 `PROVIDER_MODE`
+  env 决定;`REAL` 缺配置抛 `REAL_PROVIDER_NOT_AUTHORIZED`、缺授权抛
+  `PROVIDER_CANARY_REQUIRED`,绝不回退 MOCK;本轮真实 Provider 未启用。(来源: Supervisor §四)
+- [2026-07-18] KNOWN Round-3 三 Canary(A/B/C)走真实应用边界 + Quick/Deep/Evidence 页面
+  (vitest + Playwright 390px)全绿;真实 Provider 调用 0、真实 Diagnosis 0、main 未改变;
+  下一阶段仅 `READY_FOR_PROVIDER_CANARY`。(来源: Supervisor §七/十四)
+
 后续每个 Agent 在自己的 `agent-output/<agent-name>/CHECKPOINT.md` 中新增台账条目，
 并由 Supervisor 汇总同步回本文件的关键决策部分（非逐条照抄）。

@@ -63,6 +63,18 @@ const SCENARIO_OBSERVED_HOST = "industry-news.example.org";
 const MOCK_MODEL = "deepseek-v4-flash";
 const FETCHED_AT = new Date(0).toISOString();
 
+// ---------------------------------------------------------------------------
+// Test-only canary scenarios. Selected ONLY by a controlled server flag
+// (CANARY_MODE=1, set by the canary test server) mapped to a reserved canary
+// host — never by public API input in a normal deployment. Used to drive the
+// pre-real-sample canaries through the real application boundary.
+// ---------------------------------------------------------------------------
+const CANARY_ABOUT_ONLY_HOST = "about-only.canary.test";
+
+function isAboutOnlyCanary(website: string): boolean {
+  return process.env.CANARY_MODE === "1" && hostOf(website) === CANARY_ABOUT_ONLY_HOST;
+}
+
 /** Extract a bare host from a request website URL (www-stripped, lowercased). */
 function hostOf(website: string): string {
   try {
@@ -94,6 +106,18 @@ function resolvedBrand(input: DiagnosisInput): string {
 function scenarioResults(website: string): WebSearchResultItem[] {
   const host = hostOf(website) || "example.com";
   const origin = `https://${host}`;
+  // Canary B: only an About page is discoverable — no product / procurement pages.
+  if (isAboutOnlyCanary(website)) {
+    return [
+      {
+        title: `${brandFromHost(host)} - 关于我们`,
+        url: `${origin}/about`,
+        snippet: "企业背景介绍页,包含成立情况与所在区域。",
+        sourceDomain: host,
+        fetchedAt: FETCHED_AT,
+      },
+    ];
+  }
   return [
     {
       title: `${brandFromHost(host)} - 官网首页`,
@@ -208,7 +232,9 @@ export function createLiveEvidencePipeline(
         results,
         companyDomains: host ? [host] : [],
         competitorDomains: resolution.resolvedDomains,
-        executedQueries: planned.map((p) => p.query),
+        // Canary B: the procurement/customer-question query plan did not execute,
+        // so no measurement boundary is established for a "missing …" claim.
+        executedQueries: isAboutOnlyCanary(input.website) ? [] : planned.map((p) => p.query),
         resolutionEvidence: resolution.evidence,
         resolutions: resolution.resolutions,
       };
@@ -417,6 +443,33 @@ function scenarioStageOutput(
         ],
       };
     case "claims":
+      // Canary B: an About-only surface. A positive About-background strength is
+      // content-supported and survives; the negative "缺少采购验收" claim has no
+      // measurement boundary (empty query plan) and is pruned post-verification.
+      if (isAboutOnlyCanary(input.website)) {
+        return {
+          strengths: [
+            {
+              statement: "关于页说明了企业背景、成立情况与所在区域",
+              businessImpact: "帮助客户初步了解企业背景与所在区域",
+              claimType: "DIAGNOSTIC_INFERENCE",
+              evidenceIds: [fp(0)],
+            },
+          ],
+          coreIssues: [
+            {
+              statement: "官网缺少面向采购决策的验收说明",
+              businessImpact: "采购阶段客户拿不到验收口径,增加沟通成本",
+              claimType: "DIAGNOSTIC_INFERENCE",
+              fixDirection: "补充采购验收标准与交付说明",
+              evidenceIds: [fp(0)],
+            },
+          ],
+          geoOpportunities: [],
+          competitorGaps: [],
+          demonstrationFix: null,
+        };
+      }
       return {
         strengths: [
           {

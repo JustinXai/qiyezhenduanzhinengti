@@ -16,6 +16,10 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     env: {
       DIAGNOSIS_SMOKE_MODE: "true",
+      // Test-only server config: MOCK providers + canary scenario selection by a
+      // reserved host. Never set in a real deployment.
+      PROVIDER_MODE: "MOCK",
+      CANARY_MODE: "1",
     },
   },
   projects: [

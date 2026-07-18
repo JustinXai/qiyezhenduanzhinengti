@@ -1,5 +1,9 @@
 # REPORT_CONTRACT — Quick / Deep / Evidence 冻结结构
 
+> **Round-3**:负面/缺失型核心问题需 EvidenceCoverage 测量边界 + 限定范围文案
+> (「本次已检查的公开页面和搜索结果中未发现……」);无 coverage 则验证后移除、不进
+> Quick 核心问题。见 [CLAIM_EVIDENCE_VERIFICATION.md](CLAIM_EVIDENCE_VERIFICATION.md) §6。
+
 默认视图：**Quick**。目标：2–3 分钟，约 1800 个中文可见字符以内，手机优先。
 
 ## Quick（固定 8 模块）

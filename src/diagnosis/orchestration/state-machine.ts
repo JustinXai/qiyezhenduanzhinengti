@@ -38,7 +38,7 @@ import {
   parseDiagnosisInput,
   type DiagnosisInput,
 } from "../../runtime/diagnosis-input";
-import { publishGuard } from "../../report/validation";
+import { publishGuard, pruneUnsupportedClaims } from "../../report/validation";
 import {
   createDeterministicVerifier,
   verifyReport,
@@ -465,11 +465,17 @@ export async function runDiagnosisPipeline(
     });
   }
 
+  // Round-3 §六: on the VALIDATED report, drop claims whose verified support is
+  // insufficient (e.g. a negative/missing claim with no measurement boundary) so
+  // an otherwise-valid report still reaches READY without them. Integrity /
+  // UNSUPPORTED / duplicate violations are NOT pruned — they remain hard blocks.
+  const published = pruneUnsupportedClaims(canonical, relations, coverage).report;
+
   // Agent B publish guard (PRODUCT_TRUTH_RULES §4 evidence support, score
   // cross-field consistency, banned CTA copy). §4 is decided from the verified
   // ClaimEvidenceRelations + coverage, NOT from EvidenceItem.supportLevel. A
   // non-ok result blocks READY — the model output never decides publish.
-  const guard = publishGuard({ report: canonical, relations, coverage });
+  const guard = publishGuard({ report: published, relations, coverage });
   if (!guard.ok) {
     return fail("VALIDATING_REPORT", {
       code: "PUBLISH_GUARD_BLOCKED",
@@ -482,12 +488,12 @@ export async function runDiagnosisPipeline(
   await storage.saveReport({
     id: idFactory(),
     diagnosisId,
-    reportContractVersion: canonical.reportContractVersion,
-    scoreContractVersion: canonical.scoreContractVersion,
-    canonicalJson: JSON.stringify(canonical),
+    reportContractVersion: published.reportContractVersion,
+    scoreContractVersion: published.scoreContractVersion,
+    canonicalJson: JSON.stringify(published),
   });
 
   // -- READY ------------------------------------------------------------------
   await setStatus("READY");
-  return { ok: true, status: "READY", report: canonical };
+  return { ok: true, status: "READY", report: published };
 }

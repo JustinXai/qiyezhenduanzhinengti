@@ -95,19 +95,42 @@ export type ClaimEvidenceRelation = z.infer<typeof ClaimEvidenceRelation>;
 // observed evidence set — never from source authority alone.
 // ---------------------------------------------------------------------------
 
+export const SearchWindow = z.object({
+  from: z.string().nullable(),
+  to: z.string().nullable(),
+});
+export type SearchWindow = z.infer<typeof SearchWindow>;
+
 export const EvidenceCoverage = z.object({
+  /** Stable id of the query plan this run executed. */
+  queryPlanId: z.string(),
+  /** Every query the plan produced (planned, may exceed executed). */
+  plannedQueries: z.array(z.string()),
   /** Query Plan queries that were actually executed this run. */
   executedQueries: z.array(z.string()),
+  /** Executed queries that returned results without a provider failure. */
+  successfulQueries: z.array(z.string()),
+  /** Executed queries that failed (provider error / empty). */
+  failedQueries: z.array(z.string()),
+  /** Domains actually searched/observed this run. */
+  searchedDomains: z.array(z.string()),
+  /** All crawled page URLs this run (superset of first-party scope). */
+  crawledPages: z.array(z.string()),
   /** Controlled first-party crawl scope — the enterprise pages actually seen. */
   crawledFirstPartyUrls: z.array(z.string()),
   /** Enterprise domain(s) the crawl was scoped to. */
   firstPartyDomains: z.array(z.string()),
   /** Full evidence set observed this run (ids). */
   observedEvidenceIds: z.array(z.string()),
+  /** Time window of the searched/observed evidence (ISO strings or null). */
+  searchWindow: SearchWindow,
+  /** Human-readable scope limitations (surfaced to bound negative claims). */
+  coverageLimitations: z.array(z.string()),
   /**
    * Deterministic verdict: was enough of the enterprise's public surface
-   * actually checked to defensibly bound a negative statement? True requires at
-   * least one in-scope first-party page AND at least one executed query.
+   * actually checked to defensibly bound a negative statement? Requires at least
+   * one in-scope first-party page AND at least one executed query — an About page
+   * with no executed query plan does NOT establish a boundary.
    */
   boundaryEstablished: z.boolean(),
 });
@@ -122,6 +145,13 @@ export interface DeriveCoverageInput {
   evidence: readonly EvidenceItem[];
   firstPartyDomains: readonly string[];
   executedQueries?: readonly string[];
+  queryPlanId?: string;
+  plannedQueries?: readonly string[];
+  successfulQueries?: readonly string[];
+  failedQueries?: readonly string[];
+  searchedDomains?: readonly string[];
+  searchWindow?: SearchWindow;
+  coverageLimitations?: readonly string[];
 }
 
 /** Lowercase host, strip a single leading "www." and any trailing dot. */
@@ -162,17 +192,32 @@ export function deriveCoverage(input: DeriveCoverageInput): EvidenceCoverage {
     if (inScope) crawledFirstPartyUrls.push(e.url);
   }
 
-  const boundaryEstablished =
-    crawledFirstPartyUrls.length >= 1 &&
-    // If the caller tracks executed queries, require at least one; otherwise the
-    // presence of a controlled first-party crawl scope is the boundary signal.
-    (executedQueries.length === 0 || executedQueries.length >= 1);
+  // A boundary requires BOTH a controlled first-party page in scope AND at least
+  // one executed query (docs/CLAIM_EVIDENCE_VERIFICATION.md; Round-3 §六). An
+  // About page with an empty query plan does NOT bound a negative claim.
+  const boundaryEstablished = crawledFirstPartyUrls.length >= 1 && executedQueries.length >= 1;
+
+  const searchedDomains = input.searchedDomains
+    ? [...input.searchedDomains]
+    : [...new Set(input.evidence.map((e) => canonicalHost(e.sourceDomain)).filter(Boolean))];
 
   return {
+    queryPlanId: input.queryPlanId ?? "",
+    plannedQueries: [...(input.plannedQueries ?? executedQueries)],
     executedQueries,
+    successfulQueries: [...(input.successfulQueries ?? executedQueries)],
+    failedQueries: [...(input.failedQueries ?? [])],
+    searchedDomains,
+    crawledPages: [...crawledFirstPartyUrls],
     crawledFirstPartyUrls,
     firstPartyDomains,
     observedEvidenceIds: input.evidence.map((e) => e.id),
+    searchWindow: input.searchWindow ?? { from: null, to: null },
+    coverageLimitations: [
+      ...(input.coverageLimitations ?? []),
+      ...(crawledFirstPartyUrls.length === 0 ? ["未检查到范围内的首方页面"] : []),
+      ...(executedQueries.length === 0 ? ["本次未执行任何检索查询"] : []),
+    ],
     boundaryEstablished,
   };
 }
@@ -180,10 +225,18 @@ export function deriveCoverage(input: DeriveCoverageInput): EvidenceCoverage {
 /** An explicitly-empty coverage (nothing checked) — negatives cannot publish. */
 export function emptyCoverage(): EvidenceCoverage {
   return {
+    queryPlanId: "",
+    plannedQueries: [],
     executedQueries: [],
+    successfulQueries: [],
+    failedQueries: [],
+    searchedDomains: [],
+    crawledPages: [],
     crawledFirstPartyUrls: [],
     firstPartyDomains: [],
     observedEvidenceIds: [],
+    searchWindow: { from: null, to: null },
+    coverageLimitations: ["本次未建立测量边界(无检索、无受控抓取)"],
     boundaryEstablished: false,
   };
 }

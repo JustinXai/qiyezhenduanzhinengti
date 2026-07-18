@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EvidenceItem } from "../../src/contracts";
-import type { EvidenceCoverage } from "../../src/contracts/claim-evidence";
+import { emptyCoverage, type EvidenceCoverage } from "../../src/contracts/claim-evidence";
 import { clampVerdict } from "../../src/diagnosis/verification/clamp";
 import type { RawVerdict } from "../../src/diagnosis/verification/types";
 
@@ -21,6 +21,7 @@ function ev(partial: Partial<EvidenceItem> = {}): EvidenceItem {
 
 function coverage(partial: Partial<EvidenceCoverage> = {}): EvidenceCoverage {
   return {
+    ...emptyCoverage(),
     executedQueries: ["q1"],
     crawledFirstPartyUrls: ["https://example-equip.com/page"],
     firstPartyDomains: ["example-equip.com"],

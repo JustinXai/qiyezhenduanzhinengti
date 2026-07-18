@@ -11,6 +11,7 @@ import {
   buildSampleReport,
 } from "../../fixtures/sample-report";
 import type { EvidenceItem } from "../../contracts";
+import { deriveCoverage } from "../../contracts/claim-evidence";
 import type {
   EvidencePipeline,
   ReportProducer,
@@ -37,7 +38,23 @@ export function createMockEvidencePipeline(opts?: {
       };
     },
     async normalize() {
-      return { evidence: structuredClone(evidence) };
+      const cloned = structuredClone(evidence);
+      const firstPartyDomains = [
+        ...new Set(
+          cloned
+            .filter((e) => e.sourceType === "FIRST_PARTY_EVIDENCE")
+            .map((e) => e.sourceDomain),
+        ),
+      ];
+      // A deterministic measurement boundary so negative/missing claims can be
+      // bounded in tests, mirroring what the real pipeline supplies.
+      const coverage = deriveCoverage({
+        evidence: cloned,
+        firstPartyDomains,
+        queryPlanId: "mock-plan",
+        executedQueries: ["mock-query-1", "mock-query-2"],
+      });
+      return { evidence: cloned, coverage };
     },
   };
 }

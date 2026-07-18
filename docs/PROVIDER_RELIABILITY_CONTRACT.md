@@ -1,5 +1,10 @@
 # PROVIDER_RELIABILITY_CONTRACT
 
+> **Round-3**:Provider Mode `MOCK`/`REAL` 显式受控(仅 `PROVIDER_MODE` env,不受
+> 前端/用户输入)。`REAL` 走 preflight,缺配置抛 `REAL_PROVIDER_NOT_AUTHORIZED`、
+> 缺授权抛 `PROVIDER_CANARY_REQUIRED`,**绝不回退 MOCK**;本轮真实 Provider 未启用。
+> Next 已升至 15.5.20。见 `src/runtime/create-runtime.ts`。
+
 ## 博查（Web Search）
 
 仅允许 `https://api.bocha.cn/v1/web-search`。通过环境变量配置：

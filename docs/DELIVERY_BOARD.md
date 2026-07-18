@@ -98,7 +98,21 @@ A → B → C → D → E → F → G，按依赖顺序合入 `integration/enter
 每次集成后运行：`pnpm lint && pnpm typecheck && pnpm test && pnpm build &&
 pnpm smoke:mock && pnpm security:check`，通过后立即 commit + push。
 
+## Round-3 Pre-Real-Sample Hardening — 自主完成(Supervisor)
+
+在 5 个 Agent(H/I/J/K/L)集成之上,Supervisor 自主完成:Provider Mode 正式化
+(MOCK/REAL,REAL preflight 抛错不回退)、Coverage Context 扩展、负面 Claim 验证后剪枝
+(`prune-claims.ts`)、公共边界防泄漏、3 条 Canary 走真实应用边界(vitest 数据层 +
+Playwright 页面层 390px)、治理文档(新增 `CLAIM_EVIDENCE_VERIFICATION.md`、
+`COMPETITOR_RESOLUTION.md`、`qa/ROUND_3_PRE_REAL_SAMPLE_HARDENING.md`、`qa/canaries/`)。
+
+八项回归实测:lint / typecheck / test **484** / build / smoke:mock /
+security:check(SSRF strict)/ test:e2e **16**(含 3 Canary)/ audit + audit --prod。
+真实 Provider 调用 0、真实 Diagnosis 0、main 未改变。下一阶段仅 `READY_FOR_PROVIDER_CANARY`。
+
 ## 里程碑 Tag
 
 - `rebuild-baseline-v0` — Supervisor 基线（已创建）
 - `rebuild-vertical-slice-v1` — 第一轮 Mock Vertical Slice 全部 Gate 通过后
+- `rebuild-live-seams-v1` — 真实接缝切片(Round-3 基线,`b0e36dd`)
+- `rebuild-pre-real-sample-v1` — Round-3 真实样本前加固完成(指向最终 integration HEAD)

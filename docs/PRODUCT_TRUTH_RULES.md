@@ -1,5 +1,10 @@
 # PRODUCT_TRUTH_RULES — 真实性、证据与 AI 可见度契约
 
+> **Round-3**:§4 语义支持改由 **ClaimEvidenceRelation** 逐 pair 裁决(不再用
+> `EvidenceItem.supportLevel` 或来源权威度);负面/缺失 Claim 需 EvidenceCoverage
+> 测量边界、限定范围文案,无 coverage 则验证后移除。详见
+> [CLAIM_EVIDENCE_VERIFICATION.md](CLAIM_EVIDENCE_VERIFICATION.md)。
+
 ## 1. Evidence 来源类型
 
 - `FIRST_PARTY_EVIDENCE`：企业官网、企业明确提供的资料。
