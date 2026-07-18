@@ -29,8 +29,17 @@ Canonical DiagnosisReport
 
 ```
 CREATED → VALIDATING → SEARCHING → CRAWLING → NORMALIZING_EVIDENCE
-  → ANALYZING → VALIDATING_REPORT → READY | FAILED
+  → ANALYZING → CLAIM_EVIDENCE_VERIFICATION → VALIDATING_REPORT → READY | FAILED
 ```
+
+`CLAIM_EVIDENCE_VERIFICATION`（Round-3,Agent H）位于 `ANALYZING` 与
+`VALIDATING_REPORT` 之间:对每个候选 `(Claim, Evidence)` pair 由
+`ClaimEvidenceVerifier`（`src/diagnosis/verification/`）判定语义支持等级,产出
+`ClaimEvidenceRelation[]`(持久化于 `claim_evidence_relations`)。`EvidenceItem.supportLevel`
+退化为来源属性默认值,不再表达对某 Claim 的语义支持;发布 Guard 的 §4 裁决改以
+`ClaimEvidenceRelation` + 测量边界 `EvidenceCoverage` 为唯一依据。模型输出不能直接决定
+`READY`(Mock 模式使用确定性 Verifier,零 Provider 调用;真实模式为 DeepSeek 结构化
+Verifier,本轮不真实调用)。
 
 ## 目录职责总览
 

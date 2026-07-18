@@ -171,4 +171,31 @@ describe("SqliteStorageAdapter round-trip", () => {
       await adapter.findReusableCheckpoint({ ...key, inputHash: "other" }),
     ).toBeNull();
   });
+
+  it("round-trips claim-evidence relations (Round-3 additive)", async () => {
+    await adapter.saveClaimEvidenceRelations([
+      {
+        id: "rel_1",
+        diagnosisId: "diag_rel",
+        claimId: "iss_1",
+        claimKind: "coreIssue",
+        evidenceId: "ev_first_product",
+        supportLevel: "PARTIAL_SUPPORT",
+        confidence: 0.6,
+        justification: "coverage-backed",
+        basis: "MEASUREMENT_BOUNDARY",
+        verifierMode: "MOCK_DETERMINISTIC",
+        verifierVersion: "claim-evidence.deterministic.v1",
+      },
+    ]);
+    const rows = await adapter.getClaimEvidenceRelations("diag_rel");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.claimId).toBe("iss_1");
+    expect(rows[0]!.supportLevel).toBe("PARTIAL_SUPPORT");
+    expect(rows[0]!.basis).toBe("MEASUREMENT_BOUNDARY");
+    expect(rows[0]!.verifierVersion).toBe("claim-evidence.deterministic.v1");
+    expect(rows[0]!.createdAt.getTime()).toBe(FIXED_NOW.getTime());
+    // Unknown diagnosis → empty.
+    expect(await adapter.getClaimEvidenceRelations("nope")).toEqual([]);
+  });
 });

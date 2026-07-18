@@ -14,7 +14,26 @@ import {
   createMockEvidencePipeline,
   createMockReportProducer,
 } from "../../src/diagnosis/orchestration/mocks";
+import { createDeterministicVerifier } from "../../src/diagnosis/verification";
+import type { VerifierStrategy } from "../../src/diagnosis/verification";
 import { buildSampleReport } from "../../src/fixtures/sample-report";
+
+/** A deterministic verifier wrapper that counts how often it is invoked. */
+function countingVerifier(version: string): { strategy: VerifierStrategy; calls: () => number } {
+  const base = createDeterministicVerifier();
+  let calls = 0;
+  return {
+    strategy: {
+      mode: "MOCK_DETERMINISTIC",
+      version,
+      async assess(input) {
+        calls += 1;
+        return base.assess(input);
+      },
+    },
+    calls: () => calls,
+  };
+}
 
 const VALID_INPUT = { website: "https://example-equip.com", brandName: "示例智能装备" };
 
@@ -116,6 +135,7 @@ describe("diagnosis pipeline state machine", () => {
       "CRAWLING",
       "NORMALIZING_EVIDENCE",
       "ANALYZING",
+      "CLAIM_EVIDENCE_VERIFICATION",
       "VALIDATING_REPORT",
       "READY",
     ]);
@@ -245,5 +265,44 @@ describe("diagnosis pipeline state machine", () => {
     expect(second.ok).toBe(true);
     // Second run served the report from the reusable checkpoint.
     expect(produce).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists claim-evidence relations and counts the verifier stage in the budget", async () => {
+    const { id, token } = await createRequest("diag_rel", "tok_rel");
+    const result = await runDiagnosisPipeline(deps(), {
+      diagnosisId: id,
+      publicToken: token,
+      input: VALID_INPUT,
+    });
+    expect(result.ok).toBe(true);
+
+    const relations = await adapter.getClaimEvidenceRelations(id);
+    expect(relations.length).toBeGreaterThan(0);
+    expect(relations.every((r) => r.verifierMode === "MOCK_DETERMINISTIC")).toBe(true);
+    // Every persisted relation is traceable to the verifier version that judged it.
+    expect(relations.every((r) => r.verifierVersion.length > 0)).toBe(true);
+
+    const usage = await adapter.getProviderUsage(id);
+    expect(usage.some((u) => u.stage === "CLAIM_EVIDENCE_VERIFICATION")).toBe(true);
+  });
+
+  it("re-verifies when the verifier version changes (checkpoint invalidation)", async () => {
+    const { id, token } = await createRequest("diag_ver", "tok_ver");
+    const idFactory = seq("gen");
+    const args = { diagnosisId: id, publicToken: token, input: VALID_INPUT };
+
+    const v1 = countingVerifier("verifier.v1");
+    await runDiagnosisPipeline(deps({ verifier: v1.strategy, idFactory }), args);
+    expect(v1.calls()).toBeGreaterThan(0);
+
+    // Same version + same input → verification checkpoint is reused (no re-verify).
+    const v1again = countingVerifier("verifier.v1");
+    await runDiagnosisPipeline(deps({ verifier: v1again.strategy, idFactory }), args);
+    expect(v1again.calls()).toBe(0);
+
+    // Bumped verifier version → checkpoint key changes → re-verify.
+    const v2 = countingVerifier("verifier.v2");
+    await runDiagnosisPipeline(deps({ verifier: v2.strategy, idFactory }), args);
+    expect(v2.calls()).toBeGreaterThan(0);
   });
 });

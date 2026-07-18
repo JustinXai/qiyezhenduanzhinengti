@@ -24,6 +24,11 @@ import {
   type DiagnosisReport as DiagnosisReportType,
   type EvidenceItem,
 } from "../../contracts";
+import {
+  deriveCoverage,
+  type ClaimEvidenceRelation,
+  type EvidenceCoverage,
+} from "../../contracts/claim-evidence";
 import type {
   DiagnosisStatus,
   EvidenceRecordInput,
@@ -34,6 +39,11 @@ import {
   type DiagnosisInput,
 } from "../../runtime/diagnosis-input";
 import { publishGuard } from "../../report/validation";
+import {
+  createDeterministicVerifier,
+  verifyReport,
+  type VerifierStrategy,
+} from "../verification";
 
 // ---------------------------------------------------------------------------
 // Checkpoint identity — fixed for the mock analysis so a repeated run with the
@@ -44,6 +54,10 @@ import { publishGuard } from "../../report/validation";
 export const ANALYSIS_PROVIDER_MODEL = "deepseek-v4-flash";
 export const ANALYSIS_PROMPT_VERSION = "analysis.v1";
 export const ANALYSIS_TRUST_GUARD_VERSION = "trust-guard.v1";
+
+// Version of the deterministic Claim–Evidence publish-gate logic. Bumping it
+// (or the verifier version) invalidates a stored verification checkpoint.
+export const CLAIM_EVIDENCE_GATE_VERSION = "claim-evidence-gate.v1";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -82,6 +96,12 @@ export interface StageResult {
 export interface NormalizedEvidenceResult {
   evidence: EvidenceItem[];
   usage?: ProviderUsageSample[];
+  /**
+   * Optional measurement boundary for this run (executed query plan + controlled
+   * crawl scope). When omitted, the state machine derives a default from the
+   * evidence + the request website. Required to publish negative/missing claims.
+   */
+  coverage?: EvidenceCoverage;
 }
 
 export interface EvidencePipeline {
@@ -122,6 +142,11 @@ export interface OrchestratorDeps {
   storage: StorageAdapter;
   evidence: EvidencePipeline;
   producer: ReportProducer;
+  /**
+   * Claim–Evidence semantic verifier. Defaults to the deterministic (zero
+   * provider call) verifier; a DeepSeek-backed strategy can be injected here.
+   */
+  verifier?: VerifierStrategy;
   clock?: () => Date;
   idFactory?: () => string;
 }
@@ -149,9 +174,20 @@ export const PIPELINE_STAGES: readonly DiagnosisStatus[] = [
   "CRAWLING",
   "NORMALIZING_EVIDENCE",
   "ANALYZING",
+  "CLAIM_EVIDENCE_VERIFICATION",
   "VALIDATING_REPORT",
   "READY",
 ] as const;
+
+/** Host(s) the request website belongs to (for coverage first-party scope). */
+function firstPartyDomainsOf(website: string): string[] {
+  try {
+    const h = new URL(website).hostname.toLowerCase();
+    return [h.startsWith("www.") ? h.slice(4) : h];
+  } catch {
+    return [];
+  }
+}
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -328,6 +364,84 @@ export async function runDiagnosisPipeline(
     });
   }
 
+  // -- CLAIM_EVIDENCE_VERIFICATION -------------------------------------------
+  // Structured semantic verification of every candidate (Claim, Evidence) pair.
+  // The verifier (deterministic mock by default; DeepSeek-backed when injected)
+  // NEVER decides READY — it only produces ClaimEvidenceRelations, which the
+  // deterministic publish guard uses as the sole basis for the §4 decision.
+  await setStatus("CLAIM_EVIDENCE_VERIFICATION");
+  const verifier = deps.verifier ?? createDeterministicVerifier();
+  const coverage: EvidenceCoverage =
+    normalized.coverage ??
+    deriveCoverage({
+      evidence: normalized.evidence,
+      firstPartyDomains: firstPartyDomainsOf(input.website),
+    });
+
+  let relations: ClaimEvidenceRelation[];
+  // Checkpoint keyed on the verifier mode+version + gate version; a version bump
+  // invalidates the stored relations so they are re-verified (职责 8, test 11).
+  const verificationKey = {
+    diagnosisId,
+    stage: "CLAIM_EVIDENCE_VERIFICATION",
+    inputHash: hashInput({ report, coverage }),
+    reportContractVersion: REPORT_CONTRACT_VERSION,
+    scoreContractVersion: SCORE_CONTRACT_VERSION,
+    providerModel: verifier.mode,
+    promptVersion: verifier.version,
+    trustGuardVersion: CLAIM_EVIDENCE_GATE_VERSION,
+  };
+  const reusableVerification = await storage.findReusableCheckpoint(verificationKey);
+  if (reusableVerification) {
+    try {
+      relations = JSON.parse(reusableVerification.outputJson) as ClaimEvidenceRelation[];
+    } catch (e) {
+      return fail(
+        "CLAIM_EVIDENCE_VERIFICATION",
+        toPipelineError("VERIFICATION_CHECKPOINT_CORRUPT", e),
+      );
+    }
+  } else {
+    let verification: Awaited<ReturnType<typeof verifyReport>>;
+    try {
+      verification = await verifyReport({ report, coverage, strategy: verifier });
+    } catch (e) {
+      return fail("CLAIM_EVIDENCE_VERIFICATION", toPipelineError("VERIFICATION_FAILED", e));
+    }
+    // Verifier provider calls count against the budget (职责 8, test 12).
+    await recordUsage(verification.usage);
+    if (!verification.ok) {
+      return fail("CLAIM_EVIDENCE_VERIFICATION", {
+        code: "VERIFICATION_ILLEGAL_EVIDENCE",
+        message: `verifier referenced evidence ids outside the candidate set: ${verification.illegalEvidenceIds.join(", ")}`,
+      });
+    }
+    relations = verification.relations;
+    await storage.saveCheckpoint({
+      ...verificationKey,
+      outputJson: JSON.stringify(relations),
+    });
+  }
+
+  // Persist the relations for traceability (additive/optional storage method).
+  if (storage.saveClaimEvidenceRelations && relations.length > 0) {
+    await storage.saveClaimEvidenceRelations(
+      relations.map((r) => ({
+        id: idFactory(),
+        diagnosisId,
+        claimId: r.claimId,
+        claimKind: r.claimKind,
+        evidenceId: r.evidenceId,
+        supportLevel: r.supportLevel,
+        confidence: r.confidence,
+        justification: r.justification,
+        basis: r.basis,
+        verifierMode: r.verifierMode,
+        verifierVersion: r.verifierVersion,
+      })),
+    );
+  }
+
   // -- VALIDATING_REPORT ------------------------------------------------------
   await setStatus("VALIDATING_REPORT");
   const validation = DiagnosisReport.safeParse(report);
@@ -352,8 +466,10 @@ export async function runDiagnosisPipeline(
   }
 
   // Agent B publish guard (PRODUCT_TRUTH_RULES §4 evidence support, score
-  // cross-field consistency, banned CTA copy). A non-ok result blocks READY.
-  const guard = publishGuard({ report: canonical });
+  // cross-field consistency, banned CTA copy). §4 is decided from the verified
+  // ClaimEvidenceRelations + coverage, NOT from EvidenceItem.supportLevel. A
+  // non-ok result blocks READY — the model output never decides publish.
+  const guard = publishGuard({ report: canonical, relations, coverage });
   if (!guard.ok) {
     return fail("VALIDATING_REPORT", {
       code: "PUBLISH_GUARD_BLOCKED",

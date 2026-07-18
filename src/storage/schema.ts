@@ -46,6 +46,24 @@ export const providerUsage = sqliteTable("provider_usage", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+// Round-3 additive: verified Claim–Evidence semantic relations. Each row is one
+// (Claim, Evidence) support judgement produced by the ClaimEvidenceVerifier and
+// used by the publish guard for the §4 decision. Additive only.
+export const claimEvidenceRelations = sqliteTable("claim_evidence_relations", {
+  id: text("id").primaryKey(),
+  diagnosisId: text("diagnosis_id").notNull(),
+  claimId: text("claim_id").notNull(),
+  claimKind: text("claim_kind").notNull(), // coreIssue | strength | geoOpportunity | competitorGap
+  evidenceId: text("evidence_id").notNull(),
+  supportLevel: text("support_level").notNull(), // DIRECT_SUPPORT | PARTIAL_SUPPORT | CONTEXT_ONLY | UNSUPPORTED
+  confidence: real("confidence").notNull(),
+  justification: text("justification"),
+  basis: text("basis").notNull(), // CONTENT_MATCH | MEASUREMENT_BOUNDARY
+  verifierMode: text("verifier_mode").notNull(), // MOCK_DETERMINISTIC | DEEPSEEK_STRUCTURED
+  verifierVersion: text("verifier_version").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
 export const analysisCheckpoints = sqliteTable("analysis_checkpoints", {
   id: text("id").primaryKey(),
   diagnosisId: text("diagnosis_id").notNull(),
