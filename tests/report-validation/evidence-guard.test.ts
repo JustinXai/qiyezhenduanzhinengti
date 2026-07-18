@@ -8,19 +8,10 @@ describe("evidenceGuard", () => {
     expect(evidenceGuard(buildValidReport())).toEqual({ ok: true });
   });
 
-  it("documents the current fixture under-support (PRODUCT_TRUTH_RULES §4)", () => {
-    // GREEN today, but pinned so the Supervisor is alerted the moment the
-    // frozen fixture's evidence support levels are corrected upstream.
-    // See agent-output/agent-b/CHECKPOINT.md for the seam finding.
-    const result = evidenceGuard(SAMPLE_DIAGNOSIS_REPORT);
-    expect(result.ok).toBe(false);
-    const codes = codesOf(result);
-    // iss_1 (PARTIAL) & iss_3 (PARTIAL) -> §4.1 ; iss_2 & geo_2 (CONTEXT_ONLY)
-    // -> §4.4 ; geo_1 (single PARTIAL) -> §4.3.
-    expect(codes.filter((c) => c === "TRUTH_4_1_CORE_ISSUE_NEEDS_DIRECT_SUPPORT")).toHaveLength(2);
-    expect(codes.filter((c) => c === "TRUTH_4_4_CONTEXT_ONLY_INSUFFICIENT")).toHaveLength(2);
-    expect(codes).toContain("TRUTH_4_3_OPPORTUNITY_NEEDS_SUPPORT");
-    expect(codes).toHaveLength(5);
+  it("passes the corrected shared fixture (PRODUCT_TRUTH_RULES §4)", () => {
+    // The Supervisor corrected src/fixtures/sample-report.ts so every claim
+    // cites DIRECT_SUPPORT evidence; the raw fixture now clears the guard.
+    expect(evidenceGuard(SAMPLE_DIAGNOSIS_REPORT)).toEqual({ ok: true });
   });
 
   it("§4.1 flags a core issue lacking DIRECT_SUPPORT (only PARTIAL)", () => {
@@ -37,30 +28,36 @@ describe("evidenceGuard", () => {
 
   it("§4.2 flags a strength with a single PARTIAL_SUPPORT", () => {
     const report = buildValidReport();
-    report.strengths = [
-      { ...report.strengths[0]!, evidenceIds: ["ev_first_about"] }, // PARTIAL only
+    report.evidence = [
+      ...report.evidence,
+      { ...report.evidence[0]!, id: "ev_partial_only", supportLevel: "PARTIAL_SUPPORT" as const },
     ];
+    report.strengths = [{ ...report.strengths[0]!, evidenceIds: ["ev_partial_only"] }];
     const codes = codesOf(evidenceGuard(report));
     expect(codes).toContain("TRUTH_4_2_STRENGTH_NEEDS_SUPPORT");
   });
 
   it("§4.2 accepts a strength backed by two PARTIAL_SUPPORT items", () => {
     const report = buildValidReport();
-    // ev_first_about is PARTIAL; add a second PARTIAL sibling.
     report.evidence = [
       ...report.evidence,
-      { ...report.evidence.find((e) => e.id === "ev_first_about")!, id: "ev_first_about_2" },
+      { ...report.evidence[0]!, id: "ev_partial_a", supportLevel: "PARTIAL_SUPPORT" as const },
+      { ...report.evidence[0]!, id: "ev_partial_b", supportLevel: "PARTIAL_SUPPORT" as const },
     ];
     report.strengths = [
-      { ...report.strengths[0]!, evidenceIds: ["ev_first_about", "ev_first_about_2"] },
+      { ...report.strengths[0]!, evidenceIds: ["ev_partial_a", "ev_partial_b"] },
     ];
     expect(evidenceGuard(report).ok).toBe(true);
   });
 
   it("§4.3 flags a GEO opportunity with a single PARTIAL_SUPPORT", () => {
     const report = buildValidReport();
+    report.evidence = [
+      ...report.evidence,
+      { ...report.evidence[0]!, id: "ev_partial_only", supportLevel: "PARTIAL_SUPPORT" as const },
+    ];
     report.geoOpportunities = [
-      { ...report.geoOpportunities[0]!, evidenceIds: ["ev_first_about"] }, // 1 PARTIAL
+      { ...report.geoOpportunities[0]!, evidenceIds: ["ev_partial_only"] },
     ];
     const codes = codesOf(evidenceGuard(report));
     expect(codes).toContain("TRUTH_4_3_OPPORTUNITY_NEEDS_SUPPORT");

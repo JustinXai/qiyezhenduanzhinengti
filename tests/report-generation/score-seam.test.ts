@@ -8,7 +8,7 @@ function dim(score: number | null, status: ScoreDimension["measurementStatus"] =
 }
 
 describe("computeOverall — SCORE_CONTRACT seam", () => {
-  it("reproduces the shared sample's 59.15 / coverage 1.0", () => {
+  it("reproduces the shared sample's 62.53 / coverage 0.85", () => {
     const s = SAMPLE_DIAGNOSIS_REPORT.scores;
     const res = computeOverall({
       companyClarity: s.companyClarity,
@@ -17,8 +17,9 @@ describe("computeOverall — SCORE_CONTRACT seam", () => {
       trustEvidence: s.trustEvidence,
       aiVisibility: s.aiVisibility,
     });
-    expect(res.overallScore).toBe(59.15);
-    expect(res.scoreCoverage).toBe(1);
+    // aiVisibility null -> renormalise over 0.85: (14.4+13+13.75+12)/0.85 = 62.53
+    expect(res.overallScore).toBe(62.53);
+    expect(res.scoreCoverage).toBe(0.85);
   });
 
   it("renormalizes weights over the non-null dimensions", () => {

@@ -4,24 +4,14 @@ import type { GuardResult, GuardRuleCode } from "../../src/contracts/guard-types
 import { buildSampleReport } from "../../src/fixtures/sample-report";
 
 /**
- * A genuinely §4-valid report derived from the shared sample.
- *
- * FIXTURE SEAM: the frozen SAMPLE_DIAGNOSIS_REPORT under-supports its core
- * issues / opportunities — iss_1/iss_3/geo_1 cite only PARTIAL_SUPPORT and
- * iss_2/geo_2 cite only CONTEXT_ONLY, none of which meet PRODUCT_TRUTH_RULES
- * §4.1/§4.3/§4.4. We upgrade exactly those two evidence items to
- * DIRECT_SUPPORT here so the happy-path assertions run against a report that
- * actually satisfies §4. The upstream fixture fix is owned by the Supervisor
- * (src/fixtures is Supervisor-only); see agent-output/agent-b/CHECKPOINT.md.
+ * A §4-valid report to build guard scenarios from. The Supervisor corrected
+ * src/fixtures/sample-report.ts so the shared SAMPLE_DIAGNOSIS_REPORT already
+ * satisfies PRODUCT_TRUTH_RULES §4 (every claim cites DIRECT_SUPPORT evidence),
+ * so this is now just a mutable deep clone with optional overrides. Tests that
+ * need an under-supported claim add their own PARTIAL/CONTEXT_ONLY evidence.
  */
 export function buildValidReport(overrides: Partial<DiagnosisReport> = {}): DiagnosisReport {
-  const base = buildSampleReport();
-  base.evidence = base.evidence.map((e) =>
-    e.id === "ev_first_product" || e.id === "ev_observed_news"
-      ? { ...e, supportLevel: "DIRECT_SUPPORT" as const }
-      : e,
-  );
-  return { ...base, ...overrides };
+  return { ...buildSampleReport(), ...overrides };
 }
 
 /** Collect the rule codes from a guard result (empty when ok). */

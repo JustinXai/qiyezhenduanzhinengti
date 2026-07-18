@@ -26,7 +26,7 @@ describe("publishGuard", () => {
 
   it("blocks on a cross-field score inconsistency", () => {
     const report = buildValidReport();
-    report.scores.overallScore = 1; // real value is 59.15
+    report.scores.overallScore = 1; // real value is 62.53
     expect(codesOf(publishGuard({ report }))).toContain("CROSS_FIELD_OVERALL_SCORE_MISMATCH");
   });
 
@@ -56,12 +56,9 @@ describe("publishGuard", () => {
     expect(codes).toContain("CTA_BANNED_PHRASE");
   });
 
-  it("the raw frozen sample is blocked only by the evidence guard (score/cta pass)", () => {
-    // Confirms the FIXTURE SEAM is isolated to §4 evidence support levels: the
-    // score cross-field and CTA guards already pass on the untouched sample.
-    const result = publishGuard({ report: SAMPLE_DIAGNOSIS_REPORT });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.violations.every((v) => v.guard === "evidence")).toBe(true);
+  it("passes the corrected raw frozen sample through every guard", () => {
+    // The Supervisor fixed the fixture's §4 evidence support levels; the raw
+    // sample now clears evidence + cross-field + CTA guards together.
+    expect(publishGuard({ report: SAMPLE_DIAGNOSIS_REPORT })).toEqual({ ok: true });
   });
 });

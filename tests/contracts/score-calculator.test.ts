@@ -30,9 +30,10 @@ function scores(partial: Partial<Record<keyof ScoreDimensionMap, number>>): Scor
 describe("computeScoreBlock", () => {
   it("reproduces the canonical sample's overallScore and coverage", () => {
     const result = computeScoreBlock(SAMPLE_DIAGNOSIS_REPORT.scores);
-    // 0.20*72 + 0.20*65 + 0.25*55 + 0.20*60 + 0.15*40 = 59.15
-    expect(result.overallScore).toBe(59.15);
-    expect(result.scoreCoverage).toBe(1);
+    // aiVisibility is null (INSUFFICIENT); renormalise over 0.85 of the weight:
+    // (0.20*72 + 0.20*65 + 0.25*55 + 0.20*60) / 0.85 = 62.53
+    expect(result.overallScore).toBe(62.53);
+    expect(result.scoreCoverage).toBe(0.85);
   });
 
   it("returns overallScore null and coverage 0 when every dimension is null", () => {

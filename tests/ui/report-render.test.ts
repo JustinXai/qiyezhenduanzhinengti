@@ -110,8 +110,8 @@ describe("QuickReport rendering", () => {
   });
 
   it("renders the composite index value inside the geo-index hook", () => {
-    const html = renderQuick(); // sample overallScore = 59.15 -> rounds to 59
-    expect(html).toMatch(/data-testid="geo-index"[^>]*>\s*59\s*</);
+    const html = renderQuick(); // sample overallScore = 62.53 -> Math.round -> 63
+    expect(html).toMatch(/data-testid="geo-index"[^>]*>\s*63\s*</);
   });
 
   it("keeps quick-module-5 numbering fixed even when it is hidden", () => {

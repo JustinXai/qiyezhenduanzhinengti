@@ -32,7 +32,13 @@ import {
   type EvidenceViewModel as EvidenceViewModelType,
 } from "../src/contracts";
 import { SAMPLE_DIAGNOSIS_REPORT } from "../src/fixtures/sample-report";
-import type { StorageAdapter, DiagnosisStatus } from "../src/storage/adapter";
+import type {
+  StorageAdapter,
+  DiagnosisRequestRecord,
+  EvidenceRecord,
+  StoredReport,
+  ProviderUsageRecord,
+} from "../src/storage/adapter";
 import { findBannedTerms } from "../tests/fixtures/banned-terms";
 
 let step = 0;
@@ -52,18 +58,73 @@ function fail(msg: string): never {
 // (Agent E owns the better-sqlite3 implementation) without a DB dependency.
 // ---------------------------------------------------------------------------
 function createInMemoryStorage(): StorageAdapter {
-  const requests = new Map<string, { inputJson: string; publicToken: string; status: DiagnosisStatus }>();
+  const requests = new Map<string, DiagnosisRequestRecord>();
+  const evidenceByDiagnosis = new Map<string, EvidenceRecord[]>();
+  const reports = new Map<string, StoredReport>();
+  const usage = new Map<string, ProviderUsageRecord[]>();
   const checkpoints = new Map<string, string>();
   const key = (q: { diagnosisId: string; stage: string; inputHash: string }): string =>
     `${q.diagnosisId}::${q.stage}::${q.inputHash}`;
+  const epoch = new Date(0);
 
   return {
     async createDiagnosisRequest(input) {
-      requests.set(input.id, { inputJson: input.inputJson, publicToken: input.publicToken, status: "CREATED" });
+      requests.set(input.id, {
+        id: input.id,
+        status: "CREATED",
+        inputJson: input.inputJson,
+        publicToken: input.publicToken,
+        createdAt: epoch,
+        updatedAt: epoch,
+      });
     },
     async updateDiagnosisStatus(id, status) {
       const r = requests.get(id);
-      if (r) r.status = status;
+      if (r) {
+        r.status = status;
+        r.updatedAt = epoch;
+      }
+    },
+    async getDiagnosisRequest(id) {
+      return requests.get(id) ?? null;
+    },
+    async getDiagnosisRequestByPublicToken(publicToken) {
+      for (const r of requests.values()) if (r.publicToken === publicToken) return r;
+      return null;
+    },
+    async saveEvidence(items) {
+      for (const item of items) {
+        const arr = evidenceByDiagnosis.get(item.diagnosisId) ?? [];
+        arr.push(item);
+        evidenceByDiagnosis.set(item.diagnosisId, arr);
+      }
+    },
+    async getEvidence(diagnosisId) {
+      return evidenceByDiagnosis.get(diagnosisId) ?? [];
+    },
+    async saveReport(input) {
+      reports.set(input.diagnosisId, { ...input, createdAt: epoch });
+    },
+    async getReport(diagnosisId) {
+      return reports.get(diagnosisId) ?? null;
+    },
+    async recordProviderUsage(input) {
+      const arr = usage.get(input.diagnosisId) ?? [];
+      arr.push({
+        id: input.id,
+        diagnosisId: input.diagnosisId,
+        provider: input.provider,
+        stage: input.stage,
+        callCount: input.callCount ?? 0,
+        retryCount: input.retryCount ?? 0,
+        errorCode: input.errorCode ?? null,
+        costEstimate: input.costEstimate ?? null,
+        createdAt: epoch,
+      });
+      usage.set(input.diagnosisId, arr);
+    },
+    async getProviderUsage(diagnosisId) {
+      return usage.get(diagnosisId) ?? [];
     },
     async saveCheckpoint(cp) {
       checkpoints.set(key(cp), cp.outputJson);

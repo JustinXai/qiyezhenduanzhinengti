@@ -83,11 +83,19 @@ function scanSecrets(files: string[]): number {
 
 const CUSTOMER_VISIBLE_ROOTS = ["app/", "components/", "src/"];
 
+// Guard/validation source legitimately enumerates the banned phrases so it can
+// DETECT them (e.g. src/report/validation/cta-guard.ts holds BANNED_PHRASES).
+// It is server-side logic that never renders to a customer, so — like docs/** —
+// it is excluded from the banned-copy scan. Customer-facing copy under
+// presentation / generation / components / pages is still scanned.
+const BANNED_COPY_EXCLUDED_PREFIXES = ["src/report/validation/"];
+
 // Banned score aliases (docs/REPORT_CONTRACT.md §1) and marketing/恐吓 copy
 // (docs/PRODUCT_TRUTH_RULES.md §9) come from the shared single source of truth
 // so the gate and the vitest guard can never drift.
 
 function isCustomerVisible(file: string): boolean {
+  if (BANNED_COPY_EXCLUDED_PREFIXES.some((p) => file.startsWith(p))) return false;
   return CUSTOMER_VISIBLE_ROOTS.some((root) => file.startsWith(root));
 }
 
