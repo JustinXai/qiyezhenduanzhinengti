@@ -1,0 +1,37 @@
+{
+  "tests": [
+    {
+      "id": "aiv_1",
+      "questionCategory": "PURCHASE_DECISION",
+      "question": "华东地区有哪些可靠的中小企业柔性装配线供应商?",
+      "answerText": "常见供应商包括若干区域厂商,建议对比交付周期与售后能力后再决定。",
+      "evidenceIds": ["ev_observed_news"]
+    },
+    {
+      "id": "aiv_2",
+      "questionCategory": "BRAND_DIRECT",
+      "question": "示例智能装备主要提供什么产品和服务?",
+      "answerText": "示例智能装备提供面向中小制造企业的柔性装配线与售后运维服务。",
+      "accuracy": "PARTIAL",
+      "recommendationStrength": "WEAK",
+      "evidenceIds": ["ev_first_home"]
+    },
+    {
+      "id": "aiv_3",
+      "questionCategory": "COMPETITOR_COMPARISON",
+      "question": "示例智能装备和竞品甲自动化相比有什么差异?",
+      "answerText": "示例智能装备聚焦中小制造企业,竞品甲自动化产品线覆盖更广。",
+      "accuracy": "PARTIAL",
+      "recommendationStrength": "MODERATE",
+      "evidenceIds": ["ev_first_home", "ev_competitor_home"]
+    },
+    {
+      "id": "aiv_4",
+      "questionCategory": "OTHER",
+      "question": "当前行业整体趋势如何?",
+      "answerText": "",
+      "providerFailed": false,
+      "evidenceIds": []
+    }
+  ]
+}

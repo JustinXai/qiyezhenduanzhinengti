@@ -1,0 +1,39 @@
+{
+  "companyClarity": {
+    "criteria": [
+      { "key": "brandIdentityClear", "rating": "PRESENT" },
+      { "key": "offeringClear", "rating": "PRESENT" },
+      { "key": "targetCustomerClear", "rating": "PRESENT" },
+      { "key": "valuePropositionClear", "rating": "ABSENT" }
+    ],
+    "evidenceIds": ["ev_first_home", "ev_first_about"]
+  },
+  "websiteCompleteness": {
+    "criteria": [
+      { "key": "productInfo", "rating": "PRESENT" },
+      { "key": "companyBackground", "rating": "PRESENT" },
+      { "key": "contactChannel", "rating": "PARTIAL" },
+      { "key": "processOrPricing", "rating": "PARTIAL" },
+      { "key": "caseOrProof", "rating": "ABSENT" }
+    ],
+    "evidenceIds": ["ev_first_home", "ev_first_product"]
+  },
+  "customerQuestionCoverage": {
+    "criteria": [
+      { "key": "purchaseDecisionQuestions", "rating": "PARTIAL" },
+      { "key": "comparisonQuestions", "rating": "ABSENT" },
+      { "key": "deliveryAndAfterSales", "rating": "PARTIAL" },
+      { "key": "structuredFaq", "rating": "ABSENT" }
+    ],
+    "evidenceIds": ["ev_observed_news"]
+  },
+  "trustEvidence": {
+    "criteria": [
+      { "key": "thirdPartyCredentials", "rating": "ABSENT" },
+      { "key": "verifiableCases", "rating": "PARTIAL" },
+      { "key": "mediaOrPublicMentions", "rating": "PARTIAL" },
+      { "key": "customerTestimonials", "rating": "ABSENT" }
+    ],
+    "evidenceIds": ["ev_observed_news"]
+  }
+}
