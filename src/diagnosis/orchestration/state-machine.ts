@@ -33,6 +33,7 @@ import {
   parseDiagnosisInput,
   type DiagnosisInput,
 } from "../../runtime/diagnosis-input";
+import { publishGuard } from "../../report/validation";
 
 // ---------------------------------------------------------------------------
 // Checkpoint identity — fixed for the mock analysis so a repeated run with the
@@ -347,6 +348,18 @@ export async function runDiagnosisPipeline(
       code: "REPORT_IDENTITY_MISMATCH",
       message:
         "report diagnosisId/publicToken does not match the diagnosis request",
+    });
+  }
+
+  // Agent B publish guard (PRODUCT_TRUTH_RULES §4 evidence support, score
+  // cross-field consistency, banned CTA copy). A non-ok result blocks READY.
+  const guard = publishGuard({ report: canonical });
+  if (!guard.ok) {
+    return fail("VALIDATING_REPORT", {
+      code: "PUBLISH_GUARD_BLOCKED",
+      message: guard.violations
+        .map((v) => `${v.rule}${v.claimId ? `(${v.claimId})` : ""}: ${v.message}`)
+        .join("; "),
     });
   }
 

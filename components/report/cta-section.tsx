@@ -39,7 +39,7 @@ export function CtaSection() {
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
-          data-testid="primary-cta"
+          data-testid="primary-cta-footer"
           className="flex-1 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-neutral-900 transition hover:bg-neutral-100"
         >
           {PRIMARY_CTA}

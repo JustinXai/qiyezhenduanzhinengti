@@ -23,20 +23,18 @@ interface ScoreHeadlineProps {
 export function ScoreHeadline({ overallScore, scoreCoverage }: ScoreHeadlineProps) {
   const hasScore = overallScore !== null;
   return (
-    <div className="rounded-xl bg-neutral-900 p-4 text-white">
+    // data-testid="geo-index" wraps the whole composite-index headline (frozen
+    // label + value) so tests can assert both the canonical name and the score.
+    <div data-testid="geo-index" className="rounded-xl bg-neutral-900 p-4 text-white">
       <p className="text-xs text-neutral-300">{OVERALL_SCORE_LABEL}</p>
       <div className="mt-1 flex items-end gap-2">
         {hasScore ? (
           <>
-            <span data-testid="geo-index" className="text-4xl font-bold leading-none">
-              {formatScore(overallScore)}
-            </span>
+            <span className="text-4xl font-bold leading-none">{formatScore(overallScore)}</span>
             <span className="pb-1 text-sm text-neutral-400">/ 100</span>
           </>
         ) : (
-          <span data-testid="geo-index" className="text-lg font-semibold text-neutral-200">
-            覆盖不足,暂不评分
-          </span>
+          <span className="text-lg font-semibold text-neutral-200">覆盖不足,暂不评分</span>
         )}
       </div>
       <p className="mt-2 text-xs text-neutral-400">评分覆盖率 {formatPercent(scoreCoverage)}</p>

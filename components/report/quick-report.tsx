@@ -45,6 +45,7 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
+              data-testid="primary-cta"
               className="flex-1 rounded-lg bg-neutral-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
             >
               预约报告解读

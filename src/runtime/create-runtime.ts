@@ -8,9 +8,9 @@
 import { openMigratedDatabase } from "../storage/migrate";
 import { SqliteStorageAdapter } from "../storage/sqlite-adapter";
 import {
-  createMockEvidencePipeline,
-  createMockReportProducer,
-} from "../diagnosis/orchestration/mocks";
+  createLiveEvidencePipeline,
+  createLiveReportProducer,
+} from "../diagnosis/orchestration/live-seams";
 import type { DiagnosesApiDeps } from "./api/diagnoses-handlers";
 
 const DEFAULT_DB_URL = "./data/dev.sqlite";
@@ -27,10 +27,12 @@ export function getRuntime(): DiagnosesApiDeps {
     const db = openMigratedDatabase(resolveDbUrl());
     singleton = {
       storage: new SqliteStorageAdapter(db),
-      // INTEGRATION SEAM (Agent C search/evidence) — offline mock for round 1.
-      evidence: createMockEvidencePipeline(),
-      // INTEGRATION SEAM (Agent D report generator) — offline mock for round 1.
-      producer: createMockReportProducer(),
+      // Real Agent C search planning + evidence normalization over a mock Bocha
+      // provider (no real web search / crawl).
+      evidence: createLiveEvidencePipeline(),
+      // Real Agent D staged analysis + report assembly over a scenario DeepSeek
+      // provider (no real DeepSeek call).
+      producer: createLiveReportProducer(),
     };
   }
   return singleton;

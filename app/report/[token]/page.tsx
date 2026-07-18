@@ -1,23 +1,24 @@
+import Link from "next/link";
 import { presentReport } from "../../../src/report/presentation";
-import { SAMPLE_DIAGNOSIS_REPORT } from "../../../src/fixtures/sample-report";
 import { ReportExperience } from "../../../components/report/report-experience";
+import { getRuntime } from "../../../src/runtime/create-runtime";
+import {
+  handleGetDiagnosis,
+  type DiagnosisView,
+} from "../../../src/runtime/api/diagnoses-handlers";
 
-// INTEGRATION SEAM (Agent E API):
-// Real reports are served by Agent E from app/api (Canonical DiagnosisReport,
-// looked up by publicToken). In this round the page renders the shared sample
-// report projected through the presentation service, so the Quick/Deep/Evidence
-// experience is exercised end-to-end without a live backend.
-//
-// Per the Agent G e2e contract, when DIAGNOSIS_SMOKE_MODE is truthy the page
-// MUST render SAMPLE_DIAGNOSIS_REPORT through the presentation service — which is
-// exactly this round's behaviour (the sample is the only data source here).
-//
-// When Agent E's endpoint lands, keep the smoke-mode branch and add the real
-// lookup keyed on `token`; the rest of this component is unchanged because it
-// only consumes the presentation view models.
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// Real data source (Agent E API): the report is looked up by its public token
+// through the same handler the HTTP route uses, so the page renders exactly the
+// canonical report that was produced, validated, guarded and stored — never a
+// fixture. The presentation service projects that one report into Quick / Deep /
+// Evidence view models.
 async function loadReport(token: string) {
-  if (!token) throw new Error("缺少报告 token");
-  return SAMPLE_DIAGNOSIS_REPORT;
+  const result = await handleGetDiagnosis(getRuntime(), { id: token, publicToken: token });
+  if (result.status !== 200) return null;
+  return (result.body as DiagnosisView).report;
 }
 
 interface ReportPageProps {
@@ -27,7 +28,21 @@ interface ReportPageProps {
 export default async function ReportPage({ params }: ReportPageProps) {
   const { token } = await params;
   const report = await loadReport(token);
-  const { quick, deep, evidence } = presentReport(report);
 
+  if (!report) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center gap-3 p-6 text-center">
+        <h1 className="text-lg font-semibold">未找到诊断报告</h1>
+        <p className="text-sm text-neutral-500">
+          该报告可能尚未生成完成,或链接无效。请返回首页重新发起诊断。
+        </p>
+        <Link href="/" className="text-sm font-medium text-neutral-900 underline">
+          返回首页
+        </Link>
+      </main>
+    );
+  }
+
+  const { quick, deep, evidence } = presentReport(report);
   return <ReportExperience quick={quick} deep={deep} evidence={evidence} />;
 }
