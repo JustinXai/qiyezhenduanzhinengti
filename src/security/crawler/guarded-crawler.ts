@@ -81,36 +81,81 @@ async function defaultResolveHost(hostname: string): Promise<string[]> {
   return records.map((r) => r.address);
 }
 
+/**
+ * Race a promise against an AbortSignal. Resolves/rejects with the promise's
+ * result, unless the signal fires first — in which case it rejects. The
+ * underlying promise's eventual settlement is always consumed, so a slow
+ * `reader.read()` that outlives the abort never becomes an unhandled rejection.
+ */
+function raceAbort<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return p;
+  if (signal.aborted) {
+    void p.catch(() => {});
+    return Promise.reject(new Error("aborted"));
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error("aborted"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    p.then(
+      (v) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(v);
+      },
+      (e) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(e);
+      },
+    );
+  });
+}
+
+// Reading the body is part of the request: it is covered by the same timeout
+// (`signal`) as connect+headers, so a server that streams the body slowly
+// ("slowloris body") is aborted instead of tying up the crawler indefinitely.
 async function readCappedText(
   res: Response,
   cap: number,
-): Promise<{ ok: true; text: string } | { ok: false }> {
+  signal?: AbortSignal,
+): Promise<{ ok: true; text: string } | { ok: false; aborted?: boolean }> {
   const body = res.body as ReadableStream<Uint8Array> | null;
   if (body && typeof body.getReader === "function") {
     const reader = body.getReader();
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        total += value.byteLength;
-        if (total > cap) {
-          await reader.cancel();
-          return { ok: false };
+    try {
+      const chunks: Uint8Array[] = [];
+      let total = 0;
+      for (;;) {
+        let chunk: ReadableStreamReadResult<Uint8Array>;
+        try {
+          chunk = await raceAbort(reader.read(), signal);
+        } catch {
+          // Aborted by the timeout, or the stream errored mid-body.
+          return { ok: false, aborted: signal?.aborted === true };
         }
-        chunks.push(value);
+        const { done, value } = chunk;
+        if (done) break;
+        if (value) {
+          total += value.byteLength;
+          if (total > cap) return { ok: false };
+          chunks.push(value);
+        }
+      }
+      const merged = new Uint8Array(total);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return { ok: true, text: new TextDecoder("utf-8").decode(merged) };
+    } finally {
+      try {
+        await reader.cancel();
+      } catch {
+        // reader may already be closed/errored; releasing is best-effort.
       }
     }
-    const merged = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-      merged.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    return { ok: true, text: new TextDecoder("utf-8").decode(merged) };
   }
-  const buf = await res.arrayBuffer();
+  const buf = await raceAbort(res.arrayBuffer(), signal).catch(() => null);
+  if (buf === null) return { ok: false, aborted: signal?.aborted === true };
   if (buf.byteLength > cap) return { ok: false };
   return { ok: true, text: new TextDecoder("utf-8").decode(buf) };
 }
@@ -181,77 +226,91 @@ export function createGuardedCrawler(config: GuardedCrawlerConfig = {}) {
       }
       redirectChain.push(current.toString());
 
+      // One AbortController per hop; its timer bounds the WHOLE hop —
+      // connect + headers AND the streamed body read.
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
-      let res: Response;
       try {
-        res = await fetchImpl(current.toString(), {
-          redirect: "manual",
-          signal: controller.signal,
-          headers: { "user-agent": userAgent, accept: "text/html,text/plain;q=0.9,*/*;q=0.1" },
-        });
-      } catch (err) {
-        clearTimeout(timer);
-        const name = (err as { name?: string } | null)?.name;
-        if (name === "AbortError" || name === "TimeoutError") {
-          return { ok: false, reason: "TIMEOUT", detail: `aborted after ${timeoutMs}ms` };
+        let res: Response;
+        try {
+          res = await fetchImpl(current.toString(), {
+            redirect: "manual",
+            signal: controller.signal,
+            headers: { "user-agent": userAgent, accept: "text/html,text/plain;q=0.9,*/*;q=0.1" },
+          });
+        } catch (err) {
+          const name = (err as { name?: string } | null)?.name;
+          if (name === "AbortError" || name === "TimeoutError" || controller.signal.aborted) {
+            return { ok: false, reason: "TIMEOUT", detail: `aborted after ${timeoutMs}ms` };
+          }
+          return { ok: false, reason: "FETCH_FAILED", detail: String(err) };
         }
-        return { ok: false, reason: "FETCH_FAILED", detail: String(err) };
+
+        const status = res.status;
+
+        if (REDIRECT_STATUSES.has(status)) {
+          const location = res.headers.get("location");
+          if (!location) {
+            return { ok: false, reason: "HTTP_ERROR", detail: `${status} without Location` };
+          }
+          if (hop >= maxRedirects) {
+            return { ok: false, reason: "TOO_MANY_REDIRECTS", detail: `>${maxRedirects} redirects` };
+          }
+          let next: URL;
+          try {
+            next = new URL(location, current);
+          } catch {
+            return { ok: false, reason: "REDIRECT_TO_PRIVATE", detail: `unparseable Location: ${location}` };
+          }
+          if (next.protocol !== "http:" && next.protocol !== "https:") {
+            return { ok: false, reason: "NON_HTTP_PROTOCOL", detail: next.protocol };
+          }
+          current = next;
+          continue;
+        }
+
+        if (status < 200 || status >= 300) {
+          return { ok: false, reason: "HTTP_ERROR", detail: String(status) };
+        }
+
+        const contentTypeRaw = res.headers.get("content-type") ?? "";
+        const contentType = (contentTypeRaw.split(";")[0] ?? "").trim().toLowerCase();
+        if (!allowed.includes(contentType)) {
+          return { ok: false, reason: "DISALLOWED_CONTENT_TYPE", detail: contentTypeRaw || "(none)" };
+        }
+
+        const contentLength = res.headers.get("content-length");
+        if (contentLength && Number(contentLength) > maxBodyBytes) {
+          return { ok: false, reason: "BODY_TOO_LARGE", detail: `content-length ${contentLength}` };
+        }
+
+        let bodyRead: { ok: true; text: string } | { ok: false; aborted?: boolean };
+        try {
+          bodyRead = await readCappedText(res, maxBodyBytes, controller.signal);
+        } catch (err) {
+          if (controller.signal.aborted) {
+            return { ok: false, reason: "TIMEOUT", detail: `aborted after ${timeoutMs}ms` };
+          }
+          return { ok: false, reason: "FETCH_FAILED", detail: String(err) };
+        }
+        if (!bodyRead.ok) {
+          if (bodyRead.aborted) {
+            return { ok: false, reason: "TIMEOUT", detail: `body read aborted after ${timeoutMs}ms` };
+          }
+          return { ok: false, reason: "BODY_TOO_LARGE", detail: `body exceeded ${maxBodyBytes} bytes` };
+        }
+
+        return {
+          ok: true,
+          finalUrl: current.toString(),
+          status,
+          contentType,
+          body: bodyRead.text,
+          redirectChain,
+        };
       } finally {
         clearTimeout(timer);
       }
-
-      const status = res.status;
-
-      if (REDIRECT_STATUSES.has(status)) {
-        const location = res.headers.get("location");
-        if (!location) {
-          return { ok: false, reason: "HTTP_ERROR", detail: `${status} without Location` };
-        }
-        if (hop >= maxRedirects) {
-          return { ok: false, reason: "TOO_MANY_REDIRECTS", detail: `>${maxRedirects} redirects` };
-        }
-        let next: URL;
-        try {
-          next = new URL(location, current);
-        } catch {
-          return { ok: false, reason: "REDIRECT_TO_PRIVATE", detail: `unparseable Location: ${location}` };
-        }
-        if (next.protocol !== "http:" && next.protocol !== "https:") {
-          return { ok: false, reason: "NON_HTTP_PROTOCOL", detail: next.protocol };
-        }
-        current = next;
-        continue;
-      }
-
-      if (status < 200 || status >= 300) {
-        return { ok: false, reason: "HTTP_ERROR", detail: String(status) };
-      }
-
-      const contentTypeRaw = res.headers.get("content-type") ?? "";
-      const contentType = (contentTypeRaw.split(";")[0] ?? "").trim().toLowerCase();
-      if (!allowed.includes(contentType)) {
-        return { ok: false, reason: "DISALLOWED_CONTENT_TYPE", detail: contentTypeRaw || "(none)" };
-      }
-
-      const contentLength = res.headers.get("content-length");
-      if (contentLength && Number(contentLength) > maxBodyBytes) {
-        return { ok: false, reason: "BODY_TOO_LARGE", detail: `content-length ${contentLength}` };
-      }
-
-      const bodyRead = await readCappedText(res, maxBodyBytes);
-      if (!bodyRead.ok) {
-        return { ok: false, reason: "BODY_TOO_LARGE", detail: `body exceeded ${maxBodyBytes} bytes` };
-      }
-
-      return {
-        ok: true,
-        finalUrl: current.toString(),
-        status,
-        contentType,
-        body: bodyRead.text,
-        redirectChain,
-      };
     }
 
     return { ok: false, reason: "TOO_MANY_REDIRECTS", detail: `>${maxRedirects} redirects` };
