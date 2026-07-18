@@ -10,17 +10,28 @@
 //   2) Banned-copy scan  — forbidden综合分别名 (docs/REPORT_CONTRACT.md §1) and
 //                          forbidden营销文案 (docs/PRODUCT_TRUTH_RULES.md §9)
 //                          appearing in CUSTOMER-VISIBLE source strings.
-//   3) SSRF config hook   — regression guard for the crawler SSRF blocklist
-//                          (docs/SECURITY_INVARIANTS.md). INTEGRATION-GATED until
-//                          Agent C's `src/security/crawler/` lands in this tree.
+//   3) SSRF behavior gate — drives the REAL guarded crawler with an adversarial
+//                          corpus (private IPs, DNS rebinding, redirect-to-
+//                          private, alt IP encodings, protocol/credential
+//                          smuggling, response limits) and asserts every case is
+//                          rejected — while legitimate public traffic still
+//                          succeeds. Enforced by default (strict-on); it does NOT
+//                          grep crawler source for keywords, so it cannot be
+//                          satisfied (or broken) by comments/token vocabulary.
+//                          (docs/SECURITY_INVARIANTS.md, Agent J.)
 //
 // Escape hatch: a source line containing the marker `security-check:allow` is
 // skipped by the banned-copy scan (use sparingly, e.g. an intentional negative
-// test string). Secret scanning has no opt-out.
+// test string). Secret scanning has no opt-out. The SSRF behavior gate is strict
+// by default; set SECURITY_CHECK_SSRF_STRICT=0 to downgrade a failure to a
+// warning (emergency only — a red gate here means the crawler stopped blocking a
+// real SSRF vector).
 // ============================================================================
 import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { BANNED_TERMS } from "../tests/fixtures/banned-terms";
+import { runAllSsrfCases, SSRF_CASES } from "../tests/security/crawler/ssrf-behavior-cases";
 
 const ALLOW_MARKER = "security-check:allow";
 
@@ -122,79 +133,69 @@ function scanBannedCopy(files: string[]): number {
 }
 
 // ---------------------------------------------------------------------------
-// 3) SSRF config regression hook (INTEGRATION-GATED placeholder).
+// 3) SSRF behavior gate (strict-by-default, BEHAVIORAL — not keyword-based).
 // ---------------------------------------------------------------------------
-// The crawler (src/security/crawler/, Agent C) is not in this worktree yet.
-// Until it lands the hook is a no-op that passes. Once crawler source appears,
-// it verifies the SSRF blocklist still references every required target from
-// docs/SECURITY_INVARIANTS.md. Missing tokens are hard failures only when
-// SECURITY_CHECK_SSRF_STRICT=1 (opt-in after Agent C confirms the token
-// vocabulary); otherwise they are reported as warnings so the gate never goes
-// red on an implementation this agent cannot see.
+// Instead of grepping crawler source for token vocabulary (which proves nothing
+// about runtime behaviour and false-fails on a correct implementation that uses
+// e.g. CIDR arrays instead of the literal "10.0.0.0/8"), this runs an
+// adversarial corpus through the REAL guarded crawler and asserts the observed
+// outcome. A crawler that stops blocking any SSRF vector makes its case fail;
+// a crawler "hardened" into rejecting everything fails the positive controls.
+// The corpus (tests/security/crawler/ssrf-behavior-cases.ts) is the single
+// source of truth shared with the vitest gate, so the two can never drift.
+//
+// Strict by default: any failing case is a hard violation. Set
+// SECURITY_CHECK_SSRF_STRICT=0 to downgrade to a warning (emergency only).
 
 const CRAWLER_ROOT = "src/security/crawler/";
 
-// Required SSRF invariants. Each entry lists acceptable substrings — the guard
-// passes for an invariant if ANY of its tokens appears somewhere in crawler src.
-const REQUIRED_SSRF_INVARIANTS: { name: string; anyOf: string[] }[] = [
-  { name: "loopback / localhost", anyOf: ["localhost", "127.0.0.0/8", "127.0.0.1"] },
-  { name: "private 10.0.0.0/8", anyOf: ["10.0.0.0/8", "10.0.0.0"] },
-  { name: "private 172.16.0.0/12", anyOf: ["172.16.0.0/12", "172.16.0.0"] },
-  { name: "private 192.168.0.0/16", anyOf: ["192.168.0.0/16", "192.168.0.0"] },
-  { name: "link-local 169.254", anyOf: ["169.254", "link-local", "linkLocal"] },
-  { name: "cloud metadata endpoint", anyOf: ["169.254.169.254", "metadata"] },
-  { name: "IPv6 local / private", anyOf: ["::1", "fc00", "fd00", "fe80", "IPv6", "ipv6"] },
-  { name: "protocol allowlist (http/https only)", anyOf: ["http:", "https:", "protocol"] },
-];
-
-function ssrfConfigRegressionHook(files: string[]): number {
-  const crawlerFiles = files.filter((f) => f.startsWith(CRAWLER_ROOT));
-  if (crawlerFiles.length === 0) {
+async function ssrfBehaviorGate(): Promise<number> {
+  // Defensive: if the crawler source is absent (e.g. a partial checkout) the
+  // corpus import above would already fail, but keep an explicit skip note.
+  if (!existsSync(CRAWLER_ROOT)) {
     console.log(
-      `[security:check] ssrf-hook: INTEGRATION-GATED — ${CRAWLER_ROOT} not present in this worktree yet, skipping.`,
+      `[security:check] ssrf-gate: SKIPPED — ${CRAWLER_ROOT} not present in this worktree.`,
     );
     return 0;
   }
 
-  const strict = process.env.SECURITY_CHECK_SSRF_STRICT === "1";
-  const corpus = crawlerFiles.map((f) => readText(f) ?? "").join("\n");
-  const missing: string[] = [];
-  for (const { name, anyOf } of REQUIRED_SSRF_INVARIANTS) {
-    if (!anyOf.some((token) => corpus.includes(token))) {
-      missing.push(name);
-    }
-  }
+  const results = await runAllSsrfCases();
+  const failures = results.filter((r) => !r.pass);
+  const downgrade = process.env.SECURITY_CHECK_SSRF_STRICT === "0";
 
-  if (missing.length === 0) {
+  if (failures.length === 0) {
     console.log(
-      `[security:check] ssrf-hook: OK — all ${REQUIRED_SSRF_INVARIANTS.length} SSRF invariants referenced in crawler source.`,
+      `[security:check] ssrf-gate: OK — all ${SSRF_CASES.length} adversarial SSRF case(s) behaved as required ` +
+        "(malicious targets rejected, public traffic allowed).",
     );
     return 0;
   }
 
-  const detail = missing.map((m) => `  - ${m}`).join("\n");
-  if (strict) {
-    console.error(
-      `[security:check] ssrf-hook: FAILED (strict) — crawler source is missing references to:\n${detail}`,
+  const detail = failures.map((f) => `  - ${f.name}: ${f.detail}`).join("\n");
+  if (downgrade) {
+    console.warn(
+      `[security:check] ssrf-gate: WARNING (SECURITY_CHECK_SSRF_STRICT=0) — ` +
+        `${failures.length} SSRF behavior case(s) failed:\n${detail}`,
     );
-    return missing.length;
+    return 0;
   }
-  console.warn(
-    `[security:check] ssrf-hook: WARNING — crawler source is missing references to (set SECURITY_CHECK_SSRF_STRICT=1 to enforce):\n${detail}`,
+  console.error(
+    `[security:check] ssrf-gate: FAILED — ${failures.length} SSRF behavior case(s) failed. ` +
+      `The crawler stopped enforcing a real SSRF invariant:\n${detail}`,
   );
-  return 0;
+  return failures.length;
 }
 
 // ---------------------------------------------------------------------------
 // Aggregate.
 // ---------------------------------------------------------------------------
 
-function main() {
+async function main() {
   const files = trackedFiles();
 
   const secretViolations = scanSecrets(files);
   const bannedViolations = scanBannedCopy(files);
-  const ssrfViolations = ssrfConfigRegressionHook(files);
+  const ssrfViolations = await ssrfBehaviorGate();
 
   const total = secretViolations + bannedViolations + ssrfViolations;
   if (total > 0) {
@@ -207,8 +208,11 @@ function main() {
 
   console.log(
     `[security:check] OK — scanned ${files.length} tracked file(s); ` +
-      "no secrets, no banned copy, SSRF hook clean.",
+      "no secrets, no banned copy, SSRF behavior gate clean.",
   );
 }
 
-main();
+main().catch((err) => {
+  console.error(`[security:check] FAILED — unexpected error: ${String(err)}`);
+  process.exit(1);
+});
