@@ -5,6 +5,11 @@ import {
 } from "../../../src/diagnosis/orchestration/live-seams";
 import { publishGuard } from "../../../src/report/validation";
 import {
+  createDeterministicVerifier,
+  verifyReport,
+} from "../../../src/diagnosis/verification";
+import { emptyCoverage } from "../../../src/contracts/claim-evidence";
+import {
   parseDiagnosisInput,
   type DiagnosisInput,
 } from "../../../src/runtime/diagnosis-input";
@@ -36,7 +41,7 @@ async function run(inp: DiagnosisInput) {
     evidence: n.evidence,
   };
   const produced = await producer.produce(pctx);
-  return { evidence: n.evidence, produced };
+  return { evidence: n.evidence, coverage: n.coverage, produced };
 }
 
 describe("live-seams competitor resolution wiring", () => {
@@ -81,12 +86,21 @@ describe("live-seams competitor resolution wiring", () => {
   });
 
   it("produces a report that passes the Agent B publish guard", async () => {
-    const { produced } = await run(
+    const { produced, coverage } = await run(
       input({ competitors: [{ name: "示例竞品", website: "https://competitor-demo.example.net" }] }),
     );
     expect(produced.ok).toBe(true);
     if (produced.ok) {
-      const guard = publishGuard({ report: produced.report });
+      // Round-3: §4 is decided by verified ClaimEvidenceRelations, so run the
+      // deterministic verifier (like the state machine's verification stage does)
+      // before handing the report to the publish guard.
+      const cov = coverage ?? emptyCoverage();
+      const { relations } = await verifyReport({
+        report: produced.report,
+        coverage: cov,
+        strategy: createDeterministicVerifier(),
+      });
+      const guard = publishGuard({ report: produced.report, relations, coverage: cov });
       expect(guard.ok).toBe(true);
     }
   });
