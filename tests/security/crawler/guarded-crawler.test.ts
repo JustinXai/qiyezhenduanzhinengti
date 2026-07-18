@@ -156,6 +156,30 @@ describe("createGuardedCrawler", () => {
     if (!out.ok) expect(out.reason).toBe("TIMEOUT");
   });
 
+  it("times out when the response body stalls beyond timeoutMs (slowloris body)", async () => {
+    // Headers arrive fast, but the body never yields a chunk. The per-hop
+    // timeout must abort the streamed read, not hang forever.
+    const stalling = new ReadableStream<Uint8Array>({
+      pull() {
+        return new Promise<void>(() => {
+          /* never enqueues, never closes */
+        });
+      },
+    });
+    const fetchImpl: FetchImpl = vi.fn(
+      async () =>
+        new Response(stalling, { status: 200, headers: { "content-type": "text/html" } }),
+    );
+    const crawler = createGuardedCrawler({
+      fetchImpl,
+      resolveHost: publicResolver,
+      timeoutMs: 40,
+    });
+    const out = await crawler.crawl("https://example.com/slow-body");
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.reason).toBe("TIMEOUT");
+  });
+
   it("maps a generic network error to FETCH_FAILED", async () => {
     const fetchImpl: FetchImpl = vi.fn(async () => {
       throw new TypeError("connect ECONNREFUSED");
