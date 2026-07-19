@@ -156,3 +156,30 @@ export const pruneDecisions = sqliteTable("prune_decisions", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   algorithmVersion: text("algorithm_version").notNull(),
 });
+
+// Round-6A: one immutable final disposition for EVERY source candidate. This
+// complements (and never replaces or duplicates) the prune-only historical
+// ledger above.
+export const claimPublicationDecisions = sqliteTable("claim_publication_decisions", {
+  id: text("id").primaryKey(),
+  diagnosisId: text("diagnosis_id").notNull(),
+  reportId: text("report_id"),
+  revisionId: text("revision_id"),
+  stageRunId: text("stage_run_id"),
+  legacyCheckpointId: text("legacy_checkpoint_id"),
+  candidateSourceProvenance: text("candidate_source_provenance").notNull(),
+  candidateSourcePayloadHash: text("candidate_source_payload_hash").notNull(),
+  candidateRef: text("candidate_ref").notNull(),
+  claimKind: text("claim_kind").notNull(),
+  publicationStatus: text("publication_status").notNull(),
+  reasonCode: text("reason_code").notNull(),
+  guardRule: text("guard_rule").notNull(),
+  evidenceIdsJson: text("evidence_ids_json").notNull(),
+  directCount: integer("direct_count").notNull(),
+  partialCount: integer("partial_count").notNull(),
+  contextCount: integer("context_count").notNull(),
+  independentSupportSourceCount: integer("independent_support_source_count").notNull(),
+  coverageStatus: text("coverage_status").notNull(),
+  algorithmVersion: text("algorithm_version").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});

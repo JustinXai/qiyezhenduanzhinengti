@@ -11,6 +11,10 @@ import { createSchema, openDatabase } from "./migrate";
 import type {
   ClaimEvidenceRelationRecord,
   ClaimEvidenceRelationRecordInput,
+  ClaimPublicationDecisionBatchInput,
+  ClaimPublicationDecisionRecord,
+  ClaimPublicationStatus,
+  ClaimPublicationCandidateSourceProvenance,
   AnalysisCheckpointRecord,
   AnalysisRepairAttemptRecord,
   AnalysisRepairStatus,
@@ -34,6 +38,10 @@ import type {
   StorageAdapter,
   StoredReport,
 } from "./adapter";
+import {
+  insertClaimPublicationDecisionBatch,
+  validateClaimPublicationDecisionBatch,
+} from "./claim-publication-decisions";
 
 function toDbTime(date: Date): number {
   return Math.floor(date.getTime() / 1000);
@@ -125,6 +133,7 @@ interface ProviderUsageRow {
 }
 
 interface CheckpointRow {
+  id?: string;
   diagnosis_id?: string;
   stage?: string;
   input_hash?: string;
@@ -171,6 +180,30 @@ interface PruneDecisionRow {
   coverage_status: string;
   created_at: number;
   algorithm_version: string;
+}
+
+interface ClaimPublicationDecisionRow {
+  id: string;
+  diagnosis_id: string;
+  report_id: string | null;
+  revision_id: string | null;
+  stage_run_id: string | null;
+  legacy_checkpoint_id: string | null;
+  candidate_source_provenance: string;
+  candidate_source_payload_hash: string;
+  candidate_ref: string;
+  claim_kind: string;
+  publication_status: string;
+  reason_code: string;
+  guard_rule: string;
+  evidence_ids_json: string;
+  direct_count: number;
+  partial_count: number;
+  context_count: number;
+  independent_support_source_count: number;
+  coverage_status: string;
+  algorithm_version: string;
+  created_at: number;
 }
 
 interface AnalysisStageRunRow {
@@ -630,6 +663,53 @@ export class SqliteStorageAdapter implements StorageAdapter {
     }));
   }
 
+  // -- claim_publication_decisions ------------------------------------------
+
+  async appendClaimPublicationDecisionBatch(
+    batch: ClaimPublicationDecisionBatchInput,
+  ): Promise<void> {
+    validateClaimPublicationDecisionBatch(batch);
+    const append = this.db.transaction((input: ClaimPublicationDecisionBatchInput) => {
+      insertClaimPublicationDecisionBatch(this.db, input);
+    });
+    append(batch);
+  }
+
+  async getClaimPublicationDecisions(
+    diagnosisId: string,
+  ): Promise<ClaimPublicationDecisionRecord[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM claim_publication_decisions
+         WHERE diagnosis_id = ? ORDER BY created_at, rowid`,
+      )
+      .all(diagnosisId) as ClaimPublicationDecisionRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      diagnosisId: row.diagnosis_id,
+      reportId: row.report_id,
+      revisionId: row.revision_id,
+      stageRunId: row.stage_run_id,
+      legacyCheckpointId: row.legacy_checkpoint_id,
+      candidateSourceProvenance:
+        row.candidate_source_provenance as ClaimPublicationCandidateSourceProvenance,
+      candidateSourcePayloadHash: row.candidate_source_payload_hash,
+      candidateRef: row.candidate_ref,
+      claimKind: row.claim_kind,
+      publicationStatus: row.publication_status as ClaimPublicationStatus,
+      reasonCode: row.reason_code,
+      guardRule: row.guard_rule,
+      evidenceIds: parseEvidenceIds(row.evidence_ids_json),
+      directCount: row.direct_count,
+      partialCount: row.partial_count,
+      contextCount: row.context_count,
+      independentSupportSourceCount: row.independent_support_source_count,
+      coverageStatus: row.coverage_status as PruneDecisionCoverageStatus,
+      algorithmVersion: row.algorithm_version,
+      createdAt: fromDbTime(row.created_at),
+    }));
+  }
+
   // -- analysis_checkpoints ---------------------------------------------------
 
   async saveCheckpoint(checkpoint: {
@@ -712,7 +792,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
   ): Promise<AnalysisCheckpointRecord | null> {
     const row = this.db
       .prepare(
-        `SELECT diagnosis_id, stage, input_hash, output_json,
+        `SELECT id, diagnosis_id, stage, input_hash, output_json,
                 report_contract_version, score_contract_version, provider_model,
                 prompt_version, trust_guard_version, completed_at
          FROM analysis_checkpoints
@@ -722,6 +802,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
       .get(diagnosisId, stage) as CheckpointRow | undefined;
     if (
       !row ||
+      row.id === undefined ||
       row.diagnosis_id === undefined ||
       row.stage === undefined ||
       row.input_hash === undefined ||
@@ -735,6 +816,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
       return null;
     }
     return {
+      id: row.id,
       diagnosisId: row.diagnosis_id,
       stage: row.stage,
       inputHash: row.input_hash,

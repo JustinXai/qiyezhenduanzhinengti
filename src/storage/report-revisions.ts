@@ -1,7 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import { DiagnosisReport, type DiagnosisReport as DiagnosisReportType } from "../contracts";
 import type { DroppedClaimRecord } from "../contracts/claim-reason-codes";
-import type { PruneDecisionRecordInput } from "./adapter";
+import type {
+  ClaimPublicationDecisionCandidateKey,
+  ClaimPublicationDecisionRecordInput,
+  PruneDecisionRecordInput,
+} from "./adapter";
+import {
+  insertClaimPublicationDecisionBatch,
+  withRevisionPublicationLineage,
+} from "./claim-publication-decisions";
 import type { SqliteDatabase } from "./migrate";
 
 export interface ReportRevisionRecord {
@@ -38,6 +46,15 @@ export interface AppendReportRevisionInput {
   pruneDecisions?: Array<
     Omit<PruneDecisionRecordInput, "id" | "reportId" | "revisionId">
   >;
+  claimPublicationDecisionBatch?: {
+    expectedCandidates: ClaimPublicationDecisionCandidateKey[];
+    decisions: Array<
+      Omit<
+        ClaimPublicationDecisionRecordInput,
+        "id" | "reportId" | "revisionId" | "diagnosisId"
+      >
+    >;
+  };
 }
 
 export interface ReportRevisionRepository {
@@ -377,6 +394,17 @@ export class SqliteReportRevisionRepository implements ReportRevisionRepository 
           decision.algorithmVersion,
         );
       });
+      if (input.claimPublicationDecisionBatch) {
+        insertClaimPublicationDecisionBatch(
+          this.db,
+          withRevisionPublicationLineage({
+            revisionId: record.id,
+            diagnosisId: record.diagnosisId,
+            expectedCandidates: input.claimPublicationDecisionBatch.expectedCandidates,
+            decisions: input.claimPublicationDecisionBatch.decisions,
+          }),
+        );
+      }
       return record;
     });
     return append();

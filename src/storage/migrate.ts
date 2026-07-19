@@ -122,6 +122,20 @@ function buildIndexStatements(table: SQLiteTable): string[] {
       )} ON ${quoteIdent(cfg.name)} (${quoteIdent("public_token")});`,
     );
   }
+  if (cfg.name === "claim_publication_decisions") {
+    stmts.push(
+      `CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIdent(
+        "idx_claim_publication_decisions_report_candidate",
+      )} ON ${quoteIdent(cfg.name)} (${quoteIdent("report_id")}, ${quoteIdent(
+        "claim_kind",
+      )}, ${quoteIdent("candidate_ref")}) WHERE ${quoteIdent("report_id")} IS NOT NULL;`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIdent(
+        "idx_claim_publication_decisions_revision_candidate",
+      )} ON ${quoteIdent(cfg.name)} (${quoteIdent("revision_id")}, ${quoteIdent(
+        "claim_kind",
+      )}, ${quoteIdent("candidate_ref")}) WHERE ${quoteIdent("revision_id")} IS NOT NULL;`,
+    );
+  }
   return stmts;
 }
 

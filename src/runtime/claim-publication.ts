@@ -12,6 +12,13 @@ import {
   type ClaimPublicationCoverageScope,
   type ClaimPublicationDecision,
 } from "../report/validation/claim-publication-policy";
+import {
+  evaluateCompetitorGapPublication,
+  FAIL_CLOSED_COMPETITOR_GAP_METADATA,
+  type CompetitorGapPublicationContextById,
+  type CompetitorGapPublicationDecision,
+  type CompetitorGapPublicationReason,
+} from "../report/validation/competitor-gap-publication-policy";
 import type { AuditedPublicationCandidate } from "./prune-audit";
 import type { PruneDecisionReasonCode } from "../storage/adapter";
 
@@ -30,6 +37,7 @@ export interface StructuralPrune {
   reasonCode: PruneDecisionReasonCode;
   guardRule: string;
   coverageStatus: ClaimPublicationDecision["coverageStatus"];
+  competitorGapDecision?: CompetitorGapPublicationDecision;
 }
 
 export type UnifiedCandidatePrune = PolicyPrune | StructuralPrune;
@@ -67,6 +75,7 @@ export function applyClaimPublicationPolicyToReport(input: {
   sourceContext?: ClaimPublicationSourceContext;
   coverageScope?: ClaimPublicationCoverageScope;
   preserveNegativeIssuesAsUnresolved?: boolean;
+  competitorGapContexts?: CompetitorGapPublicationContextById;
 }): ApplyClaimPublicationResult {
   const sourceContext = publicationSourceContextFromReport(
     input.report,
@@ -143,6 +152,44 @@ export function applyClaimPublicationPolicyToReport(input: {
     });
     return false;
   });
+  const competitorGaps = input.report.competitorGaps.filter((gap) => {
+    const decision = evaluateCompetitorGapPublication({
+      gap,
+      evidence: input.report.evidence,
+      relations: input.relations.filter((relation) => relation.claimId === gap.id),
+      sourceContext,
+      metadata:
+        input.competitorGapContexts?.[gap.id] ??
+        FAIL_CLOSED_COMPETITOR_GAP_METADATA,
+    });
+    if (decision.outcome === "PUBLISH" || decision.outcome === "BLOCK") {
+      // BLOCK remains visible to publishGuard so invalid references/UNSUPPORTED
+      // fail closed instead of being mislabeled as a content prune.
+      return true;
+    }
+    prunes.push({
+      type: "STRUCTURAL",
+      candidate: {
+        claimKind: "competitorGap",
+        candidateRef: gap.id,
+        sourceIssueId: null,
+        evidenceIds: [...gap.evidenceIds],
+      },
+      reasonCode: competitorGapPruneReason(decision.reason),
+      guardRule: competitorGapGuardRule(decision.reason),
+      coverageStatus:
+        decision.coverageStatus === "ESTABLISHED"
+          ? "ESTABLISHED_AND_BOUNDED"
+          : decision.coverageStatus,
+      competitorGapDecision: decision,
+    });
+    if (decision.outcome === "DEEP_NEEDS_CONFIRMATION") {
+      deepNeedsConfirmation.push(
+        `竞品公开信息观察（未形成确定性差距）：${gap.gapStatement}`,
+      );
+    }
+    return false;
+  });
   const removedOpportunityIds = input.report.geoOpportunities
     .filter((item) => !geoOpportunities.some((retained) => retained.id === item.id))
     .map((item) => item.id);
@@ -186,6 +233,7 @@ export function applyClaimPublicationPolicyToReport(input: {
       strengths,
       coreIssues,
       geoOpportunities,
+      competitorGaps,
       demonstrationFix: keepDemonstrationFix ? demonstrationFix : null,
     },
     prunes,
@@ -197,4 +245,14 @@ export function applyClaimPublicationPolicyToReport(input: {
     demonstrationFixRemoved: demonstrationFix !== null && !keepDemonstrationFix,
     deepNeedsConfirmation,
   };
+}
+
+function competitorGapGuardRule(reason: CompetitorGapPublicationReason): string {
+  return `COMPETITOR_GAP_${reason}`;
+}
+
+function competitorGapPruneReason(
+  reason: CompetitorGapPublicationReason,
+): PruneDecisionReasonCode {
+  return reason === "PUBLISHED" ? "UNVERIFIED_COMPETITOR_ASSERTION" : reason;
 }

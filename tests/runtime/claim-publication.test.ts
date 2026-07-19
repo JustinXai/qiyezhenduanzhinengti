@@ -105,4 +105,112 @@ describe("shared report publication projection", () => {
     );
     expect(result.deepNeedsConfirmation[0]).toContain("仅限本次保存的公开证据范围");
   });
+
+  it("uses the shared competitor policy and fails closed when resolver metadata is absent", () => {
+    const base = buildSampleReport();
+    const report = buildSampleReport({
+      strengths: [],
+      coreIssues: [],
+      geoOpportunities: [],
+      demonstrationFix: null,
+    });
+    const coverage = deriveCoverage({
+      evidence: report.evidence,
+      firstPartyDomains: ["example-equip.com"],
+      executedQueries: ["竞品差距"],
+    });
+    const relation: ClaimEvidenceRelation = {
+      claimId: base.competitorGaps[0]!.id,
+      claimKind: "competitorGap",
+      evidenceId: "ev_competitor_home",
+      supportLevel: "PARTIAL_SUPPORT",
+      confidence: 0.8,
+      justification: "verified",
+      basis: "CONTENT_MATCH",
+      verifierMode: "MOCK_DETERMINISTIC",
+      verifierVersion: "test.v1",
+    };
+
+    const result = applyClaimPublicationPolicyToReport({
+      report,
+      coverage,
+      relations: [relation],
+    });
+
+    expect(result.report.competitorGaps).toEqual([]);
+    expect(result.prunes).toContainEqual(
+      expect.objectContaining({
+        type: "STRUCTURAL",
+        reasonCode: "UNVERIFIED_COMPETITOR_ASSERTION",
+      }),
+    );
+  });
+
+  it("retains a gap only when both comparison sides pass the shared policy", () => {
+    const report = buildSampleReport({
+      strengths: [],
+      coreIssues: [],
+      geoOpportunities: [],
+      demonstrationFix: null,
+    });
+    report.competitorGaps = [
+      {
+        ...report.competitorGaps[0]!,
+        gapStatement:
+          "本次检查的竞品公开官网页面中可见交付说明；在本次已检查的企业公开页面中暂未发现同类入口。",
+        evidenceIds: ["ev_first_home", "ev_competitor_home"],
+      },
+    ];
+    const coverage = deriveCoverage({
+      evidence: report.evidence,
+      firstPartyDomains: ["example-equip.com"],
+      executedQueries: ["交付说明"],
+    });
+    const relations: ClaimEvidenceRelation[] = ["ev_first_home", "ev_competitor_home"].map(
+      (evidenceId) => ({
+        claimId: "gap_1",
+        claimKind: "competitorGap",
+        evidenceId,
+        supportLevel: "PARTIAL_SUPPORT",
+        confidence: 0.8,
+        justification: "verified",
+        basis: "CONTENT_MATCH",
+        verifierMode: "MOCK_DETERMINISTIC",
+        verifierVersion: "test.v1",
+      }),
+    );
+
+    const result = applyClaimPublicationPolicyToReport({
+      report,
+      coverage,
+      relations,
+      sourceContext: {
+        companyId: report.diagnosisId,
+        firstPartyDomains: ["example-equip.com"],
+        competitorEntities: [
+          {
+            competitorEntityId: "competitor_jia",
+            domains: ["competitor-jia.example.net"],
+          },
+        ],
+      },
+      competitorGapContexts: {
+        gap_1: {
+          competitorNameSource: "USER_INPUT",
+          competitorEntityId: "competitor_jia",
+          comparisonDimension: "交付说明",
+          currentCompanyComparisonDimension: "交付说明",
+          competitorComparisonDimension: "交付说明",
+          conclusionWithinEvidence: true,
+          negativeOrMissing: true,
+          currentCompanyCoverageEstablished: true,
+          competitorCoverageEstablished: true,
+          boundedScope: true,
+        },
+      },
+    });
+
+    expect(result.report.competitorGaps).toHaveLength(1);
+    expect(result.prunes).toEqual([]);
+  });
 });
