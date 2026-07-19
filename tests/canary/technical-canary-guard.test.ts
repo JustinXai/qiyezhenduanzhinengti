@@ -35,6 +35,7 @@ import type {
 } from "../../src/providers/types";
 import type { GuardedCrawler } from "../../src/security/crawler/guarded-crawler";
 import { normalizeEvidence } from "../../src/diagnosis/evidence/normalize";
+import { resolveRunConfig } from "../../scripts/technical-company-canary";
 
 const SWITCH = ["TECHNICAL_COMPANY", "CANARY_AUTHORIZED"].join("_"); // avoid self-matching greps
 
@@ -56,6 +57,29 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.restoreAllMocks());
+
+describe("technical-canary isolated run profiles", () => {
+  it("resolves zh-v2 only with its matching process-level profile", () => {
+    const config = resolveRunConfig(
+      ["--profile=zh-v2"],
+      { TECHNICAL_CANARY_PROFILE: "TECHNICAL_COMPANY_CANARY_ZH_V2" },
+    );
+    expect(config.privateDir).toBe("E:/企业诊断智能体_private/technical-company-canary-zh-v2");
+    expect(config.dbFile).toBe("technical-canary-zh-v2.sqlite");
+    expect(config.round).toBe("technical-company-canary-zh-v2");
+  });
+
+  it("fails closed for a missing/mismatched or unknown profile", () => {
+    expect(() => resolveRunConfig(["--profile=zh-v2"], {})).toThrow(/CANARY_PROFILE_MISMATCH/);
+    expect(() => resolveRunConfig(["--profile=other"], {})).toThrow(/UNSUPPORTED_CANARY_PROFILE/);
+  });
+
+  it("keeps the legacy v1 path as the default without touching it", () => {
+    const config = resolveRunConfig([], {});
+    expect(config.privateDir).toBe("E:/企业诊断智能体_private/technical-company-canary-v1");
+    expect(config.dbFile).toBe("technical-canary.sqlite");
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Phase-5 authorization gate — the 7 required tests.

@@ -33,8 +33,48 @@ import { DiagnosisReport as DiagnosisReportSchema } from "../src/contracts";
 import type { DiagnosisReport } from "../src/contracts";
 import { findBannedTerms } from "../tests/fixtures/banned-terms";
 
-const PRIVATE_DIR = "E:/企业诊断智能体_private/technical-company-canary-v1";
-const DB_PATH = join(PRIVATE_DIR, "technical-canary.sqlite");
+export interface TechnicalCanaryRunConfig {
+  profile: "v1" | "zh-v2";
+  profileEnv: "TECHNICAL_COMPANY_CANARY_V1" | "TECHNICAL_COMPANY_CANARY_ZH_V2";
+  round: "technical-company-canary-v1" | "technical-company-canary-zh-v2";
+  privateDir: string;
+  dbFile: "technical-canary.sqlite" | "technical-canary-zh-v2.sqlite";
+}
+
+const RUN_CONFIGS: Record<TechnicalCanaryRunConfig["profile"], TechnicalCanaryRunConfig> = {
+  v1: {
+    profile: "v1",
+    profileEnv: "TECHNICAL_COMPANY_CANARY_V1",
+    round: "technical-company-canary-v1",
+    privateDir: "E:/企业诊断智能体_private/technical-company-canary-v1",
+    dbFile: "technical-canary.sqlite",
+  },
+  "zh-v2": {
+    profile: "zh-v2",
+    profileEnv: "TECHNICAL_COMPANY_CANARY_ZH_V2",
+    round: "technical-company-canary-zh-v2",
+    privateDir: "E:/企业诊断智能体_private/technical-company-canary-zh-v2",
+    dbFile: "technical-canary-zh-v2.sqlite",
+  },
+};
+
+export function resolveRunConfig(
+  argv: readonly string[] = process.argv.slice(2),
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): TechnicalCanaryRunConfig {
+  const profileArg = argv.find((arg) => arg.startsWith("--profile="));
+  const profile = (profileArg?.slice("--profile=".length) || "v1") as TechnicalCanaryRunConfig["profile"];
+  const config = RUN_CONFIGS[profile];
+  if (!config) throw new Error(`UNSUPPORTED_CANARY_PROFILE: ${profile}`);
+  if (profile === "zh-v2" && env.TECHNICAL_CANARY_PROFILE !== config.profileEnv) {
+    throw new Error(`CANARY_PROFILE_MISMATCH: TECHNICAL_CANARY_PROFILE must be ${config.profileEnv}`);
+  }
+  return config;
+}
+
+const RUN_CONFIG = resolveRunConfig();
+const PRIVATE_DIR = RUN_CONFIG.privateDir;
+const DB_PATH = join(PRIVATE_DIR, RUN_CONFIG.dbFile);
 const RUN_LOCK = join(PRIVATE_DIR, "run-lock.json");
 const PORT = 3100;
 const BASE = `http://localhost:${PORT}`;
@@ -130,6 +170,7 @@ function serverEnv(mode: "REAL" | "MOCK"): NodeJS.ProcessEnv {
       PROVIDER_MODE: "MOCK",
       TECHNICAL_COMPANY_CANARY_AUTHORIZED: "false",
       DATABASE_URL: DB_PATH,
+      TECHNICAL_CANARY_PROFILE: RUN_CONFIG.profileEnv,
       PORT: String(PORT),
     };
   }
@@ -139,6 +180,7 @@ function serverEnv(mode: "REAL" | "MOCK"): NodeJS.ProcessEnv {
     TECHNICAL_COMPANY_CANARY_AUTHORIZED: "true",
     DIAGNOSIS_SMOKE_MODE: "false",
     DATABASE_URL: DB_PATH,
+    TECHNICAL_CANARY_PROFILE: RUN_CONFIG.profileEnv,
     PORT: String(PORT),
   };
 }
@@ -538,7 +580,7 @@ async function main(): Promise<void> {
     // Desensitized summary (short ids; hashes instead of raw payloads).
     const scores = report.scores as Record<string, unknown>;
     const summary = {
-      round: "technical-company-canary-v1",
+      round: RUN_CONFIG.round,
       startedAt,
       finishedAt: new Date().toISOString(),
       company: { name: CANARY_INPUT.brandName, website: CANARY_INPUT.website },
@@ -753,7 +795,7 @@ async function verifyOnly(): Promise<void> {
 
     const scores = report.scores as unknown as Record<string, unknown>;
     const summary = {
-      round: "technical-company-canary-v1",
+      round: RUN_CONFIG.round,
       mode: "verify-only-over-persisted-run",
       finishedAt: new Date().toISOString(),
       company: { name: CANARY_INPUT.brandName, website: CANARY_INPUT.website },
