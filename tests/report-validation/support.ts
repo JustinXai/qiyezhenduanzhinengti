@@ -17,7 +17,10 @@ import {
  * shared SAMPLE_DIAGNOSIS_REPORT.
  */
 export function buildValidReport(overrides: Partial<DiagnosisReport> = {}): DiagnosisReport {
-  return { ...buildSampleReport(), ...overrides };
+  // The shared canonical fixture carries a legacy competitor gap without the
+  // Round-6A resolver/comparison metadata. Unrelated guard tests start from a
+  // truth-valid report and opt into competitor-gap scenarios explicitly.
+  return { ...buildSampleReport(), competitorGaps: [], ...overrides };
 }
 
 /** Deterministic measurement boundary for a report (first-party pages checked). */

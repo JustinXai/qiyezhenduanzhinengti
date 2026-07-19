@@ -39,6 +39,12 @@ import {
   type ClaimPublicationCoverageScope,
   type ClaimPublicationDecision,
 } from "./claim-publication-policy";
+import {
+  evaluateCompetitorGapPublication,
+  FAIL_CLOSED_COMPETITOR_GAP_METADATA,
+  type CompetitorGapPublicationContextById,
+  type CompetitorGapPublicationReason,
+} from "./competitor-gap-publication-policy";
 
 type GatedKind = "coreIssue" | "strength" | "geoOpportunity";
 
@@ -58,6 +64,8 @@ export interface EvidenceGuardInput {
   /** Explicit entity resolution for source independence; legacy callers default safely. */
   sourceContext?: ClaimPublicationSourceContext;
   coverageScope?: ClaimPublicationCoverageScope;
+  /** Resolver/verifier comparison metadata keyed by canonical competitor gap id. */
+  competitorGapContexts?: CompetitorGapPublicationContextById;
 }
 
 export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
@@ -76,8 +84,8 @@ export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
     relationsByClaim.set(r.claimId, list);
   }
 
-  // Only the three gated claim kinds are publish-gated (competitorGaps are
-  // verified for traceability but not §4-gated, preserving prior behavior).
+  // The shared Claim policy gates these three claim kinds. Competitor gaps are
+  // evaluated separately below by CompetitorGapPublicationPolicyV1.
   const claims = extractVerifiableClaims(report).filter(
     (c): c is typeof c & { kind: GatedKind } => c.kind !== "competitorGap",
   );
@@ -95,9 +103,58 @@ export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
     );
   }
 
+  for (const gap of report.competitorGaps) {
+    const result = evaluateCompetitorGapPublication({
+      gap: {
+        id: gap.id,
+        competitorName: gap.competitorName,
+        gapStatement: gap.gapStatement,
+        evidenceIds: gap.evidenceIds,
+      },
+      evidence: report.evidence,
+      relations: relationsByClaim.get(gap.id) ?? [],
+      sourceContext,
+      metadata:
+        input.competitorGapContexts?.[gap.id] ??
+        FAIL_CLOSED_COMPETITOR_GAP_METADATA,
+    });
+    if (result.outcome === "PUBLISH") continue;
+    violations.push({
+      guard: "evidence",
+      rule: competitorGapGuardRule(result.reason),
+      message: `competitorGap ${gap.id} 未通过竞品差距发布策略(${result.reason}; CURRENT_RELATIONS=${result.currentCompanyRelationEvidenceIds.length}, COMPETITOR_OFFICIAL_RELATIONS=${result.competitorOfficialRelationEvidenceIds.length}, DIMENSION_MATCHED=${result.comparisonDimensionMatched}, COVERAGE=${result.coverageStatus})`,
+      claimType: "competitorGap",
+      claimId: gap.id,
+      evidenceIds: [...gap.evidenceIds],
+    });
+  }
+
   checkDuplicateOpportunityRelations(report, relationsByClaim, violations);
 
   return violations.length === 0 ? { ok: true } : { ok: false, violations };
+}
+
+function competitorGapGuardRule(reason: CompetitorGapPublicationReason): GuardRuleCode {
+  const rules: Record<
+    Exclude<CompetitorGapPublicationReason, "PUBLISHED">,
+    GuardRuleCode
+  > = {
+    UNVERIFIED_COMPETITOR_ASSERTION:
+      "COMPETITOR_GAP_UNVERIFIED_COMPETITOR_ASSERTION",
+    MISSING_COMPETITOR_OFFICIAL_RELATION:
+      "COMPETITOR_GAP_MISSING_COMPETITOR_OFFICIAL_RELATION",
+    MISSING_CURRENT_COMPANY_RELATION:
+      "COMPETITOR_GAP_MISSING_CURRENT_COMPANY_RELATION",
+    COMPETITOR_ENTITY_NOT_RESOLVED:
+      "COMPETITOR_GAP_COMPETITOR_ENTITY_NOT_RESOLVED",
+    COMPARISON_DIMENSION_MISMATCH:
+      "COMPETITOR_GAP_COMPARISON_DIMENSION_MISMATCH",
+    COMPETITOR_COVERAGE_NOT_ESTABLISHED:
+      "COMPETITOR_GAP_COMPETITOR_COVERAGE_NOT_ESTABLISHED",
+  };
+  return reason === "PUBLISHED"
+    ? "COMPETITOR_GAP_UNVERIFIED_COMPETITOR_ASSERTION"
+    : rules[reason];
 }
 
 function evaluateClaim(

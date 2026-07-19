@@ -28,6 +28,7 @@ import {
 } from "./cross-field-guard";
 import { ctaGuard } from "./cta-guard";
 import type { ClaimPublicationCoverageScope } from "./claim-publication-policy";
+import type { CompetitorGapPublicationContextById } from "./competitor-gap-publication-policy";
 
 export interface PublishGuardInput {
   report: DiagnosisReport;
@@ -40,6 +41,7 @@ export interface PublishGuardInput {
   coverage: EvidenceCoverage;
   sourceContext?: ClaimPublicationSourceContext;
   coverageScope?: ClaimPublicationCoverageScope;
+  competitorGapContexts?: CompetitorGapPublicationContextById;
   /** Optional Quick/Deep/Evidence projections to validate alongside the report. */
   viewModels?: ReportViewModels;
   /** Optional CTA labels to check against the frozen literals. */
@@ -47,10 +49,26 @@ export interface PublishGuardInput {
 }
 
 export function publishGuard(input: PublishGuardInput): GuardResult {
-  const { report, relations, coverage, sourceContext, coverageScope, viewModels, cta } = input;
+  const {
+    report,
+    relations,
+    coverage,
+    sourceContext,
+    coverageScope,
+    competitorGapContexts,
+    viewModels,
+    cta,
+  } = input;
 
   const results: GuardResult[] = [
-    evidenceGuard({ report, relations, coverage, sourceContext, coverageScope }),
+    evidenceGuard({
+      report,
+      relations,
+      coverage,
+      sourceContext,
+      coverageScope,
+      competitorGapContexts,
+    }),
     crossFieldGuard(report),
     ctaGuard({ report, quick: viewModels?.quick, cta }),
   ];

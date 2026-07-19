@@ -52,7 +52,26 @@ export {
 
 export { publishGuard, type PublishGuardInput } from "./publish-guard";
 
-export { pruneUnsupportedClaims, type PruneResult } from "./prune-claims";
+export {
+  pruneUnsupportedClaims,
+  type PruneResult,
+  type PruneUnsupportedClaimsOptions,
+} from "./prune-claims";
+
+export {
+  CompetitorGapPublicationPolicyV1,
+  COMPETITOR_GAP_PUBLICATION_POLICY_VERSION,
+  FAIL_CLOSED_COMPETITOR_GAP_METADATA,
+  evaluateCompetitorGapPublication,
+  type CompetitorGapPublicationCandidate,
+  type CompetitorGapPublicationContextById,
+  type CompetitorGapPublicationDecision,
+  type CompetitorGapPublicationMetadata,
+  type CompetitorGapPublicationOutcome,
+  type CompetitorGapPublicationPolicyInput,
+  type CompetitorGapPublicationReason,
+  type CompetitorNameSource,
+} from "./competitor-gap-publication-policy";
 
 export {
   ClaimPublicationPolicy,
