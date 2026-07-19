@@ -1,3 +1,10 @@
+import { pathToFileURL } from "node:url";
+import {
+  planFrozenEvidenceAnalysisRecovery,
+  resumeAnalysisFromFrozenEvidence,
+  type ResumeFrozenAnalysisDependencies,
+} from "../src/diagnosis/orchestration/recovery/resume-analysis";
+
 /**
  * Round-5.2B frozen-evidence recovery runner.
  *
@@ -287,6 +294,107 @@ export interface AnalysisRecoveryRunnerOutcome {
   usageDelta: RecoveryUsage;
 }
 
+export interface RuntimeBackedRunnerOptions {
+  runtime: ResumeFrozenAnalysisDependencies;
+  readPreflight(diagnosisId: string): Promise<FrozenRecoveryPreflight>;
+  printSanitizedPlan(plan: SanitizedRecoveryPlan): void;
+  /** Read the ordinary GET response; used only to prove recovery fields are absent. */
+  readPublicApiPayload?(): Promise<unknown>;
+}
+
+/**
+ * Bind the QA policy directly to Agent O's recovery APIs. This factory performs
+ * no migration and opens no database; the Supervisor owns construction of the
+ * already-migrated private runtime after every integration gate is green.
+ */
+export function createRuntimeBackedRunnerDependencies(
+  options: RuntimeBackedRunnerOptions,
+): AnalysisRecoveryRunnerDependencies {
+  const { runtime } = options;
+  return {
+    readPreflight: options.readPreflight,
+    printSanitizedPlan: options.printSanitizedPlan,
+    planRecovery: async () => {
+      const plan = await planFrozenEvidenceAnalysisRecovery(runtime);
+      return {
+        diagnosisId: plan.diagnosisId,
+        reusedStages: plan.reusedStages.filter(
+          (stage): stage is RecoverableStage => stage !== "REPORT_CLAIMS",
+        ),
+        rerunStages: plan.rerunStages,
+        deepSeekCallCap: plan.deepSeekCallCap,
+      };
+    },
+    resumeRecovery: async (approvedPlan) => {
+      const recovered = await resumeAnalysisFromFrozenEvidence(runtime);
+      const returnedPlan: RuntimeRecoveryPlan = {
+        diagnosisId: recovered.diagnosisId,
+        reusedStages: recovered.reusedStages.filter(
+          (stage): stage is RecoverableStage => stage !== "REPORT_CLAIMS",
+        ),
+        rerunStages: recovered.rerunStages,
+        deepSeekCallCap: recovered.deepSeekCallCap,
+      };
+      assertRuntimePlanMatches(returnedPlan, {
+        diagnosisId: approvedPlan.diagnosisId,
+        authorized: true,
+        originalFailureEligible: true,
+        runLockExists: true,
+        repairAttemptCount: 0,
+        evidenceCount: 22,
+        identityAvailability: {
+          diagnosisInputHash: true,
+          evidenceRegistryHash: true,
+          competitorResolutionHash: true,
+          queryPlanHash: true,
+        },
+        reusedStages: approvedPlan.reusedStages,
+        rerunStages: approvedPlan.rerunStages,
+        providerBudget: {
+          bocha: 0,
+          crawler: 0,
+          deepSeek: approvedPlan.deepSeekCallCap,
+          retries: 0,
+          newDiagnoses: 0,
+        },
+        blockedBy: [],
+      });
+      const attempts = await runtime.storage.getAnalysisRepairAttempts(recovered.diagnosisId);
+      const attempt = attempts.find((item) => item.repairAttempt === 1);
+      return {
+        ok: recovered.resultState === "READY",
+        finalStatus: recovered.resultState,
+        repairAttempt: recovered.repairAttempt,
+        originalFailurePreserved: attempt?.originalFailureStage === "REPORT_CLAIMS_FAILED",
+        repairTimeline: attempt
+          ? ["FAILED", "REPAIR_ATTEMPT", attempt.resultState ?? attempt.status]
+          : [],
+        publicApiPayload: await options.readPublicApiPayload?.(),
+      };
+    },
+    readUsage: async (diagnosisId) => {
+      const rows = await runtime.storage.getProviderUsage(diagnosisId);
+      const usage: RecoveryUsage = { ...ZERO_USAGE };
+      for (const row of rows) {
+        const provider = row.provider.toLowerCase();
+        if (provider === "bocha") usage.bochaCalls += row.callCount;
+        if (provider === "crawler") usage.crawlerCalls += row.callCount;
+        if (provider === "deepseek") usage.deepSeekCalls += row.callCount;
+        usage.retries += row.retryCount;
+      }
+      return usage;
+    },
+    readDiagnosisCount: () => runtime.storage.countDiagnosisRequests(),
+  };
+}
+
+const ZERO_USAGE: RecoveryUsage = {
+  bochaCalls: 0,
+  crawlerCalls: 0,
+  deepSeekCalls: 0,
+  retries: 0,
+};
+
 /** Execute exactly one repair attempt after all fail-closed checks pass. */
 export async function runAnalysisRecoveryRunner(
   deps: AnalysisRecoveryRunnerDependencies,
@@ -341,4 +449,55 @@ export async function runAnalysisRecoveryRunner(
   assertNoRecoveryInternalsInPublicApi(result.publicApiPayload);
 
   return { plan: sanitized, result, usageDelta };
+}
+
+/**
+ * Machine-readable forensic preflight for the current V2 record. Values come
+ * from Agent M's read-only audit. The two unavailable identities intentionally
+ * remain null; they are never invented from summaries or usage rows.
+ */
+export function currentDiagD9dForensicPreflight(): FrozenRecoveryPreflight {
+  return {
+    diagnosisId: ANALYSIS_RECOVERY_DIAGNOSIS_ID,
+    originalStatus: "FAILED",
+    originalPhase: "ANALYZING",
+    originalFailureCode: "REPORT_CLAIMS_FAILED",
+    runLockExists: true,
+    repairAttemptCount: 0,
+    diagnosisCount: 2,
+    evidenceCount: 22,
+    expectedEvidenceCount: 22,
+    identities: {
+      diagnosisInput: {
+        frozen: "7f83796f15c71668550d3b281055c11830f4d302d93bffc21c8de0fe02b73038",
+        current: "7f83796f15c71668550d3b281055c11830f4d302d93bffc21c8de0fe02b73038",
+      },
+      evidenceRegistry: {
+        frozen: "9b4ca22dc268d338c8614ba86c17b756594a2a47718b0d883093f9f957e5e7ce",
+        current: "9b4ca22dc268d338c8614ba86c17b756594a2a47718b0d883093f9f957e5e7ce",
+      },
+      competitorResolution: { frozen: null, current: null },
+      queryPlan: { frozen: null, current: null },
+    },
+    recoverableStages: {
+      REPORT_PROFILE: false,
+      REPORT_SCORING: false,
+      REPORT_AI_VISIBILITY: false,
+    },
+  };
+}
+
+function printCurrentForensicBlock(): void {
+  const plan = buildSanitizedRecoveryPlan(currentDiagD9dForensicPreflight(), process.env);
+  console.log(JSON.stringify(plan, null, 2));
+  console.error(`[analysis-recovery] BLOCKED: ${plan.blockedBy.join(",")}`);
+  process.exitCode = 1;
+}
+
+const invokedPath = process.argv[1];
+if (invokedPath && import.meta.url === pathToFileURL(invokedPath).href) {
+  // The checked-in current-diagnosis CLI is intentionally read-only. A future
+  // executable recovery seam requires Supervisor integration after the missing
+  // frozen identities are supplied by a trusted source.
+  printCurrentForensicBlock();
 }

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AnalysisRecoveryRunnerError,
   buildSanitizedRecoveryPlan,
+  currentDiagD9dForensicPreflight,
   runAnalysisRecoveryRunner,
   type AnalysisRecoveryRunnerDependencies,
   type FrozenRecoveryPreflight,
@@ -124,6 +125,21 @@ describe("analysis recovery planning", () => {
     expect(output).not.toContain("sha256:frozen");
     expect(output).toContain("identityAvailability");
   });
+
+  it("keeps the audited current diagnosis forensic-blocked with a zero-call plan", () => {
+    const plan = buildSanitizedRecoveryPlan(currentDiagD9dForensicPreflight(), AUTH);
+    expect(plan.blockedBy).toEqual([
+      "COMPETITOR_RESOLUTION_HASH_MISSING",
+      "QUERY_PLAN_HASH_MISSING",
+    ]);
+    expect(plan.providerBudget).toEqual({
+      bocha: 0,
+      crawler: 0,
+      deepSeek: 4,
+      retries: 0,
+      newDiagnoses: 0,
+    });
+  });
 });
 
 describe("fail-closed preflight with zero calls", () => {
@@ -170,6 +186,16 @@ describe("fail-closed preflight with zero calls", () => {
     }
   });
 
+  it("does not open or migrate the private database before forensic preflight", () => {
+    const source = readFileSync(
+      new URL("../../scripts/resume-analysis-recovery.ts", import.meta.url),
+      "utf8",
+    );
+    expect(source).not.toContain("openMigratedDatabase");
+    expect(source).not.toContain("createSqliteStorageAdapter");
+    expect(source).not.toContain("better-sqlite3");
+  });
+
   it("blocks current diag when competitor and query-plan frozen identities are unavailable", async () => {
     const pf = preflight();
     pf.identities.competitorResolution = { frozen: null, current: null };
@@ -202,6 +228,11 @@ describe("one-shot provider and mutation budgets", () => {
   it("fails if DeepSeek exceeds the computed cap", async () => {
     await expect(runAnalysisRecoveryRunner(deps(preflight(), { ...ZERO, deepSeekCalls: 5 }), AUTH))
       .rejects.toMatchObject({ code: "DEEPSEEK_BUDGET_EXCEEDED" });
+  });
+
+  it("fails if any automatic retry is recorded", async () => {
+    await expect(runAnalysisRecoveryRunner(deps(preflight(), { ...ZERO, retries: 1 }), AUTH))
+      .rejects.toMatchObject({ code: "AUTOMATIC_RETRY_FORBIDDEN" });
   });
 
   it("does not automatically rerun after failure", async () => {
