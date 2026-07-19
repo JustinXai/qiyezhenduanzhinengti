@@ -89,8 +89,11 @@ export const analysisStageRuns = sqliteTable("analysis_stage_runs", {
   status: text("status").notNull(),
   inputHash: text("input_hash").notNull(),
   evidenceRegistryHash: text("evidence_registry_hash").notNull(),
-  competitorResolutionHash: text("competitor_resolution_hash").notNull(),
-  queryPlanHash: text("query_plan_hash").notNull(),
+  // Strict resume stores both hashes. Frozen-Evidence Reanalysis deliberately
+  // stores NULL because those historical artifacts were never persisted.
+  competitorResolutionHash: text("competitor_resolution_hash"),
+  queryPlanHash: text("query_plan_hash"),
+  frozenEvidenceSnapshotHash: text("frozen_evidence_snapshot_hash"),
   outputJson: text("output_json"),
   outputHash: text("output_hash"),
   schemaVersion: text("schema_version").notNull(),
@@ -120,4 +123,12 @@ export const analysisRepairAttempts = sqliteTable("analysis_repair_attempts", {
   providerCallDelta: integer("provider_call_delta").notNull().default(0),
   resultState: text("result_state"),
   failureCategory: text("failure_category"),
+  recoveryMode: text("recovery_mode")
+    .notNull()
+    .default("STRICT_CHECKPOINT_RESUME"),
+  missingHistoricalProvenance: text("missing_historical_provenance")
+    .notNull()
+    .default("[]"),
+  frozenEvidenceSnapshotJson: text("frozen_evidence_snapshot_json"),
+  frozenEvidenceSnapshotHash: text("frozen_evidence_snapshot_hash"),
 });
