@@ -35,16 +35,18 @@ COMMIT: current branch HEAD (record from Git)
 ## Coordination anchors
 
 - Agent Q contract commit: `07946c421183209470679df5990492d8d4b2b287`
-- Agent R runtime commit: `5e2aee9f46131268f1a786d3dd387b0dae331347`
+- Agent R runtime commits: `5e2aee9f46131268f1a786d3dd387b0dae331347`,
+  `69274bfff596d662314f779c1e6f9ab7eed3cbce`
 - Integration order: Q → R → S.
 - S does not include or modify Q/R-owned files and does not edit shared barrels.
 
 ## Verification
 
-- Targeted TypeScript: PASS
-- Targeted ESLint: PASS
-- Runner QA: PASS (`17` tests)
-- Full suite/security: record after staged-source scan
+- `pnpm lint`: PASS (0 errors; 1 pre-existing warning)
+- `pnpm typecheck`: PASS
+- Runner QA: PASS (`18` tests)
+- Full suite: PASS (`49` files / `628` tests)
+- Security: PASS (`229` tracked files; `52` SSRF cases; no secrets)
 - Real Provider/network calls: Bocha 0 / Crawler 0 / DeepSeek 0 / retries 0
 - New Diagnosis: 0
 
