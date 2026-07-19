@@ -47,8 +47,18 @@ describe("evidenceGuard (relation-based, ROUND-3)", () => {
     expect(codes).toContain("TRUTH_4_2_STRENGTH_NEEDS_SUPPORT");
   });
 
-  it("§4.2 — a strength backed by two PARTIAL relations passes", () => {
+  it("§4.2 — a strength backed by two independent-domain PARTIAL relations passes", () => {
     const report = buildValidReport();
+    report.evidence = report.evidence.map((item) =>
+      item.id === "ev_first_about"
+        ? {
+            ...item,
+            sourceDomain: "independent-source.example.net",
+            normalizedDomain: "independent-source.example.net",
+            url: "https://independent-source.example.net/about",
+          }
+        : item,
+    );
     report.strengths = [
       { ...report.strengths[0]!, id: "str_1", evidenceIds: ["ev_first_home", "ev_first_about"] },
     ];
@@ -60,6 +70,22 @@ describe("evidenceGuard (relation-based, ROUND-3)", () => {
     report.coreIssues = [];
     report.geoOpportunities = [];
     expect(evidenceGuard({ report, relations, coverage: coverageOf(report) })).toEqual({ ok: true });
+  });
+
+  it("§4.2 — two PARTIAL relation rows from one root domain are not independent", () => {
+    const report = buildValidReport();
+    report.strengths = [
+      { ...report.strengths[0]!, id: "str_1", evidenceIds: ["ev_first_home", "ev_first_about"] },
+    ];
+    report.coreIssues = [];
+    report.geoOpportunities = [];
+    const relations: ClaimEvidenceRelation[] = [
+      rel({ claimId: "str_1", claimKind: "strength", evidenceId: "ev_first_home", supportLevel: "PARTIAL_SUPPORT", basis: "CONTENT_MATCH" }),
+      rel({ claimId: "str_1", claimKind: "strength", evidenceId: "ev_first_about", supportLevel: "PARTIAL_SUPPORT", basis: "CONTENT_MATCH" }),
+    ];
+    expect(codesOf(evidenceGuard({ report, relations, coverage: coverageOf(report) }))).toContain(
+      "TRUTH_4_2_STRENGTH_NEEDS_SUPPORT",
+    );
   });
 
   it("§4.4 — a positive strength backed only by CONTEXT_ONLY relations", () => {

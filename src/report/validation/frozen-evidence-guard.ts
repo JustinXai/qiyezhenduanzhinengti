@@ -14,6 +14,7 @@ import {
   RecoveryMode,
   CompetitorResolutionStatus,
 } from "../../diagnosis/orchestration/recovery/frozen-evidence-contract";
+import { countIndependentEvidenceDomains } from "./evidence-independence";
 
 export const FROZEN_EVIDENCE_QUICK_COMPETITOR_LIMITATION =
   "已收到竞品输入,但本次公开证据不足,暂不做确定性比较。";
@@ -271,12 +272,14 @@ function checkNegativeClaims(
         detail,
       );
     }
-    const partialEvidenceIds = new Set(
-      relations
-        .filter((relation) => relation.supportLevel === "PARTIAL_SUPPORT")
-        .map((relation) => relation.evidenceId),
+    const partialEvidenceIds = relations
+      .filter((relation) => relation.supportLevel === "PARTIAL_SUPPORT")
+      .map((relation) => relation.evidenceId);
+    const independentPartialDomains = countIndependentEvidenceDomains(
+      partialEvidenceIds,
+      input.report.evidence,
     );
-    if (partialEvidenceIds.size < 2) {
+    if (independentPartialDomains < 2) {
       add(
         violations,
         "NEGATIVE_CLAIM_INSUFFICIENT_INDEPENDENT_EVIDENCE",
