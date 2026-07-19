@@ -105,26 +105,39 @@ export const CompetitorGapStageItem = z.object({
   gapStatement: z.string(),
   evidenceIds: z.array(z.string()),
 });
-export const DemonstrationFixStageItem = z.object({
-  fixType: DemonstrationFixType,
-  /** §七: the published issue the fix demonstrates (validated when present). */
-  sourceIssueId: z.string().optional(),
-  currentIssue: z.string(),
-  suggestedAssetType: z.string(),
-  before: z.string(),
-  after: z.string(),
-  whyBetter: z.string(),
-  customerConfirmationNeeded: z.string(),
-  geoTeamDeliverable: z.string(),
-  evidenceIds: z.array(z.string()),
-  // NOTE: any `disclaimer` DeepSeek emits is ignored; we stamp the frozen literal.
-});
+
+const NonEmptyCandidateText = z.string().trim().min(1);
+
+/**
+ * Internal-only model proposal for a demonstration fix.
+ *
+ * The public DemonstrationFix contract remains Supervisor-owned and unchanged.
+ * In particular, the model is not trusted to write `currentIssue` or the frozen
+ * `disclaimer`; both are added deterministically after sourceIssueId resolution.
+ */
+export const CandidateDemonstrationFix = z
+  .object({
+    sourceIssueId: NonEmptyCandidateText,
+    assetType: DemonstrationFixType,
+    beforeStructure: NonEmptyCandidateText,
+    afterStructure: NonEmptyCandidateText,
+    whyBetter: NonEmptyCandidateText,
+    confirmationNeeded: NonEmptyCandidateText,
+    deliverable: NonEmptyCandidateText,
+    evidenceIds: z
+      .array(NonEmptyCandidateText)
+      .min(1)
+      .refine((ids) => new Set(ids).size === ids.length, "evidenceIds must be unique"),
+  })
+  .strict();
+export type CandidateDemonstrationFix = z.infer<typeof CandidateDemonstrationFix>;
 
 export const ClaimsStageOutput = z.object({
   strengths: z.array(StrengthStageItem),
   coreIssues: z.array(CoreIssueStageItem),
   geoOpportunities: z.array(GeoOpportunityStageItem),
   competitorGaps: z.array(CompetitorGapStageItem),
-  demonstrationFix: DemonstrationFixStageItem.nullable(),
+  // Required and exact: null or one complete strict Candidate. No partial object.
+  demonstrationFix: CandidateDemonstrationFix.nullable(),
 });
 export type ClaimsStageOutput = z.infer<typeof ClaimsStageOutput>;

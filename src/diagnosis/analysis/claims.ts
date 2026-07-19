@@ -5,9 +5,10 @@
 //   - referential integrity: every evidence id must resolve (unknown ids filtered).
 //   - NO array[0] auto-backfill (PRODUCT_TRUTH_RULES §4.7): a claim left with zero
 //     resolvable evidence ids is DROPPED, never padded.
-//   - the demonstrationFix disclaimer is stamped from the frozen Zod literal, never
-//     copied from model output; if its evidence does not resolve it becomes null
-//     (PRODUCT_TRUTH_RULES §5 — never fabricate a module for completeness).
+//   - the model emits only a strict CandidateDemonstrationFix. currentIssue comes
+//     from its exact source issue and the disclaimer comes from the frozen literal.
+//   - a missing source issue or missing issue/evidence relationship makes the
+//     demonstration fix null; there is no first-issue or first-evidence fallback.
 //
 // Support-level publish thresholds (≥1 DIRECT_SUPPORT etc.) are enforced later by
 // Agent B's Evidence Semantic Guard; this stage guarantees the structural + id
@@ -26,11 +27,18 @@ import type { DroppedClaimRecord } from "../../contracts/claim-reason-codes";
 import { parseStageJson, type StageParseResult } from "../../providers/deepseek";
 import { indexEvidence, resolveEvidenceIds, type EvidenceIndex } from "./evidence-index";
 import { ClaimsStageOutput } from "./stage-schemas";
+import type { CandidateDemonstrationFix } from "./stage-schemas";
 
 // contracts/index.ts exports CompetitorGap only as a Zod value; derive the type.
 type CompetitorGap = DiagnosisReport["competitorGaps"][number];
 
 const FROZEN_DEMO_DISCLAIMER = DemonstrationFix.shape.disclaimer.value;
+
+const SUGGESTED_ASSET_TYPE: Record<CandidateDemonstrationFix["assetType"], string> = {
+  ENTITY_DESCRIPTION: "企业实体描述",
+  FAQ_EXAMPLE: "结构化 FAQ 区块",
+  BEFORE_AFTER_STRUCTURE: "内容结构改版示意",
+};
 
 export interface ClaimsResult {
   strengths: Strength[];
@@ -71,11 +79,13 @@ function buildCoreIssues(
   index: EvidenceIndex,
 ): CoreIssue[] {
   const out: CoreIssue[] = [];
-  items.forEach((item) => {
+  items.forEach((item, sourceIndex) => {
     const evidenceIds = resolveEvidenceIds(item.evidenceIds, index);
     if (evidenceIds.length === 0) return;
     out.push({
-      id: `iss_${out.length + 1}`,
+      // Preserve the model's positional source id even when an earlier issue is
+      // dropped. Renumbering would let iss_1 silently point at a different issue.
+      id: `iss_${sourceIndex + 1}`,
       claimType: item.claimType,
       statement: item.statement,
       businessImpact: item.businessImpact,
@@ -151,38 +161,54 @@ function buildCompetitorGaps(
 function buildDemonstrationFix(
   item: ClaimsStageOutput["demonstrationFix"],
   index: EvidenceIndex,
-  issueIds: ReadonlySet<string>,
+  issuesById: ReadonlyMap<string, CoreIssue>,
   dropped: DroppedClaimRecord[],
 ): DemonstrationFixModel | null {
   if (item === null) return null;
-  const evidenceIds = resolveEvidenceIds(item.evidenceIds, index);
-  if (evidenceIds.length === 0) {
+  const issue = issuesById.get(item.sourceIssueId);
+  if (!issue) {
     dropped.push({
       kind: "demonstrationFix",
-      ref: item.currentIssue.slice(0, 40),
-      reasonCode: dropReasonForEvidence(item.evidenceIds),
-    });
-    return null; // hide the module rather than fabricate
-  }
-  // §七: the demonstration fix must originate from a PUBLISHED issue.
-  if (item.sourceIssueId !== undefined && !issueIds.has(item.sourceIssueId)) {
-    dropped.push({
-      kind: "demonstrationFix",
-      ref: item.currentIssue.slice(0, 40),
+      ref: item.sourceIssueId,
       reasonCode: "INVALID_EVIDENCE_REFERENCE",
     });
     return null;
   }
+
+  const resolvedEvidenceIds = resolveEvidenceIds(item.evidenceIds, index);
+  if (resolvedEvidenceIds.length !== item.evidenceIds.length) {
+    dropped.push({
+      kind: "demonstrationFix",
+      ref: item.sourceIssueId,
+      reasonCode: dropReasonForEvidence(item.evidenceIds),
+    });
+    return null;
+  }
+
+  // Candidate evidence must have an explicit input-level relationship to the
+  // exact issue. Semantic verification remains the downstream verifier's job.
+  // Keep only that intersection; never substitute evidence[0] or issue[0].
+  const issueEvidence = new Set(issue.evidenceIds);
+  const evidenceIds = resolvedEvidenceIds.filter((id) => issueEvidence.has(id));
+  if (evidenceIds.length === 0) {
+    dropped.push({
+      kind: "demonstrationFix",
+      ref: item.sourceIssueId,
+      reasonCode: "INVALID_EVIDENCE_REFERENCE",
+    });
+    return null;
+  }
+
   return {
     id: "demo_1",
-    fixType: item.fixType,
-    currentIssue: item.currentIssue,
-    suggestedAssetType: item.suggestedAssetType,
-    before: item.before,
-    after: item.after,
+    fixType: item.assetType,
+    currentIssue: issue.statement,
+    suggestedAssetType: SUGGESTED_ASSET_TYPE[item.assetType],
+    before: item.beforeStructure,
+    after: item.afterStructure,
     whyBetter: item.whyBetter,
-    customerConfirmationNeeded: item.customerConfirmationNeeded,
-    geoTeamDeliverable: item.geoTeamDeliverable,
+    customerConfirmationNeeded: item.confirmationNeeded,
+    geoTeamDeliverable: item.deliverable,
     evidenceIds,
     disclaimer: FROZEN_DEMO_DISCLAIMER,
   };
@@ -225,7 +251,8 @@ export function buildClaims(
   }
   // The stage output declares issue links positionally ("iss_1"…), which is the
   // id scheme buildCoreIssues assigns — so linkage is validated on BUILT ids.
-  const issueIds = new Set(coreIssues.map((i) => i.id));
+  const issuesById = new Map(coreIssues.map((i) => [i.id, i]));
+  const issueIds = new Set(issuesById.keys());
 
   const competitorGaps = buildCompetitorGaps(s.competitorGaps, index);
   if (competitorGaps.length < s.competitorGaps.length) {
@@ -247,7 +274,7 @@ export function buildClaims(
       coreIssues,
       geoOpportunities: buildGeoOpportunities(s.geoOpportunities, index, issueIds, dropped),
       competitorGaps,
-      demonstrationFix: buildDemonstrationFix(s.demonstrationFix, index, issueIds, dropped),
+      demonstrationFix: buildDemonstrationFix(s.demonstrationFix, index, issuesById, dropped),
       dropped,
     },
   };

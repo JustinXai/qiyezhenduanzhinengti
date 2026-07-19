@@ -19,6 +19,8 @@ import type { DiagnosisInput } from "../../runtime/diagnosis-input";
 import { competitorNames } from "../../runtime/diagnosis-input";
 
 export const REAL_ANALYSIS_PROMPT_VERSION = "analysis.real.v1";
+/** Per-stage version used by frozen-evidence claims recovery. */
+export const REPORT_CLAIMS_ZH_PROMPT_VERSION = "REPORT_CLAIMS_ZH_PROMPT_V2_1";
 
 /** Per-stage completion budgets (never a blanket 256; sized to expected output). */
 export const STAGE_MAX_TOKENS: Record<string, number> = {
@@ -32,6 +34,7 @@ export interface StagePrompt {
   systemPrompt: string;
   userPrompt: string;
   maxTokens: number;
+  version: string;
 }
 
 const SYSTEM_PROMPT =
@@ -95,7 +98,12 @@ export function buildCompanyProfilePrompt(
     `{"brandName":"string","industry":"string","productOrService":"string","targetRegion":"string","competitors":["string"],"unresolvedQuestions":["string"]}`,
     "unresolvedQuestions列出2-4条公开信息无法回答、需要企业确认的问题。",
   ].join("\n");
-  return { systemPrompt: SYSTEM_PROMPT, userPrompt, maxTokens: STAGE_MAX_TOKENS.company_profile! };
+  return {
+    systemPrompt: SYSTEM_PROMPT,
+    userPrompt,
+    maxTokens: STAGE_MAX_TOKENS.company_profile!,
+    version: REAL_ANALYSIS_PROMPT_VERSION,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +135,12 @@ export function buildDimensionSignalsPrompt(
     "输出JSON对象,结构严格为(将?替换为评级):",
     RUBRIC,
   ].join("\n");
-  return { systemPrompt: SYSTEM_PROMPT, userPrompt, maxTokens: STAGE_MAX_TOKENS.dimension_signals! };
+  return {
+    systemPrompt: SYSTEM_PROMPT,
+    userPrompt,
+    maxTokens: STAGE_MAX_TOKENS.dimension_signals!,
+    version: REAL_ANALYSIS_PROMPT_VERSION,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +177,12 @@ export function buildAiVisibilityPrompt(
     "输出JSON对象,结构严格为:",
     `{"tests":[{"id":"...","questionCategory":"...","question":"...","answerText":"...","accuracy":"...(可省略)","recommendationStrength":"...(可省略)","evidenceIds":[]}]}`,
   ].join("\n");
-  return { systemPrompt: SYSTEM_PROMPT, userPrompt, maxTokens: STAGE_MAX_TOKENS.ai_visibility! };
+  return {
+    systemPrompt: SYSTEM_PROMPT,
+    userPrompt,
+    maxTokens: STAGE_MAX_TOKENS.ai_visibility!,
+    version: REAL_ANALYSIS_PROMPT_VERSION,
+  };
 }
 
 /** Default probe set: the canary's customer questions + two brand-direct probes. */
@@ -212,7 +230,11 @@ export function buildClaimsPrompt(
     "4c) 每条geoOpportunity必须给出recommendedAction(具体可落地的GEO内容动作,不允许\"多发内容\"式空泛建议)和priorityReason(为什么现在优先做,结合证据与业务影响);",
     "4d) 所有客户可见文本默认使用简体中文;品牌名与产品型号可保留原文;不得输出英文解释段落或中英双语重复内容;",
     `5) ${competitorRule}`,
-    "6) demonstrationFix: 仅当某个coreIssue可以用一个内容资产示范修复时给出(fixType: ENTITY_DESCRIPTION/FAQ_EXAMPLE/BEFORE_AFTER_STRUCTURE),否则为null;before/after描述结构而非虚构事实;customerConfirmationNeeded写明需要企业确认的真实口径。",
+    "6) demonstrationFix只能是null或一个字段完整的Candidate对象;无完整证据支持时必须返回null,不得缺字段或补写猜测内容;",
+    "6a) Candidate字段只能是sourceIssueId、assetType、beforeStructure、afterStructure、whyBetter、confirmationNeeded、deliverable、evidenceIds;不得输出currentIssue,不得输出disclaimer;",
+    "6b) sourceIssueId只能选择本次coreIssues中的位置编号(第1条为iss_1,第2条为iss_2,以此类推);不得引用不存在的问题,不得使用第一条问题兜底;",
+    "6c) assetType只能是ENTITY_DESCRIPTION / FAQ_EXAMPLE / BEFORE_AFTER_STRUCTURE;beforeStructure与afterStructure只描述内容结构,不得虚构企业事实;",
+    "6d) demonstrationFix.evidenceIds只能从上方候选证据摘要选择,并且必须与sourceIssueId引用的问题有共同证据;不得使用第一条证据兜底;",
     "",
     inputContext(input),
     "",
@@ -222,9 +244,14 @@ export function buildClaimsPrompt(
     "输出JSON对象,结构严格为:",
     `{"strengths":[{"statement":"...","businessImpact":"...","claimType":"...","evidenceIds":["..."]}],` +
       `"coreIssues":[{"statement":"...","businessImpact":"...","claimType":"...","fixDirection":"...","evidenceIds":["..."]}],` +
-      `"geoOpportunities":[{"statement":"...","businessImpact":"...","claimType":"...","customerQuestion":"...","contentGap":"...","evidenceIds":["..."]}],` +
+      `"geoOpportunities":[{"statement":"...","businessImpact":"...","claimType":"...","customerQuestion":"...","contentGap":"...","sourceIssueId":"iss_1","recommendedAction":"...","priorityReason":"...","evidenceIds":["..."]}],` +
       `"competitorGaps":[{"competitorName":"...","gapStatement":"...","evidenceIds":["..."]}],` +
-      `"demonstrationFix":{...}或null}`,
+      `"demonstrationFix":{"sourceIssueId":"iss_1","assetType":"FAQ_EXAMPLE","beforeStructure":"...","afterStructure":"...","whyBetter":"...","confirmationNeeded":"...","deliverable":"...","evidenceIds":["..."]}或null}`,
   ].join("\n");
-  return { systemPrompt: SYSTEM_PROMPT, userPrompt, maxTokens: STAGE_MAX_TOKENS.claims! };
+  return {
+    systemPrompt: SYSTEM_PROMPT,
+    userPrompt,
+    maxTokens: STAGE_MAX_TOKENS.claims!,
+    version: REPORT_CLAIMS_ZH_PROMPT_VERSION,
+  };
 }
