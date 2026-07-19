@@ -181,7 +181,13 @@ describe("buildClaims", () => {
   });
 
   it("reports PROVIDER_SCHEMA_MISMATCH for old or malformed model output", () => {
-    const oldShape = buildClaims(EVIDENCE, claimsFixture);
+    const oldShape = buildClaims(EVIDENCE, {
+      ...claimsFixture,
+      demonstrationFix: {
+        ...claimsFixture.demonstrationFix,
+        currentIssue: "旧模型直接生成的问题文案",
+      },
+    });
     expect(oldShape.ok).toBe(false);
     if (!oldShape.ok) expect(oldShape.error.code).toBe("PROVIDER_SCHEMA_MISMATCH");
 

@@ -526,14 +526,13 @@ function scenarioStageOutput(
         // Gated on confirmed competitor evidence — empty when nothing resolved.
         competitorGaps: scenarioCompetitorGaps(evidence, input),
         demonstrationFix: {
-          fixType: "FAQ_EXAMPLE",
-          currentIssue: "官网缺少面向采购决策的常见问题解答",
-          suggestedAssetType: "结构化 FAQ 区块",
-          before: "产品页仅罗列参数,未回答客户关心的交付与售后问题",
-          after: "新增 FAQ:交付周期 / 售后响应 / 选型建议,每条给出明确、可核验的回答结构",
+          sourceIssueId: "iss_1",
+          assetType: "FAQ_EXAMPLE",
+          beforeStructure: "产品页仅罗列参数,未回答客户关心的交付与售后问题",
+          afterStructure: "新增 FAQ:交付周期 / 售后响应 / 选型建议,每条给出明确、可核验的回答结构",
           whyBetter: "客户与 AI 都能直接提取到关键决策信息,减少歧义",
-          customerConfirmationNeeded: "确认真实的交付周期区间与售后承诺口径",
-          geoTeamDeliverable: "FAQ 内容结构模板与首批问题清单",
+          confirmationNeeded: "确认真实的交付周期区间与售后承诺口径",
+          deliverable: "FAQ 内容结构模板与首批问题清单",
           evidenceIds: [fp(1)],
         },
       };
