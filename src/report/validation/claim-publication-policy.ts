@@ -39,6 +39,8 @@ export interface ClaimPublicationCandidate {
   id: string;
   kind: Exclude<ClaimKind, "competitorGap">;
   text: string;
+  /** Exact field that carries the negative scope qualifier (statement or contentGap). */
+  negativeScopeText: string;
   evidenceIds: readonly string[];
 }
 
@@ -93,9 +95,24 @@ function coverageStatusOf(
     coverageScopeOf(input) === "FROZEN_EVIDENCE"
       ? FROZEN_EVIDENCE_NEGATIVE_SCOPE_PHRASES
       : STANDARD_NEGATIVE_SCOPE_PHRASES;
-  return phrases.some((phrase) => input.claim.text.includes(phrase))
+  const scopedText = input.claim.negativeScopeText.trim();
+  return phrases.some((phrase) => scopedText.startsWith(phrase))
     ? "ESTABLISHED_AND_BOUNDED"
     : "SCOPE_LIMITATION_MISSING";
+}
+
+export function negativeScopeTextFromReport(
+  report: DiagnosisReport,
+  kind: ClaimPublicationCandidate["kind"],
+  claimId: string,
+): string {
+  if (kind === "coreIssue") {
+    return report.coreIssues.find((item) => item.id === claimId)?.statement ?? "";
+  }
+  if (kind === "strength") {
+    return report.strengths.find((item) => item.id === claimId)?.statement ?? "";
+  }
+  return report.geoOpportunities.find((item) => item.id === claimId)?.contentGap ?? "";
 }
 
 function decision(
