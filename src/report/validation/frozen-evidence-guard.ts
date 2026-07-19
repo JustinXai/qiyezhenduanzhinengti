@@ -1,5 +1,6 @@
 import type { DiagnosisReport } from "../../contracts";
 import type { ClaimEvidenceRelation } from "../../contracts/claim-evidence";
+import type { ClaimPublicationSourceContext } from "../../contracts/independent-support-source";
 import {
   classifyPolarity,
   extractVerifiableClaims,
@@ -13,18 +14,21 @@ import {
   parseFrozenEvidenceSnapshotV1,
   RecoveryMode,
   CompetitorResolutionStatus,
+  createFrozenEvidenceScopeCoverage,
 } from "../../diagnosis/orchestration/recovery/frozen-evidence-contract";
-import { countIndependentEvidenceDomains } from "./evidence-independence";
+import {
+  evaluateClaimPublication,
+  FROZEN_EVIDENCE_NEGATIVE_SCOPE_PHRASES,
+  publicationSourceContextFromReport,
+} from "./claim-publication-policy";
 
 export const FROZEN_EVIDENCE_QUICK_COMPETITOR_LIMITATION =
   "已收到竞品输入,但本次公开证据不足,暂不做确定性比较。";
 export const FROZEN_EVIDENCE_DEEP_COMPETITOR_LIMITATION =
   "本次恢复未重新确认竞品官方网站。";
 
-export const FROZEN_EVIDENCE_NEGATIVE_SCOPE_PREFIXES = [
-  "在本次保存的公开证据中，暂未发现",
-  "基于本次保存的公开页面和搜索证据，相关说明仍不充分",
-] as const;
+export const FROZEN_EVIDENCE_NEGATIVE_SCOPE_PREFIXES =
+  FROZEN_EVIDENCE_NEGATIVE_SCOPE_PHRASES;
 
 const UNBOUNDED_NEGATIVE_PHRASES = [
   "官网没有",
@@ -47,7 +51,6 @@ export type FrozenEvidenceGuardRuleCode =
   | "COMPETITOR_GAP_NOT_EMPTY"
   | "COMPETITOR_LIMITATION_MISSING"
   | "NEGATIVE_CLAIM_SCOPE_UNBOUNDED"
-  | "NEGATIVE_CLAIM_DIRECT_SUPPORT"
   | "NEGATIVE_CLAIM_INSUFFICIENT_INDEPENDENT_EVIDENCE"
   | "NEGATIVE_CLAIM_NOT_SNAPSHOT_BOUNDED"
   | "PUBLIC_RECOVERY_DATA_LEAK";
@@ -91,6 +94,7 @@ export interface FrozenEvidenceGuardInput {
   };
   report: DiagnosisReport;
   relations: readonly ClaimEvidenceRelation[];
+  sourceContext?: ClaimPublicationSourceContext;
   presentation: {
     quickCompetitorLimitation: string;
     deepCompetitorLimitation: string;
@@ -234,6 +238,7 @@ function publicPayloadLeaksInternalData(
 
 function checkNegativeClaims(
   input: FrozenEvidenceGuardInput,
+  snapshot: FrozenEvidenceSnapshotV1,
   violations: FrozenEvidenceGuardViolation[],
 ): void {
   const relationsByClaim = new Map<string, ClaimEvidenceRelation[]>();
@@ -243,10 +248,21 @@ function checkNegativeClaims(
     relationsByClaim.set(relation.claimId, current);
   }
 
+  const coverage = createFrozenEvidenceScopeCoverage({
+    snapshot,
+    evidence: input.report.evidence,
+  });
+  const sourceContext = publicationSourceContextFromReport(
+    input.report,
+    coverage,
+    input.sourceContext,
+  );
+
   for (const claim of extractVerifiableClaims(input.report)) {
     if (classifyPolarity({ kind: claim.kind, text: claim.text }) !== "NEGATIVE_MISSING") {
       continue;
     }
+    if (claim.kind === "competitorGap") continue;
     const detail = { claimId: claim.id, evidenceIds: claim.candidateEvidenceIds };
     const bounded = FROZEN_EVIDENCE_NEGATIVE_SCOPE_PREFIXES.some((prefix) =>
       claim.text.includes(prefix),
@@ -264,26 +280,28 @@ function checkNegativeClaims(
     }
 
     const relations = relationsByClaim.get(claim.id) ?? [];
-    if (relations.some((relation) => relation.supportLevel === "DIRECT_SUPPORT")) {
-      add(
-        violations,
-        "NEGATIVE_CLAIM_DIRECT_SUPPORT",
-        `negative claim ${claim.id} may be at most PARTIAL_SUPPORT`,
-        detail,
-      );
-    }
-    const partialEvidenceIds = relations
-      .filter((relation) => relation.supportLevel === "PARTIAL_SUPPORT")
-      .map((relation) => relation.evidenceId);
-    const independentPartialDomains = countIndependentEvidenceDomains(
-      partialEvidenceIds,
-      input.report.evidence,
-    );
-    if (independentPartialDomains < 2) {
+    const decision = evaluateClaimPublication({
+      claim: {
+        id: claim.id,
+        kind: claim.kind,
+        text: claim.text,
+        evidenceIds: claim.candidateEvidenceIds,
+      },
+      relations,
+      evidence: input.report.evidence,
+      coverage,
+      sourceContext,
+      coverageScope: "FROZEN_EVIDENCE",
+    });
+    if (
+      decision.rule === "INSUFFICIENT_DIRECT_SUPPORT" ||
+      decision.rule === "INSUFFICIENT_INDEPENDENT_SUPPORT" ||
+      decision.rule === "CONTEXT_ONLY_INSUFFICIENT"
+    ) {
       add(
         violations,
         "NEGATIVE_CLAIM_INSUFFICIENT_INDEPENDENT_EVIDENCE",
-        `negative claim ${claim.id} must be pruned unless it has two independent PARTIAL_SUPPORT relations`,
+        `negative claim ${claim.id} failed the shared publication threshold (${decision.rule})`,
         detail,
       );
     }
@@ -384,7 +402,9 @@ export function frozenEvidenceGuard(
     );
   }
 
-  checkNegativeClaims(input, violations);
+  if (snapshot && reportEvidenceMatchesSnapshot(input.report, snapshot)) {
+    checkNegativeClaims(input, snapshot, violations);
+  }
 
   if (snapshot && publicPayloadLeaksInternalData(input.publicApiPayload, snapshot)) {
     add(

@@ -17,6 +17,7 @@ import type {
   ClaimEvidenceRelation,
   EvidenceCoverage,
 } from "../../contracts/claim-evidence";
+import type { ClaimPublicationSourceContext } from "../../contracts/independent-support-source";
 import type { GuardResult } from "../../contracts/guard-types";
 import { combineGuardResults } from "../../contracts/guard-types";
 import { evidenceGuard } from "./evidence-guard";
@@ -26,6 +27,7 @@ import {
   type ReportViewModels,
 } from "./cross-field-guard";
 import { ctaGuard } from "./cta-guard";
+import type { ClaimPublicationCoverageScope } from "./claim-publication-policy";
 
 export interface PublishGuardInput {
   report: DiagnosisReport;
@@ -36,6 +38,8 @@ export interface PublishGuardInput {
   relations: readonly ClaimEvidenceRelation[];
   /** The run's measurement boundary — required to gate negative/missing claims. */
   coverage: EvidenceCoverage;
+  sourceContext?: ClaimPublicationSourceContext;
+  coverageScope?: ClaimPublicationCoverageScope;
   /** Optional Quick/Deep/Evidence projections to validate alongside the report. */
   viewModels?: ReportViewModels;
   /** Optional CTA labels to check against the frozen literals. */
@@ -43,10 +47,10 @@ export interface PublishGuardInput {
 }
 
 export function publishGuard(input: PublishGuardInput): GuardResult {
-  const { report, relations, coverage, viewModels, cta } = input;
+  const { report, relations, coverage, sourceContext, coverageScope, viewModels, cta } = input;
 
   const results: GuardResult[] = [
-    evidenceGuard({ report, relations, coverage }),
+    evidenceGuard({ report, relations, coverage, sourceContext, coverageScope }),
     crossFieldGuard(report),
     ctaGuard({ report, quick: viewModels?.quick, cta }),
   ];

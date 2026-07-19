@@ -95,11 +95,11 @@ function report(evidence: EvidenceItem[]): DiagnosisReport {
 }
 
 function relations(): ClaimEvidenceRelation[] {
-  return ["ev_00", "ev_08"].map((evidenceId) => ({
+  return ["ev_00", "ev_08"].map((evidenceId, index) => ({
     claimId: "iss_1",
     claimKind: "coreIssue",
     evidenceId,
-    supportLevel: "PARTIAL_SUPPORT",
+    supportLevel: index === 0 ? "DIRECT_SUPPORT" : "PARTIAL_SUPPORT",
     confidence: 0.7,
     justification: "仅在保存的证据范围内形成测量边界",
     basis: "MEASUREMENT_BOUNDARY",
@@ -171,6 +171,15 @@ describe("frozenEvidenceGuard", () => {
     expect(frozenEvidenceGuard(input)).toEqual({ ok: true });
   });
 
+  it("applies the shared Issue threshold and rejects PARTIAL-only frozen negatives", () => {
+    const input = validInput();
+    input.relations = input.relations.map((relation) => ({
+      ...relation,
+      supportLevel: "PARTIAL_SUPPORT",
+    }));
+    expect(codes(input)).toContain("NEGATIVE_CLAIM_INSUFFICIENT_INDEPENDENT_EVIDENCE");
+  });
+
   it("rejects the strict-resume mode and any current Evidence identity change", () => {
     const input = validInput();
     input.recoveryMode = "STRICT_CHECKPOINT_RESUME";
@@ -217,7 +226,7 @@ describe("frozenEvidenceGuard", () => {
     );
   });
 
-  it("rejects absolute negatives, DIRECT support, and fewer than two independent Evidence items", () => {
+  it("rejects an absolute negative even when DIRECT satisfies its base threshold", () => {
     const input = validInput();
     input.report.coreIssues[0]!.statement = "官网没有采购问答说明";
     input.relations = [
@@ -228,12 +237,9 @@ describe("frozenEvidenceGuard", () => {
       },
     ];
     expect(codes(input)).toEqual(
-      expect.arrayContaining([
-        "NEGATIVE_CLAIM_SCOPE_UNBOUNDED",
-        "NEGATIVE_CLAIM_DIRECT_SUPPORT",
-        "NEGATIVE_CLAIM_INSUFFICIENT_INDEPENDENT_EVIDENCE",
-      ]),
+      expect.arrayContaining(["NEGATIVE_CLAIM_SCOPE_UNBOUNDED"]),
     );
+    expect(codes(input)).not.toContain("NEGATIVE_CLAIM_INSUFFICIENT_INDEPENDENT_EVIDENCE");
   });
 
   it("rejects internal recovery fields or snapshot hashes in the public API", () => {
