@@ -25,6 +25,10 @@ import type {
   EvidenceRecordInput,
   ProviderUsageInput,
   ProviderUsageRecord,
+  PruneDecisionRecord,
+  PruneDecisionRecordInput,
+  PruneDecisionReasonCode,
+  PruneDecisionCoverageStatus,
   SaveReportInput,
   StartAnalysisStageRunInput,
   StorageAdapter,
@@ -37,6 +41,44 @@ function toDbTime(date: Date): number {
 
 function fromDbTime(seconds: number): Date {
   return new Date(seconds * 1000);
+}
+
+function validatePruneDecision(item: PruneDecisionRecordInput): void {
+  if ((item.reportId === null) === (item.revisionId === null)) {
+    throw new Error("PRUNE_DECISION_EXACTLY_ONE_PUBLICATION_ID_REQUIRED");
+  }
+  for (const [field, value] of [
+    ["diagnosisId", item.diagnosisId],
+    ["stageRunId", item.stageRunId],
+    ["claimKind", item.claimKind],
+    ["candidateRef", item.candidateRef],
+    ["guardRule", item.guardRule],
+    ["algorithmVersion", item.algorithmVersion],
+  ] as const) {
+    if (value.trim().length === 0) throw new Error(`PRUNE_DECISION_${field.toUpperCase()}_REQUIRED`);
+  }
+  for (const [field, value] of [
+    ["independentSupportSourceCount", item.independentSupportSourceCount],
+    ["directCount", item.directCount],
+    ["partialCount", item.partialCount],
+    ["contextCount", item.contextCount],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`PRUNE_DECISION_${field.toUpperCase()}_INVALID`);
+    }
+  }
+  if (new Set(item.evidenceIds).size !== item.evidenceIds.length) {
+    throw new Error("PRUNE_DECISION_EVIDENCE_IDS_DUPLICATED");
+  }
+  if (Number.isNaN(item.createdAt.getTime())) throw new Error("PRUNE_DECISION_CREATED_AT_INVALID");
+}
+
+function parseEvidenceIds(serialized: string): string[] {
+  const parsed: unknown = JSON.parse(serialized);
+  if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string")) {
+    throw new Error("PRUNE_DECISION_EVIDENCE_IDS_CORRUPT");
+  }
+  return parsed;
 }
 
 interface DiagnosisRow {
@@ -108,6 +150,27 @@ interface ClaimEvidenceRelationRow {
   verifier_mode: string;
   verifier_version: string;
   created_at: number;
+}
+
+interface PruneDecisionRow {
+  id: string;
+  diagnosis_id: string;
+  report_id: string | null;
+  revision_id: string | null;
+  stage_run_id: string;
+  claim_kind: string;
+  candidate_ref: string;
+  source_issue_id: string | null;
+  reason_code: string;
+  guard_rule: string;
+  evidence_ids_json: string;
+  independent_support_source_count: number;
+  direct_count: number;
+  partial_count: number;
+  context_count: number;
+  coverage_status: string;
+  created_at: number;
+  algorithm_version: string;
 }
 
 interface AnalysisStageRunRow {
@@ -359,7 +422,10 @@ export class SqliteStorageAdapter implements StorageAdapter {
   async getReport(diagnosisId: string): Promise<StoredReport | null> {
     const row = this.db
       .prepare(
-        `SELECT * FROM reports WHERE diagnosis_id = ? ORDER BY created_at DESC LIMIT 1`,
+        `SELECT * FROM reports
+         WHERE diagnosis_id = ?
+         ORDER BY rowid DESC
+         LIMIT 1`,
       )
       .get(diagnosisId) as ReportRow | undefined;
     if (!row) return null;
@@ -486,6 +552,81 @@ export class SqliteStorageAdapter implements StorageAdapter {
       verifierMode: row.verifier_mode,
       verifierVersion: row.verifier_version,
       createdAt: fromDbTime(row.created_at),
+    }));
+  }
+
+  // -- prune_decisions -------------------------------------------------------
+
+  async appendPruneDecisions(items: PruneDecisionRecordInput[]): Promise<void> {
+    if (items.length === 0) return;
+    for (const item of items) validatePruneDecision(item);
+    const insert = this.db.prepare(
+      `INSERT INTO prune_decisions
+         (id, diagnosis_id, report_id, revision_id, stage_run_id, claim_kind,
+          candidate_ref, source_issue_id, reason_code, guard_rule,
+          evidence_ids_json, independent_support_source_count, direct_count,
+          partial_count, context_count, coverage_status, created_at,
+          algorithm_version)
+       VALUES
+         (@id, @diagnosis_id, @report_id, @revision_id, @stage_run_id, @claim_kind,
+          @candidate_ref, @source_issue_id, @reason_code, @guard_rule,
+          @evidence_ids_json, @independent_support_source_count, @direct_count,
+          @partial_count, @context_count, @coverage_status, @created_at,
+          @algorithm_version)`,
+    );
+    const append = this.db.transaction((records: PruneDecisionRecordInput[]) => {
+      for (const item of records) {
+        insert.run({
+          id: item.id,
+          diagnosis_id: item.diagnosisId,
+          report_id: item.reportId,
+          revision_id: item.revisionId,
+          stage_run_id: item.stageRunId,
+          claim_kind: item.claimKind,
+          candidate_ref: item.candidateRef,
+          source_issue_id: item.sourceIssueId,
+          reason_code: item.reasonCode,
+          guard_rule: item.guardRule,
+          evidence_ids_json: JSON.stringify(item.evidenceIds),
+          independent_support_source_count: item.independentSupportSourceCount,
+          direct_count: item.directCount,
+          partial_count: item.partialCount,
+          context_count: item.contextCount,
+          coverage_status: item.coverageStatus,
+          created_at: toDbTime(item.createdAt),
+          algorithm_version: item.algorithmVersion,
+        });
+      }
+    });
+    append(items);
+  }
+
+  async getPruneDecisions(diagnosisId: string): Promise<PruneDecisionRecord[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM prune_decisions
+         WHERE diagnosis_id = ? ORDER BY created_at, rowid`,
+      )
+      .all(diagnosisId) as PruneDecisionRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      diagnosisId: row.diagnosis_id,
+      reportId: row.report_id,
+      revisionId: row.revision_id,
+      stageRunId: row.stage_run_id,
+      claimKind: row.claim_kind,
+      candidateRef: row.candidate_ref,
+      sourceIssueId: row.source_issue_id,
+      reasonCode: row.reason_code as PruneDecisionReasonCode,
+      guardRule: row.guard_rule,
+      evidenceIds: parseEvidenceIds(row.evidence_ids_json),
+      independentSupportSourceCount: row.independent_support_source_count,
+      directCount: row.direct_count,
+      partialCount: row.partial_count,
+      contextCount: row.context_count,
+      coverageStatus: row.coverage_status as PruneDecisionCoverageStatus,
+      createdAt: fromDbTime(row.created_at),
+      algorithmVersion: row.algorithm_version,
     }));
   }
 

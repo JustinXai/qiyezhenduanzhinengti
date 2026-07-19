@@ -117,6 +117,25 @@ describe("append-only report revisions", () => {
     ]);
   });
 
+  it("deterministically reads the newest append even when its supplied timestamp is older", async () => {
+    const revised = buildSampleReport({ coreIssues: [] });
+    const revision = await repository.append({
+      diagnosisId: original.diagnosisId,
+      expectedParentReportId: "report_original",
+      revisionReason: "same-second append",
+      algorithmVersion: "round6-prune-audit.v1",
+      canonicalJson: canonicalReportJson(revised),
+      prunedClaims: [],
+    });
+
+    const rows = db
+      .prepare("SELECT id, created_at FROM reports ORDER BY rowid")
+      .all() as Array<{ id: string; created_at: number }>;
+    expect(rows).toHaveLength(2);
+    expect(rows[1]?.created_at).toBeLessThan(rows[0]?.created_at ?? 0);
+    expect((await storage.getReport(original.diagnosisId))?.id).toBe(revision.id);
+  });
+
   it("fails stale-parent and no-change attempts without modifying history", async () => {
     await expect(
       repository.append({
