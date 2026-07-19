@@ -7,7 +7,7 @@
 - Branch: `codex/frozen-evidence-reanalysis-runtime`
 - Baseline: `4f03f7e1f8e657c45fe814c2923d8c661fb36e49`
 - Q contract dependency (cherry-picked on this branch): `082e1ae`
-- Runtime commit: `5e2aee9c`
+- Runtime commits: `5e2aee9c`, `69274bff`
 - Diagnosis authorized by the round: `diag_d9d`
 - Real Provider calls: 0
 - Network calls: 0
@@ -123,4 +123,3 @@ Changed only the assigned recovery runtime, necessary additive Storage files,
 owned runtime/storage tests, and this checkpoint. No shared barrel/config/script/
 QA document was edited. No private artifact, V1 artifact, V2 SQLite, run-lock,
 main or integration branch was modified.
-
