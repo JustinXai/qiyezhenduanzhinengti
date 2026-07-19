@@ -7,6 +7,8 @@ import type {
 } from "../../../storage/adapter";
 import { ANALYSIS_STAGES } from "../../../storage/adapter";
 import { AnalysisRepairAuthorization } from "../../../runtime/analysis-repair-authorization";
+import { EvidenceItem as EvidenceItemSchema } from "../../../contracts";
+import type { EvidenceItem } from "../../../contracts";
 import type { AnalysisStageDefinition } from "./resume-analysis";
 import { stableHash, stableJson } from "./stable-hash";
 import {
@@ -60,7 +62,7 @@ export interface FrozenEvidenceFinalizationInput {
   publicToken: string;
   diagnosisInput: unknown;
   evidenceRegistry: EvidenceRecord[];
-  normalizedEvidence: unknown[];
+  normalizedEvidence: EvidenceItem[];
   snapshot: RuntimeFrozenEvidenceSnapshotV1;
   snapshotHash: string;
   coverageMode: typeof FROZEN_EVIDENCE_COVERAGE_MODE;
@@ -85,7 +87,7 @@ export interface FrozenEvidenceReanalysisDependencies {
     stageInput: Readonly<{
       diagnosisInput: unknown;
       evidenceRegistry: EvidenceRecord[];
-      normalizedEvidence: unknown[];
+      normalizedEvidence: EvidenceItem[];
       frozenEvidenceSnapshot: RuntimeFrozenEvidenceSnapshotV1;
       frozenEvidenceSnapshotHash: string;
       coverageMode: typeof FROZEN_EVIDENCE_COVERAGE_MODE;
@@ -145,7 +147,7 @@ interface PreparedFrozenEvidenceReanalysis {
   plan: FrozenEvidenceReanalysisPlan;
   diagnosisInput: unknown;
   evidenceRegistry: EvidenceRecord[];
-  normalizedEvidence: unknown[];
+  normalizedEvidence: EvidenceItem[];
 }
 
 function assertSha256(value: string, category: string): void {
@@ -229,7 +231,7 @@ function sourceCount(evidence: readonly EvidenceRecord[], sourceType: string): n
 function buildSnapshot(input: {
   expected: FrozenEvidenceReanalysisExpectation;
   evidenceRegistry: EvidenceRecord[];
-  normalizedEvidence: unknown[];
+  normalizedEvidence: EvidenceItem[];
   capturedAt: Date;
 }): RuntimeFrozenEvidenceSnapshotV1 {
   const { expected, evidenceRegistry, normalizedEvidence } = input;
@@ -370,16 +372,21 @@ async function prepare(
     "NORMALIZING_EVIDENCE",
   );
   if (!checkpoint) throw new FrozenEvidenceReanalysisError("NORMALIZED_CHECKPOINT_MISSING");
-  const parsedCheckpoint = parseJsonStrict(checkpoint.outputJson);
-  if (!Array.isArray(parsedCheckpoint)) {
+  const rawCheckpoint = parseJsonStrict(checkpoint.outputJson);
+  if (!Array.isArray(rawCheckpoint)) {
     throw new FrozenEvidenceReanalysisError("NORMALIZED_EVIDENCE_INVALID");
   }
-  if (parsedCheckpoint.length !== expected.evidenceCount) {
+  if (rawCheckpoint.length !== expected.evidenceCount) {
     throw new FrozenEvidenceReanalysisError("NORMALIZED_EVIDENCE_COUNT_MISMATCH");
   }
-  if (stableHash(parsedCheckpoint) !== expected.normalizedEvidenceHash) {
+  if (stableHash(rawCheckpoint) !== expected.normalizedEvidenceHash) {
     throw new FrozenEvidenceReanalysisError("NORMALIZED_EVIDENCE_HASH_MISMATCH");
   }
+  const validatedCheckpoint = EvidenceItemSchema.array().safeParse(rawCheckpoint);
+  if (!validatedCheckpoint.success) {
+    throw new FrozenEvidenceReanalysisError("NORMALIZED_EVIDENCE_SCHEMA_MISMATCH");
+  }
+  const parsedCheckpoint = validatedCheckpoint.data;
 
   const snapshot = parseFrozenEvidenceSnapshotV1(buildSnapshot({
     expected,

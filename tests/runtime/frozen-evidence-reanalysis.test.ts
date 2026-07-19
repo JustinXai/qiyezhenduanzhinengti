@@ -46,7 +46,7 @@ function evidenceRows(): EvidenceRecordInput[] {
       title: `证据 ${index}`,
       snippet: `公开摘要 ${index}`,
       authorityLevel: index < 6 ? "A" : index < 20 ? "C" : "B",
-      supportLevel: null,
+      supportLevel: "CONTEXT_ONLY",
       fetchedAt: CAPTURED_AT,
     };
   });
