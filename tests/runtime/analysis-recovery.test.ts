@@ -117,6 +117,17 @@ describe("frozen-Evidence analysis recovery", () => {
       invokeDeepSeekStage: async ({ stage }) => ({
         rawJson: JSON.stringify({ stage }),
       }),
+      finalizeRecoveredAnalysis: async ({ diagnosisId }) => {
+        await storage.saveReport({
+          id: `report_${diagnosisId}`,
+          diagnosisId,
+          reportContractVersion: "test-report.v1",
+          scoreContractVersion: "test-score.v1",
+          canonicalJson: "{}",
+        });
+        await storage.updateDiagnosisStatus(diagnosisId, "READY");
+        return { resultState: "READY" };
+      },
       ...overrides,
     };
   }
@@ -186,7 +197,7 @@ describe("frozen-Evidence analysis recovery", () => {
       retries: 0,
     });
     expect(invoke).toHaveBeenCalledTimes(1);
-    expect((await storage.getDiagnosisRequest(DIAGNOSIS_ID))?.status).toBe("FAILED");
+    expect((await storage.getDiagnosisRequest(DIAGNOSIS_ID))?.status).toBe("READY");
     expect(await storage.countDiagnosisRequests()).toBe(1);
     expect((await storage.getAnalysisRepairAttempts(DIAGNOSIS_ID))[0]).toMatchObject({
       status: "SUCCEEDED",
@@ -210,6 +221,63 @@ describe("frozen-Evidence analysis recovery", () => {
     const runs = await storage.getAnalysisStageRuns(DIAGNOSIS_ID);
     expect(runs).toHaveLength(4);
     expect(runs.every((run) => run.status === "SUCCEEDED" && run.outputJson)).toBe(true);
+    expect(await storage.getReport(DIAGNOSIS_ID)).not.toBeNull();
+  });
+
+  it("invokes deterministic finalization only after all four validated outputs", async () => {
+    const finalize = vi.fn(async ({ diagnosisId, outputs }) => {
+      expect(Object.keys(outputs).sort()).toEqual([...ORDER].sort());
+      expect((await storage.getAnalysisStageRuns(diagnosisId)).every((r) => r.status === "SUCCEEDED"))
+        .toBe(true);
+      await storage.saveReport({
+        id: "final_report",
+        diagnosisId,
+        reportContractVersion: "test-report.v1",
+        scoreContractVersion: "test-score.v1",
+        canonicalJson: "{}",
+      });
+      await storage.updateDiagnosisStatus(diagnosisId, "READY");
+      return { resultState: "READY" as const };
+    });
+    const result = await resumeAnalysisFromFrozenEvidence(
+      deps({ finalizeRecoveredAnalysis: finalize }),
+    );
+    expect(finalize).toHaveBeenCalledTimes(1);
+    expect(result.resultState).toBe("READY");
+    expect(await storage.countDiagnosisRequests()).toBe(1);
+    expect((await storage.getProviderUsage(DIAGNOSIS_ID)).every((u) => u.provider === "deepseek"))
+      .toBe(true);
+  });
+
+  it("rejects Provider activity introduced by finalization and returns the diagnosis to FAILED", async () => {
+    const finalize = vi.fn(async ({ diagnosisId }) => {
+      await storage.recordProviderUsage({
+        id: "illegal_bocha_usage",
+        diagnosisId,
+        provider: "bocha",
+        stage: "RECOVERY_FINALIZATION",
+        callCount: 1,
+        retryCount: 0,
+      });
+      await storage.saveReport({
+        id: "illegal_report",
+        diagnosisId,
+        reportContractVersion: "test-report.v1",
+        scoreContractVersion: "test-score.v1",
+        canonicalJson: "{}",
+      });
+      await storage.updateDiagnosisStatus(diagnosisId, "READY");
+      return { resultState: "READY" as const };
+    });
+    await expect(
+      resumeAnalysisFromFrozenEvidence(deps({ finalizeRecoveredAnalysis: finalize })),
+    ).rejects.toMatchObject({ category: "BOCHA_CALL_DELTA_NONZERO" });
+    expect(finalize).toHaveBeenCalledTimes(1);
+    expect((await storage.getDiagnosisRequest(DIAGNOSIS_ID))?.status).toBe("FAILED");
+    expect((await storage.getAnalysisRepairAttempts(DIAGNOSIS_ID))[0]).toMatchObject({
+      status: "FAILED",
+      failureCategory: "BOCHA_CALL_DELTA_NONZERO",
+    });
   });
 
   it("fails closed on missing frozen competitor/query data before a call or repair row", async () => {
@@ -249,13 +317,17 @@ describe("frozen-Evidence analysis recovery", () => {
     const invoke = vi.fn(async () => ({
       rawJson: JSON.stringify({
         unexpected: "secret raw response must not persist",
-        Authorization: "Bearer secret",
+        Authorization: "masked-auth-value",
       }),
     }));
+    const finalize = vi.fn();
     await expect(
-      resumeAnalysisFromFrozenEvidence(deps({ invokeDeepSeekStage: invoke })),
+      resumeAnalysisFromFrozenEvidence(
+        deps({ invokeDeepSeekStage: invoke, finalizeRecoveredAnalysis: finalize }),
+      ),
     ).rejects.toMatchObject({ category: "PROVIDER_SCHEMA_MISMATCH" });
     expect(invoke).toHaveBeenCalledTimes(1);
+    expect(finalize).not.toHaveBeenCalled();
     const runs = await storage.getAnalysisStageRuns(DIAGNOSIS_ID);
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({
@@ -265,7 +337,7 @@ describe("frozen-Evidence analysis recovery", () => {
       errorCategory: "PROVIDER_SCHEMA_MISMATCH",
     });
     expect(runs[0]!.errorMetadataJson).not.toContain("secret raw response");
-    expect(runs[0]!.errorMetadataJson).not.toContain("Bearer");
+    expect(runs[0]!.errorMetadataJson).not.toContain("masked-auth-value");
     const attempt = (await storage.getAnalysisRepairAttempts(DIAGNOSIS_ID))[0]!;
     expect(attempt.status).toBe("FAILED");
     expect(attempt.providerCallDelta).toBe(1);

@@ -57,6 +57,20 @@ export interface AnalysisProviderInvocation {
   rawJson: string;
 }
 
+export interface RecoveredAnalysisFinalizationInput {
+  diagnosisId: string;
+  publicToken: string;
+  diagnosisInput: unknown;
+  evidence: EvidenceRecord[];
+  competitorResolution: unknown;
+  queryPlan: unknown;
+  outputs: Record<AnalysisStage, unknown>;
+}
+
+export interface RecoveredAnalysisFinalizationResult {
+  resultState: "READY";
+}
+
 export interface ResumeFrozenAnalysisDependencies {
   storage: AnalysisRecoveryStorage;
   authorization: AnalysisRepairAuthorization;
@@ -74,6 +88,15 @@ export interface ResumeFrozenAnalysisDependencies {
       priorStageOutputs: Partial<Record<AnalysisStage, unknown>>;
     }>;
   }): Promise<AnalysisProviderInvocation>;
+  /**
+   * Required deterministic continuation seam. It must assemble Canonical,
+   * verify Claim–Evidence, run all publication/language guards, save the report,
+   * and transition this same diagnosis to READY. It must not create a Diagnosis
+   * or invoke any Provider; persisted usage deltas are checked after it returns.
+   */
+  finalizeRecoveredAnalysis(
+    input: RecoveredAnalysisFinalizationInput,
+  ): Promise<RecoveredAnalysisFinalizationResult>;
   idFactory?: () => string;
 }
 
@@ -99,7 +122,7 @@ export interface FrozenAnalysisRecoveryResult extends FrozenAnalysisRecoveryPlan
     retries: 0;
   };
   outputs: Record<AnalysisStage, unknown>;
-  resultState: "ANALYSIS_STAGES_RECOVERED";
+  resultState: "READY";
 }
 
 export class AnalysisRecoveryError extends Error {
@@ -222,11 +245,11 @@ async function prepareRecovery(
   if (!diagnosis || diagnosis.id !== expected.diagnosisId) {
     throw new AnalysisRecoveryError("DIAGNOSIS_ID_MISMATCH");
   }
-  if (diagnosis.status !== "FAILED") {
-    throw new AnalysisRecoveryError("DIAGNOSIS_NOT_FAILED");
-  }
   if ((await storage.getAnalysisRepairAttempts(expected.diagnosisId)).length !== 0) {
     throw new AnalysisRecoveryError("REPAIR_ATTEMPT_ALREADY_EXISTS");
+  }
+  if (diagnosis.status !== "FAILED") {
+    throw new AnalysisRecoveryError("DIAGNOSIS_NOT_FAILED");
   }
 
   let diagnosisInput: unknown;
@@ -460,9 +483,30 @@ export async function resumeAnalysisFromFrozenEvidence(
       prepared.outputs[stage] = output;
     }
 
+    for (const stage of ANALYSIS_STAGES) {
+      if (prepared.outputs[stage] === undefined) {
+        throw new AnalysisRecoveryError("ANALYSIS_OUTPUT_INCOMPLETE");
+      }
+    }
+    const finalization = await deps.finalizeRecoveredAnalysis({
+      diagnosisId: expected.diagnosisId,
+      publicToken: (await storage.getDiagnosisRequest(expected.diagnosisId))!.publicToken,
+      diagnosisInput: prepared.diagnosisInput,
+      evidence: prepared.evidence,
+      competitorResolution: prepared.artifacts.competitorResolution,
+      queryPlan: prepared.artifacts.queryPlan,
+      outputs: prepared.outputs as Record<AnalysisStage, unknown>,
+    });
+    if (finalization.resultState !== "READY") {
+      throw new AnalysisRecoveryError("RECOVERY_FINALIZATION_NOT_READY");
+    }
+
     const diagnosis = await storage.getDiagnosisRequest(expected.diagnosisId);
-    if (!diagnosis || diagnosis.status !== "FAILED") {
-      throw new AnalysisRecoveryError("ORIGINAL_FAILURE_NOT_PRESERVED");
+    if (!diagnosis || diagnosis.status !== "READY") {
+      throw new AnalysisRecoveryError("RECOVERY_FINALIZATION_STATUS_INVALID");
+    }
+    if (!(await storage.getReport(expected.diagnosisId))) {
+      throw new AnalysisRecoveryError("RECOVERY_FINALIZATION_REPORT_MISSING");
     }
     if ((await storage.countDiagnosisRequests()) !== diagnosisCountBefore) {
       throw new AnalysisRecoveryError("NEW_DIAGNOSIS_CREATED");
@@ -486,7 +530,7 @@ export async function resumeAnalysisFromFrozenEvidence(
       repairAttempt: 1,
       status: "SUCCEEDED",
       providerCallDelta: deepseek.calls,
-      resultState: "ANALYSIS_STAGES_RECOVERED",
+      resultState: "READY",
       failureCategory: null,
     });
 
@@ -500,14 +544,20 @@ export async function resumeAnalysisFromFrozenEvidence(
         retries: 0,
       },
       outputs: prepared.outputs as Record<AnalysisStage, unknown>,
-      resultState: "ANALYSIS_STAGES_RECOVERED",
+      resultState: "READY",
     };
   } catch (error) {
+    const current = await storage.getDiagnosisRequest(expected.diagnosisId);
+    if (current?.status === "READY") {
+      await storage.updateDiagnosisStatus(expected.diagnosisId, "FAILED");
+    }
+    const failedUsage = usageTotals(await storage.getProviderUsage(expected.diagnosisId));
+    const failedDeepSeek = usageDelta(usageBefore, failedUsage, "deepseek");
     await storage.completeAnalysisRepairAttempt({
       diagnosisId: expected.diagnosisId,
       repairAttempt: 1,
       status: "FAILED",
-      providerCallDelta: invoked,
+      providerCallDelta: failedDeepSeek.calls,
       resultState: "ANALYSIS_RECOVERY_FAILED",
       failureCategory: categoryOf(error),
     });
