@@ -32,6 +32,7 @@ import {
 import type { ClaimPublicationSourceContext } from "../../contracts/independent-support-source";
 import type {
   DiagnosisStatus,
+  AnalysisStage,
   EvidenceRecordInput,
   PruneDecisionRecordInput,
   StorageAdapter,
@@ -111,6 +112,12 @@ export interface NormalizedEvidenceResult {
    * evidence + the request website. Required to publish negative/missing claims.
    */
   coverage?: EvidenceCoverage;
+  /** Current-run provenance hashes; required by REAL analysis stage persistence. */
+  analysisProvenance?: {
+    evidenceRegistryHash: string;
+    competitorResolutionHash: string;
+    queryPlanHash: string;
+  };
 }
 
 export interface EvidencePipeline {
@@ -134,6 +141,17 @@ export interface ReportProducerContext {
   input: DiagnosisInput;
   evidence: EvidenceItem[];
   coverage?: EvidenceCoverage;
+  persistValidatedAnalysisStage?: (
+    stage: ValidatedNormalAnalysisStage,
+  ) => Promise<void>;
+}
+
+export interface ValidatedNormalAnalysisStage {
+  stage: AnalysisStage;
+  output: unknown;
+  schemaVersion: string;
+  promptVersion: string;
+  providerModel: string;
 }
 
 export type ReportProducerResult =
@@ -146,6 +164,7 @@ export type ReportProducerResult =
   | { ok: false; error: PipelineError };
 
 export interface ReportProducer {
+  analysisStageRunPersistence?: "REQUIRED" | "NOT_REQUIRED";
   produce(ctx: ReportProducerContext): Promise<ReportProducerResult>;
 }
 
@@ -373,6 +392,74 @@ export async function runDiagnosisPipeline(
       return fail("ANALYZING", toPipelineError("CHECKPOINT_CORRUPT", e));
     }
   } else {
+    let persistValidatedAnalysisStage:
+      | ReportProducerContext["persistValidatedAnalysisStage"]
+      | undefined;
+    if (deps.producer.analysisStageRunPersistence === "REQUIRED") {
+      if (
+        !normalized.analysisProvenance ||
+        !storage.startAnalysisStageRun ||
+        !storage.completeAnalysisStageRun ||
+        !storage.getAnalysisStageRuns
+      ) {
+        return fail("ANALYZING", {
+          code: "NORMAL_ANALYSIS_STAGE_PERSISTENCE_UNAVAILABLE",
+          message:
+            "REAL analysis requires current provenance and append-only analysis_stage_runs storage",
+        });
+      }
+      const existingRuns = await storage.getAnalysisStageRuns(diagnosisId);
+      const attempts = new Map<AnalysisStage, number>();
+      for (const run of existingRuns) {
+        attempts.set(run.stage, Math.max(attempts.get(run.stage) ?? 0, run.attempt));
+      }
+      persistValidatedAnalysisStage = async (stage) => {
+        const runId = idFactory();
+        const usageId = idFactory();
+        const attempt = (attempts.get(stage.stage) ?? 0) + 1;
+        attempts.set(stage.stage, attempt);
+        const outputJson = JSON.stringify(stage.output);
+        const outputHash = createHash("sha256").update(outputJson).digest("hex");
+        await storage.recordProviderUsage({
+          id: usageId,
+          diagnosisId,
+          provider: "deepseek",
+          stage: stage.stage,
+          callCount: 1,
+          retryCount: 0,
+          errorCode: null,
+          costEstimate: null,
+        });
+        await storage.startAnalysisStageRun!({
+          id: runId,
+          diagnosisId,
+          stage: stage.stage,
+          attempt,
+          inputHash: hashInput({
+            input,
+            evidenceIds,
+            stage: stage.stage,
+            schemaVersion: stage.schemaVersion,
+            promptVersion: stage.promptVersion,
+            providerModel: stage.providerModel,
+          }),
+          evidenceRegistryHash: normalized.analysisProvenance!.evidenceRegistryHash,
+          competitorResolutionHash:
+            normalized.analysisProvenance!.competitorResolutionHash,
+          queryPlanHash: normalized.analysisProvenance!.queryPlanHash,
+          frozenEvidenceSnapshotHash: null,
+          schemaVersion: stage.schemaVersion,
+          promptVersion: stage.promptVersion,
+          providerModel: stage.providerModel,
+        });
+        await storage.completeAnalysisStageRun!({
+          id: runId,
+          outputJson,
+          outputHash,
+          providerUsageId: usageId,
+        });
+      };
+    }
     let produced: ReportProducerResult;
     try {
       produced = await deps.producer.produce({
@@ -381,12 +468,15 @@ export async function runDiagnosisPipeline(
         input,
         evidence: normalized.evidence,
         coverage,
+        persistValidatedAnalysisStage,
       });
     } catch (e) {
       return fail("ANALYZING", toPipelineError("ANALYSIS_FAILED", e));
     }
     if (!produced.ok) return fail("ANALYZING", produced.error);
-    await recordUsage(produced.usage);
+    if (deps.producer.analysisStageRunPersistence !== "REQUIRED") {
+      await recordUsage(produced.usage);
+    }
     report = produced.report;
     analysisPrunedCandidates = produced.prunedCandidates ?? [];
     await storage.saveCheckpoint({

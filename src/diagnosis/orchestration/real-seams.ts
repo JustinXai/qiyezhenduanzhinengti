@@ -16,6 +16,7 @@
 // stage fails, the pipeline stops, budgets are NEVER auto-raised.
 // ============================================================================
 
+import { createHash } from "node:crypto";
 import * as cheerio from "cheerio";
 import type { EvidenceItem } from "../../contracts";
 import { deriveCoverage } from "../../contracts/claim-evidence";
@@ -49,6 +50,8 @@ import {
   buildCompanyProfilePrompt,
   buildDimensionSignalsPrompt,
   defaultProbes,
+  REAL_ANALYSIS_PROMPT_VERSION,
+  REPORT_CLAIMS_ZH_PROMPT_VERSION,
 } from "../analysis/stage-prompts";
 import {
   AiVisibilityStageOutput,
@@ -250,9 +253,28 @@ interface RealSearchData {
   companyDomains: string[];
   competitorDomains: string[];
   executedQueries: string[];
+  plannedQueries: Array<{ category: string; query: string }>;
   resolutionEvidence: EvidenceItem[];
   resolutions: CompetitorResolution[];
   searchFailures: number;
+}
+
+const NORMAL_ANALYSIS_STAGE_SCHEMA_VERSION = "analysis-stage-output.v1";
+
+function stableHash(value: unknown): string {
+  const stable = (item: unknown): string => {
+    if (item === null || typeof item !== "object") {
+      const serialized = JSON.stringify(item);
+      return serialized === undefined ? "null" : serialized;
+    }
+    if (Array.isArray(item)) return `[${item.map(stable).join(",")}]`;
+    const record = item as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stable(record[key])}`)
+      .join(",")}}`;
+  };
+  return createHash("sha256").update(stable(value)).digest("hex");
 }
 
 // ---------------------------------------------------------------------------
@@ -339,6 +361,7 @@ export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): Evid
         companyDomains: host ? [host] : [],
         competitorDomains: resolution.resolvedDomains,
         executedQueries,
+        plannedQueries: planned.map(({ category, query }) => ({ category, query })),
         resolutionEvidence: resolution.evidence,
         resolutions: resolution.resolutions,
         searchFailures,
@@ -458,7 +481,17 @@ export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): Evid
       // The per-item language/sourceTier annotations flow into the canonical
       // report, so distribution stats stay derivable downstream without a
       // side-channel (curated.stats is also unit-tested directly).
-      return { evidence, coverage };
+      return {
+        evidence,
+        coverage,
+        analysisProvenance: {
+          evidenceRegistryHash: stableHash(evidence),
+          competitorResolutionHash: stableHash(data.resolutions),
+          queryPlanHash: stableHash(
+            data.plannedQueries ?? data.executedQueries.map((query) => ({ category: "LEGACY", query })),
+          ),
+        },
+      };
     },
   };
 }
@@ -479,6 +512,7 @@ export function createRealReportProducer(deps: RealReportProducerDeps): ReportPr
   const deepseek = budgetedCompletionProvider(deps.deepseek, deps.tracker);
 
   return {
+    analysisStageRunPersistence: "REQUIRED",
     async produce(ctx: ReportProducerContext): Promise<ReportProducerResult> {
       const { input, evidence } = ctx;
       const usage: ProviderUsageSample[] = [];
@@ -505,12 +539,14 @@ export function createRealReportProducer(deps: RealReportProducerDeps): ReportPr
           userPrompt: prompt.userPrompt,
           maxTokens: prompt.maxTokens,
         });
-        usage.push({
-          provider: "deepseek",
-          stage: "ANALYZING",
-          callCount: 1,
-          errorCode: res.ok ? null : res.error.code,
-        });
+        if (!ctx.persistValidatedAnalysisStage || !res.ok) {
+          usage.push({
+            provider: "deepseek",
+            stage: "ANALYZING",
+            callCount: 1,
+            errorCode: res.ok ? null : res.error.code,
+          });
+        }
         if (!res.ok) {
           return { ok: false, error: { code: res.error.code, message: res.error.message } };
         }
@@ -521,7 +557,27 @@ export function createRealReportProducer(deps: RealReportProducerDeps): ReportPr
             error: { code: `REPORT_${name.toUpperCase()}_FAILED`, message: parsed.error.message },
           };
         }
-        out[name] = res.json;
+        out[name] = parsed.value;
+        if (ctx.persistValidatedAnalysisStage) {
+          const stage =
+            name === "company_profile"
+              ? "REPORT_PROFILE"
+              : name === "dimension_signals"
+                ? "REPORT_SCORING"
+                : name === "ai_visibility"
+                  ? "REPORT_AI_VISIBILITY"
+                  : "REPORT_CLAIMS";
+          await ctx.persistValidatedAnalysisStage({
+            stage,
+            output: parsed.value,
+            schemaVersion: NORMAL_ANALYSIS_STAGE_SCHEMA_VERSION,
+            promptVersion:
+              name === "claims"
+                ? REPORT_CLAIMS_ZH_PROMPT_VERSION
+                : REAL_ANALYSIS_PROMPT_VERSION,
+            providerModel: deps.model,
+          });
+        }
       }
 
       const identity: ReportIdentity = {

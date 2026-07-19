@@ -13,6 +13,8 @@ import type {
   ProviderUsageRecord,
   PruneDecisionRecord,
   PruneDecisionRecordInput,
+  ClaimPublicationDecisionBatchInput,
+  ClaimPublicationDecisionRecord,
   SaveReportInput,
   StorageAdapter,
   StoredReport,
@@ -38,6 +40,7 @@ export class InMemoryStorageAdapter implements StorageAdapter {
   private readonly usage: ProviderUsageRecord[] = [];
   private readonly checkpoints: CheckpointEntry[] = [];
   private readonly pruneDecisions: PruneDecisionRecord[] = [];
+  private readonly publicationDecisions: ClaimPublicationDecisionRecord[] = [];
   private readonly now: () => Date;
 
   constructor(now: () => Date = () => new Date()) {
@@ -131,6 +134,22 @@ export class InMemoryStorageAdapter implements StorageAdapter {
 
   async getPruneDecisions(diagnosisId: string): Promise<PruneDecisionRecord[]> {
     return this.pruneDecisions
+      .filter((item) => item.diagnosisId === diagnosisId)
+      .map((item) => structuredClone(item));
+  }
+
+  async appendClaimPublicationDecisionBatch(
+    batch: ClaimPublicationDecisionBatchInput,
+  ): Promise<void> {
+    this.publicationDecisions.push(
+      ...batch.decisions.map((item) => structuredClone(item)),
+    );
+  }
+
+  async getClaimPublicationDecisions(
+    diagnosisId: string,
+  ): Promise<ClaimPublicationDecisionRecord[]> {
+    return this.publicationDecisions
       .filter((item) => item.diagnosisId === diagnosisId)
       .map((item) => structuredClone(item));
   }

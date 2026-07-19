@@ -153,6 +153,57 @@ export interface PruneDecisionRecordInput {
 
 export type PruneDecisionRecord = PruneDecisionRecordInput;
 
+export const CLAIM_PUBLICATION_STATUSES = [
+  "PUBLISHED",
+  "PRUNED",
+  "DEEP_NEEDS_CONFIRMATION",
+] as const;
+
+export type ClaimPublicationStatus = (typeof CLAIM_PUBLICATION_STATUSES)[number];
+export type ClaimPublicationCandidateSourceProvenance =
+  | "ANALYSIS_STAGE_RUN"
+  | "LEGACY_ANALYSIS_CHECKPOINT";
+
+export interface ClaimPublicationDecisionCandidateKey {
+  claimKind: string;
+  candidateRef: string;
+}
+
+/** Internal-only final disposition for one generation candidate. */
+export interface ClaimPublicationDecisionRecordInput {
+  id: string;
+  diagnosisId: string;
+  /** Exactly one of reportId/revisionId must be present. */
+  reportId: string | null;
+  revisionId: string | null;
+  /** Exactly one of stageRunId/legacyCheckpointId must be present. */
+  stageRunId: string | null;
+  legacyCheckpointId: string | null;
+  candidateSourceProvenance: ClaimPublicationCandidateSourceProvenance;
+  candidateSourcePayloadHash: string;
+  candidateRef: string;
+  claimKind: string;
+  publicationStatus: ClaimPublicationStatus;
+  reasonCode: string;
+  guardRule: string;
+  evidenceIds: string[];
+  directCount: number;
+  partialCount: number;
+  contextCount: number;
+  independentSupportSourceCount: number;
+  coverageStatus: PruneDecisionCoverageStatus;
+  algorithmVersion: string;
+  createdAt: Date;
+}
+
+export type ClaimPublicationDecisionRecord = ClaimPublicationDecisionRecordInput;
+
+/** The adapter rejects missing, extra, or duplicate candidate decisions atomically. */
+export interface ClaimPublicationDecisionBatchInput {
+  expectedCandidates: ClaimPublicationDecisionCandidateKey[];
+  decisions: ClaimPublicationDecisionRecordInput[];
+}
+
 export const ANALYSIS_STAGES = [
   "REPORT_PROFILE",
   "REPORT_SCORING",
@@ -239,6 +290,7 @@ export interface BeginAnalysisRepairAttemptInput {
 }
 
 export interface AnalysisCheckpointRecord {
+  id: string;
   diagnosisId: string;
   stage: string;
   inputHash: string;
@@ -289,6 +341,14 @@ export interface StorageAdapter {
   // -- prune_decisions (Round-6, internal append-only ledger) ----------------
   appendPruneDecisions?(items: PruneDecisionRecordInput[]): Promise<void>;
   getPruneDecisions?(diagnosisId: string): Promise<PruneDecisionRecord[]>;
+
+  // -- claim_publication_decisions (Round-6A, complete final ledger) ----------
+  appendClaimPublicationDecisionBatch?(
+    batch: ClaimPublicationDecisionBatchInput,
+  ): Promise<void>;
+  getClaimPublicationDecisions?(
+    diagnosisId: string,
+  ): Promise<ClaimPublicationDecisionRecord[]>;
 
   // -- analysis_checkpoints ---------------------------------------------------
   saveCheckpoint(checkpoint: {
