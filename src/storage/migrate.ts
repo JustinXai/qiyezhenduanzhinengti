@@ -10,7 +10,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { is } from "drizzle-orm";
-import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
+import { getTableConfig, SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as schema from "./schema";
 
 export type SqliteDatabase = Database.Database;
@@ -36,18 +36,68 @@ function formatDefault(value: unknown): string {
 }
 
 /** Build `CREATE TABLE IF NOT EXISTS` DDL for one drizzle table. */
+function buildColumnSql(col: SQLiteColumn): string {
+  const parts = [quoteIdent(col.name), col.getSQLType()];
+  if (col.primary) parts.push("PRIMARY KEY");
+  if (col.notNull) parts.push("NOT NULL");
+  if (col.hasDefault && col.default !== undefined) {
+    parts.push(`DEFAULT ${formatDefault(col.default)}`);
+  }
+  return parts.join(" ");
+}
+
 export function buildCreateTableSql(table: SQLiteTable): string {
   const cfg = getTableConfig(table);
-  const cols = cfg.columns.map((col) => {
-    const parts = [quoteIdent(col.name), col.getSQLType()];
-    if (col.primary) parts.push("PRIMARY KEY");
-    if (col.notNull) parts.push("NOT NULL");
-    if (col.hasDefault && col.default !== undefined) {
-      parts.push(`DEFAULT ${formatDefault(col.default)}`);
-    }
-    return "  " + parts.join(" ");
-  });
+  const cols = cfg.columns.map((col) => `  ${buildColumnSql(col)}`);
   return `CREATE TABLE IF NOT EXISTS ${quoteIdent(cfg.name)} (\n${cols.join(",\n")}\n);`;
+}
+
+/** Add newly declared columns to an existing table without touching rows. */
+function addMissingColumns(db: SqliteDatabase, table: SQLiteTable): void {
+  const cfg = getTableConfig(table);
+  const existing = new Set(
+    (db.prepare(`PRAGMA table_info(${quoteIdent(cfg.name)})`).all() as Array<{ name: string }>).map(
+      (column) => column.name,
+    ),
+  );
+  for (const column of cfg.columns) {
+    if (!existing.has(column.name)) {
+      db.exec(
+        `ALTER TABLE ${quoteIdent(cfg.name)} ADD COLUMN ${buildColumnSql(column)};`,
+      );
+    }
+  }
+}
+
+/**
+ * Round-5.2C needs explicit NULL provenance for two missing legacy artifacts.
+ * SQLite cannot drop NOT NULL in place, so rebuild only the affected ledger
+ * once. Existing strict-resume rows and their hashes are copied byte-for-byte.
+ */
+function relaxAnalysisStageRunProvenance(db: SqliteDatabase): void {
+  const tableName = "analysis_stage_runs";
+  const columns = db.prepare(`PRAGMA table_info(${quoteIdent(tableName)})`).all() as Array<{
+    name: string;
+    notnull: number;
+  }>;
+  const needsRebuild = columns.some(
+    (column) =>
+      (column.name === "competitor_resolution_hash" || column.name === "query_plan_hash") &&
+      column.notnull === 1,
+  );
+  if (!needsRebuild) return;
+
+  const legacy = "analysis_stage_runs_round_52b";
+  const currentColumns = getTableConfig(schema.analysisStageRuns).columns.map((column) => column.name);
+  const legacyColumns = new Set(columns.map((column) => column.name));
+  const copiedColumns = currentColumns.filter((column) => legacyColumns.has(column));
+  const list = copiedColumns.map(quoteIdent).join(", ");
+  db.exec(`ALTER TABLE ${quoteIdent(tableName)} RENAME TO ${quoteIdent(legacy)};`);
+  db.exec(buildCreateTableSql(schema.analysisStageRuns));
+  db.exec(
+    `INSERT INTO ${quoteIdent(tableName)} (${list}) SELECT ${list} FROM ${quoteIdent(legacy)};`,
+  );
+  db.exec(`DROP TABLE ${quoteIdent(legacy)};`);
 }
 
 /**
@@ -86,10 +136,16 @@ export function buildSchemaSql(): string[] {
 
 /** Create every table + index (idempotent) on the given connection. */
 export function createSchema(db: SqliteDatabase): void {
-  const run = db.transaction((statements: string[]) => {
-    for (const sql of statements) db.exec(sql);
+  const tables = schemaTables();
+  const run = db.transaction(() => {
+    for (const table of tables) db.exec(buildCreateTableSql(table));
+    for (const table of tables) addMissingColumns(db, table);
+    relaxAnalysisStageRunProvenance(db);
+    for (const table of tables) {
+      for (const sql of buildIndexStatements(table)) db.exec(sql);
+    }
   });
-  run(buildSchemaSql());
+  run();
 }
 
 /**

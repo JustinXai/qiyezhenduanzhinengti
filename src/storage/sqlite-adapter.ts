@@ -11,8 +11,10 @@ import { createSchema, openDatabase } from "./migrate";
 import type {
   ClaimEvidenceRelationRecord,
   ClaimEvidenceRelationRecordInput,
+  AnalysisCheckpointRecord,
   AnalysisRepairAttemptRecord,
   AnalysisRepairStatus,
+  AnalysisRecoveryReusedStage,
   AnalysisStage,
   AnalysisStageRunRecord,
   AnalysisStageRunStatus,
@@ -81,7 +83,16 @@ interface ProviderUsageRow {
 }
 
 interface CheckpointRow {
+  diagnosis_id?: string;
+  stage?: string;
+  input_hash?: string;
   output_json: string;
+  report_contract_version?: string;
+  score_contract_version?: string;
+  provider_model?: string;
+  prompt_version?: string;
+  trust_guard_version?: string;
+  completed_at?: number;
 }
 
 interface ClaimEvidenceRelationRow {
@@ -107,8 +118,9 @@ interface AnalysisStageRunRow {
   status: string;
   input_hash: string;
   evidence_registry_hash: string;
-  competitor_resolution_hash: string;
-  query_plan_hash: string;
+  competitor_resolution_hash: string | null;
+  query_plan_hash: string | null;
+  frozen_evidence_snapshot_hash: string | null;
   output_json: string | null;
   output_hash: string | null;
   schema_version: string;
@@ -134,6 +146,10 @@ interface AnalysisRepairAttemptRow {
   provider_call_delta: number;
   result_state: string | null;
   failure_category: string | null;
+  recovery_mode: string;
+  missing_historical_provenance: string;
+  frozen_evidence_snapshot_json: string | null;
+  frozen_evidence_snapshot_hash: string | null;
 }
 
 function sha256(value: string): string {
@@ -549,6 +565,48 @@ export class SqliteStorageAdapter implements StorageAdapter {
     return row ? { outputJson: row.output_json } : null;
   }
 
+  async getLatestCheckpoint(
+    diagnosisId: string,
+    stage: string,
+  ): Promise<AnalysisCheckpointRecord | null> {
+    const row = this.db
+      .prepare(
+        `SELECT diagnosis_id, stage, input_hash, output_json,
+                report_contract_version, score_contract_version, provider_model,
+                prompt_version, trust_guard_version, completed_at
+         FROM analysis_checkpoints
+         WHERE diagnosis_id = ? AND stage = ?
+         ORDER BY completed_at DESC LIMIT 1`,
+      )
+      .get(diagnosisId, stage) as CheckpointRow | undefined;
+    if (
+      !row ||
+      row.diagnosis_id === undefined ||
+      row.stage === undefined ||
+      row.input_hash === undefined ||
+      row.report_contract_version === undefined ||
+      row.score_contract_version === undefined ||
+      row.provider_model === undefined ||
+      row.prompt_version === undefined ||
+      row.trust_guard_version === undefined ||
+      row.completed_at === undefined
+    ) {
+      return null;
+    }
+    return {
+      diagnosisId: row.diagnosis_id,
+      stage: row.stage,
+      inputHash: row.input_hash,
+      outputJson: row.output_json,
+      reportContractVersion: row.report_contract_version,
+      scoreContractVersion: row.score_contract_version,
+      providerModel: row.provider_model,
+      promptVersion: row.prompt_version,
+      trustGuardVersion: row.trust_guard_version,
+      completedAt: fromDbTime(row.completed_at),
+    };
+  }
+
   // -- Round-5.2B analysis stage runs ----------------------------------------
 
   async startAnalysisStageRun(input: StartAnalysisStageRunInput): Promise<void> {
@@ -557,12 +615,14 @@ export class SqliteStorageAdapter implements StorageAdapter {
         `INSERT INTO analysis_stage_runs
            (id, diagnosis_id, stage, attempt, status, input_hash,
             evidence_registry_hash, competitor_resolution_hash, query_plan_hash,
+            frozen_evidence_snapshot_hash,
             output_json, output_hash, schema_version, prompt_version, provider_model,
             provider_usage_id, started_at, completed_at, error_category,
             error_metadata_json)
          VALUES
            (@id, @diagnosis_id, @stage, @attempt, 'RUNNING', @input_hash,
             @evidence_registry_hash, @competitor_resolution_hash, @query_plan_hash,
+            @frozen_evidence_snapshot_hash,
             NULL, NULL, @schema_version, @prompt_version, @provider_model,
             NULL, @started_at, NULL, NULL, NULL)`,
       )
@@ -575,6 +635,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
         evidence_registry_hash: input.evidenceRegistryHash,
         competitor_resolution_hash: input.competitorResolutionHash,
         query_plan_hash: input.queryPlanHash,
+        frozen_evidence_snapshot_hash: input.frozenEvidenceSnapshotHash ?? null,
         schema_version: input.schemaVersion,
         prompt_version: input.promptVersion,
         provider_model: input.providerModel,
@@ -700,6 +761,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
       evidenceRegistryHash: row.evidence_registry_hash,
       competitorResolutionHash: row.competitor_resolution_hash,
       queryPlanHash: row.query_plan_hash,
+      frozenEvidenceSnapshotHash: row.frozen_evidence_snapshot_hash,
       outputJson: row.output_json,
       outputHash: row.output_hash,
       schemaVersion: row.schema_version,
@@ -732,11 +794,15 @@ export class SqliteStorageAdapter implements StorageAdapter {
           `INSERT INTO analysis_repair_attempts
              (id, diagnosis_id, repair_attempt, original_failure_stage,
               authorized_at, started_at, completed_at, status, reused_stages,
-              rerun_stages, provider_call_delta, result_state, failure_category)
+              rerun_stages, provider_call_delta, result_state, failure_category,
+              recovery_mode, missing_historical_provenance,
+              frozen_evidence_snapshot_json, frozen_evidence_snapshot_hash)
            VALUES
              (@id, @diagnosis_id, 1, @original_failure_stage,
               @authorized_at, @started_at, NULL, 'RUNNING', @reused_stages,
-              @rerun_stages, 0, NULL, NULL)`,
+              @rerun_stages, 0, NULL, NULL, @recovery_mode,
+              @missing_historical_provenance, @frozen_evidence_snapshot_json,
+              @frozen_evidence_snapshot_hash)`,
         )
         .run({
           id: `${input.diagnosisId}:1`,
@@ -746,6 +812,12 @@ export class SqliteStorageAdapter implements StorageAdapter {
           started_at: toDbTime(this.now()),
           reused_stages: JSON.stringify(input.reusedStages),
           rerun_stages: JSON.stringify(input.rerunStages),
+          recovery_mode: input.recoveryMode ?? "STRICT_CHECKPOINT_RESUME",
+          missing_historical_provenance: JSON.stringify(
+            input.missingHistoricalProvenance ?? [],
+          ),
+          frozen_evidence_snapshot_json: input.frozenEvidenceSnapshotJson ?? null,
+          frozen_evidence_snapshot_hash: input.frozenEvidenceSnapshotHash ?? null,
         });
     });
     begin();
@@ -797,11 +869,17 @@ export class SqliteStorageAdapter implements StorageAdapter {
       startedAt: fromDbTime(row.started_at),
       completedAt: row.completed_at === null ? null : fromDbTime(row.completed_at),
       status: row.status as AnalysisRepairStatus,
-      reusedStages: JSON.parse(row.reused_stages) as AnalysisStage[],
+      reusedStages: JSON.parse(row.reused_stages) as AnalysisRecoveryReusedStage[],
       rerunStages: JSON.parse(row.rerun_stages) as AnalysisStage[],
       providerCallDelta: row.provider_call_delta,
       resultState: row.result_state,
       failureCategory: row.failure_category,
+      recoveryMode: row.recovery_mode as AnalysisRepairAttemptRecord["recoveryMode"],
+      missingHistoricalProvenance: JSON.parse(
+        row.missing_historical_provenance,
+      ) as string[],
+      frozenEvidenceSnapshotJson: row.frozen_evidence_snapshot_json,
+      frozenEvidenceSnapshotHash: row.frozen_evidence_snapshot_hash,
     }));
   }
 }

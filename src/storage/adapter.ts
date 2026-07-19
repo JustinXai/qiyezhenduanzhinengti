@@ -119,8 +119,11 @@ export interface AnalysisStageRunRecord {
   status: AnalysisStageRunStatus;
   inputHash: string;
   evidenceRegistryHash: string;
-  competitorResolutionHash: string;
-  queryPlanHash: string;
+  /** Null only for the explicit FROZEN_EVIDENCE_REANALYSIS mode. */
+  competitorResolutionHash: string | null;
+  /** Null only for the explicit FROZEN_EVIDENCE_REANALYSIS mode. */
+  queryPlanHash: string | null;
+  frozenEvidenceSnapshotHash: string | null;
   outputJson: string | null;
   outputHash: string | null;
   schemaVersion: string;
@@ -140,14 +143,16 @@ export interface StartAnalysisStageRunInput {
   attempt: number;
   inputHash: string;
   evidenceRegistryHash: string;
-  competitorResolutionHash: string;
-  queryPlanHash: string;
+  competitorResolutionHash: string | null;
+  queryPlanHash: string | null;
+  frozenEvidenceSnapshotHash?: string | null;
   schemaVersion: string;
   promptVersion: string;
   providerModel: string;
 }
 
 export type AnalysisRepairStatus = "RUNNING" | "SUCCEEDED" | "FAILED";
+export type AnalysisRecoveryReusedStage = AnalysisStage | "EVIDENCE_REGISTRY";
 
 export interface AnalysisRepairAttemptRecord {
   diagnosisId: string;
@@ -157,11 +162,15 @@ export interface AnalysisRepairAttemptRecord {
   startedAt: Date;
   completedAt: Date | null;
   status: AnalysisRepairStatus;
-  reusedStages: AnalysisStage[];
+  reusedStages: AnalysisRecoveryReusedStage[];
   rerunStages: AnalysisStage[];
   providerCallDelta: number;
   resultState: string | null;
   failureCategory: string | null;
+  recoveryMode: "STRICT_CHECKPOINT_RESUME" | "FROZEN_EVIDENCE_REANALYSIS";
+  missingHistoricalProvenance: string[];
+  frozenEvidenceSnapshotJson: string | null;
+  frozenEvidenceSnapshotHash: string | null;
 }
 
 export interface BeginAnalysisRepairAttemptInput {
@@ -169,8 +178,25 @@ export interface BeginAnalysisRepairAttemptInput {
   repairAttempt: number;
   originalFailureStage: string;
   authorizedAt: Date;
-  reusedStages: AnalysisStage[];
+  reusedStages: AnalysisRecoveryReusedStage[];
   rerunStages: AnalysisStage[];
+  recoveryMode?: "STRICT_CHECKPOINT_RESUME" | "FROZEN_EVIDENCE_REANALYSIS";
+  missingHistoricalProvenance?: string[];
+  frozenEvidenceSnapshotJson?: string | null;
+  frozenEvidenceSnapshotHash?: string | null;
+}
+
+export interface AnalysisCheckpointRecord {
+  diagnosisId: string;
+  stage: string;
+  inputHash: string;
+  outputJson: string;
+  reportContractVersion: string;
+  scoreContractVersion: string;
+  providerModel: string;
+  promptVersion: string;
+  trustGuardVersion: string;
+  completedAt: Date;
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +256,10 @@ export interface StorageAdapter {
     promptVersion: string;
     trustGuardVersion: string;
   }): Promise<{ outputJson: string } | null>;
+  getLatestCheckpoint?(
+    diagnosisId: string,
+    stage: string,
+  ): Promise<AnalysisCheckpointRecord | null>;
 
   // -- Round-5.2B analysis recovery (optional for legacy/in-memory adapters) --
   countDiagnosisRequests?(): Promise<number>;
@@ -310,4 +340,8 @@ export interface AnalysisRecoveryStorage extends StorageAdapter {
     failureCategory: string | null;
   }): Promise<void>;
   getAnalysisRepairAttempts(diagnosisId: string): Promise<AnalysisRepairAttemptRecord[]>;
+  getLatestCheckpoint(
+    diagnosisId: string,
+    stage: string,
+  ): Promise<AnalysisCheckpointRecord | null>;
 }
