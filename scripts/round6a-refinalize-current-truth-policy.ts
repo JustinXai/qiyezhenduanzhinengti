@@ -24,7 +24,11 @@ import {
   refinalizeReportWithCurrentTruthPolicy,
 } from "../src/services/diagnosis/refinalize-current-truth-policy";
 import { createSchema, openDatabase } from "../src/storage/migrate";
-import { canonicalReportJson, SqliteReportRevisionRepository } from "../src/storage/report-revisions";
+import {
+  applyReportRevisionSchema,
+  canonicalReportJson,
+  SqliteReportRevisionRepository,
+} from "../src/storage/report-revisions";
 import { SqliteStorageAdapter } from "../src/storage/sqlite-adapter";
 
 const AUTH_ENV = "ROUND6A_OFFLINE_REFINALIZATION_AUTHORIZED";
@@ -205,6 +209,7 @@ async function main(): Promise<void> {
   const db = openDatabase(dbPath);
   try {
     createSchema(db);
+    applyReportRevisionSchema(db);
     const storage = new SqliteStorageAdapter(db);
     const revisions = new SqliteReportRevisionRepository(db);
     const stored = await storage.getReport(args.diagnosis);
