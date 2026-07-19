@@ -21,9 +21,9 @@ describe("Round-5.3 three-company sample harness", () => {
 
     const alpha = result.companyMetrics[0]!;
     expect(alpha).toMatchObject({
-      evidenceCount: 3,
-      chineseEvidenceRatio: 0.6667,
-      tierDistribution: { A: 1, B: 1, C: 1 },
+      evidenceCount: 5,
+      chineseEvidenceRatio: 0.8,
+      tierDistribution: { A: 1, B: 1, C: 1, D: 1, E: 1 },
       issueCandidateCount: 1,
       issuePublishedCount: 1,
       opportunityCandidateCount: 1,
@@ -31,7 +31,7 @@ describe("Round-5.3 three-company sample harness", () => {
       demonstrationFixCandidate: true,
       demonstrationFixPublished: true,
       credibleDemonstrationFix: true,
-      evidenceUtilization: 0.6667,
+      evidenceUtilizationRate: 0.4,
       claimPublicationRate: 0.75,
       opportunityYieldRate: 1,
       quickVisibleCharacters: 900,
@@ -65,12 +65,66 @@ describe("Round-5.3 three-company sample harness", () => {
     expect(result.ready).toBe(true);
   });
 
+  it("derives all five evidence tiers and accepts D/E evidence without a statistics failure", () => {
+    const metrics = computeCompanySampleMetrics(buildRound53ThreeCompanyMockFixture()[0]!);
+    expect(metrics.tierDistribution).toEqual({ A: 1, B: 1, C: 1, D: 1, E: 1 });
+    expect(Object.values(metrics.tierDistribution).reduce((sum, count) => sum + count, 0)).toBe(
+      metrics.evidenceCount,
+    );
+  });
+
+  it("uses IndependentSupportSourceKey rather than domains or evidence ids", () => {
+    const fixtures = buildRound53ThreeCompanyMockFixture();
+    const alpha = fixtures[0]!;
+    alpha.evidence.push(
+      {
+        id: "alpha-cn",
+        language: "zh-CN",
+        normalizedDomain: "alpha.cn",
+        tier: "A",
+        sourceType: "FIRST_PARTY_EVIDENCE",
+      },
+      {
+        id: "alpha-support",
+        language: "zh-CN",
+        normalizedDomain: "support.alpha.com",
+        tier: "A",
+        sourceType: "FIRST_PARTY_EVIDENCE",
+      },
+    );
+    alpha.sourceContext.firstPartyDomains = [
+      ...alpha.sourceContext.firstPartyDomains,
+      "alpha.cn",
+      "alpha.com",
+    ];
+    alpha.opportunities[0]!.evidenceIds = ["alpha-cn", "alpha-support"];
+    alpha.opportunities[0]!.support = [
+      { evidenceId: "alpha-cn", supportLevel: "PARTIAL_SUPPORT", basis: "MEASUREMENT_BOUNDARY" },
+      { evidenceId: "alpha-support", supportLevel: "PARTIAL_SUPPORT", basis: "MEASUREMENT_BOUNDARY" },
+    ];
+    expect(computeCompanySampleMetrics(alpha).hasCredibleOpportunity).toBe(false);
+
+    alpha.evidence.push({
+      id: "alpha-third-party-two",
+      language: "zh-CN",
+      normalizedDomain: "independent.example.org",
+      tier: "B",
+      sourceType: "OBSERVED_WEB_EVIDENCE",
+    });
+    alpha.opportunities[0]!.evidenceIds = ["alpha-ev-b", "alpha-third-party-two"];
+    alpha.opportunities[0]!.support = [
+      { evidenceId: "alpha-ev-b", supportLevel: "PARTIAL_SUPPORT", basis: "MEASUREMENT_BOUNDARY" },
+      { evidenceId: "alpha-third-party-two", supportLevel: "PARTIAL_SUPPORT", basis: "MEASUREMENT_BOUNDARY" },
+    ];
+    expect(computeCompanySampleMetrics(alpha).hasCredibleOpportunity).toBe(true);
+  });
+
   it("accepts a bounded Deep needs-confirmation observation but rejects a partial-only Quick issue", () => {
     const deepFixtures = buildRound53ThreeCompanyMockFixture();
     deepFixtures[2]!.claims[1] = {
       ...deepFixtures[2]!.claims[1]!,
       publicationStatus: "DEEP_NEEDS_CONFIRMATION",
-      support: [{ evidenceId: "gamma-ev-b", supportLevel: "PARTIAL_SUPPORT" }],
+      support: [{ evidenceId: "gamma-ev-b", supportLevel: "PARTIAL_SUPPORT", basis: "MEASUREMENT_BOUNDARY" }],
       needsConfirmationNotice: true,
       savedEvidenceScopeNotice: true,
       notDeterministicConclusion: true,
@@ -80,7 +134,7 @@ describe("Round-5.3 three-company sample harness", () => {
     const quickFixtures = buildRound53ThreeCompanyMockFixture();
     quickFixtures[0]!.claims[1] = {
       ...quickFixtures[0]!.claims[1]!,
-      support: [{ evidenceId: "alpha-ev-b", supportLevel: "PARTIAL_SUPPORT" }],
+      support: [{ evidenceId: "alpha-ev-b", supportLevel: "PARTIAL_SUPPORT", basis: "MEASUREMENT_BOUNDARY" }],
     };
     const result = evaluateThreeCompanySample(quickFixtures);
     expect(gate(result, "ALL_TRUTH_GUARDS_PASS").passed).toBe(false);
