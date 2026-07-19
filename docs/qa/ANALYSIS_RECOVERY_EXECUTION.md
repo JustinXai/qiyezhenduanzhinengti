@@ -2,14 +2,23 @@
 
 ## Status
 
-`READY_FOR_RECOVERY_EXECUTION` means the QA runner and budget guards are ready
-for integration. It does **not** authorize a real call and does **not** mean the
-current `diag_d9d` can be recovered.
+`READY_FOR_RECOVERY_EXECUTION` is a code-readiness marker only: the QA runner
+and budget guards are ready for Supervisor integration. It does **not**
+authorize a real call, does **not** claim an executable recovery seam is
+currently configured, and does **not** mean the current `diag_d9d` can be
+recovered.
 
 The current V2 record is forensically blocked. Its frozen
 `competitorResolutionHash` and `queryPlanHash` are not available. The runner
 prints this as boolean identity availability only, then stops before planning a
 runtime repair, creating a repair-attempt row, or calling a Provider.
+
+Running `pnpm exec tsx scripts/resume-analysis-recovery.ts` executes only that
+forensic preflight. It prints the sanitized blocked plan and exits non-zero. It
+does not open or migrate SQLite. The module also exports a factory wired
+directly to `planFrozenEvidenceAnalysisRecovery` and
+`resumeAnalysisFromFrozenEvidence`; only the Supervisor may construct that
+injected private runtime after trusted identities and all gates are present.
 
 ## Server-only authorization
 
@@ -76,4 +85,3 @@ loop. Any failure ends the authorized attempt.
 For the current `diag_d9d`, step 4 blocks on
 `COMPETITOR_RESOLUTION_HASH_MISSING` and `QUERY_PLAN_HASH_MISSING`; therefore
 real Provider usage remains zero and no repair attempt is created.
-
