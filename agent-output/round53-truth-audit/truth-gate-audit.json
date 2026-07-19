@@ -1,0 +1,790 @@
+{
+  "schemaVersion": "round53.truth-gate-audit.v1",
+  "round": "Round-5.3",
+  "diagnosisId": "diag_d9d81ba3428f4696b088870ca7416e49",
+  "auditMode": "COPIED_SQLITE_QUERY_ONLY",
+  "invariants": {
+    "realProviderCalls": 0,
+    "networkCalls": 0,
+    "diagnosisCreates": 0,
+    "recoveryRuns": 0,
+    "sourceDatabaseWrites": 0,
+    "sourceDatabaseArtifactsUnchanged": true
+  },
+  "sourceDatabaseArtifactsBefore": [
+    {
+      "name": "technical-canary-zh-v2.sqlite",
+      "bytes": 229376,
+      "sha256": "2b34b5b042a277d5e1aa96abfd22751e0bf9776cf2009df211b8e84df1ef2cb8"
+    },
+    {
+      "name": "technical-canary-zh-v2.sqlite-wal",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "technical-canary-zh-v2.sqlite-shm",
+      "bytes": 32768,
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+    }
+  ],
+  "sourceDatabaseArtifactsAfter": [
+    {
+      "name": "technical-canary-zh-v2.sqlite",
+      "bytes": 229376,
+      "sha256": "2b34b5b042a277d5e1aa96abfd22751e0bf9776cf2009df211b8e84df1ef2cb8"
+    },
+    {
+      "name": "technical-canary-zh-v2.sqlite-wal",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "technical-canary-zh-v2.sqlite-shm",
+      "bytes": 32768,
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+    }
+  ],
+  "persistedState": {
+    "diagnosisStatus": "READY",
+    "reportRows": [
+      {
+        "id": "7fcafee7-1cdf-466c-bb9b-efc78d438e1c",
+        "createdAt": 1784431406
+      }
+    ],
+    "reportCount": 1,
+    "evidenceCount": 22,
+    "relationCount": 22,
+    "relationCountForPublishedClaims": 14,
+    "providerUsageRowsReadOnlyBaseline": [
+      {
+        "provider": "bocha",
+        "stage": "SEARCHING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784424458
+      },
+      {
+        "provider": "bocha",
+        "stage": "SEARCHING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784424458
+      },
+      {
+        "provider": "bocha",
+        "stage": "SEARCHING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784424458
+      },
+      {
+        "provider": "bocha",
+        "stage": "SEARCHING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784424458
+      },
+      {
+        "provider": "bocha",
+        "stage": "SEARCHING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784424458
+      },
+      {
+        "provider": "bocha",
+        "stage": "SEARCHING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784424458
+      },
+      {
+        "provider": "bocha",
+        "stage": "SEARCHING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784424458
+      },
+      {
+        "provider": "bocha",
+        "stage": "SEARCHING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784424458
+      },
+      {
+        "provider": "bocha",
+        "stage": "SEARCHING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784424458
+      },
+      {
+        "provider": "crawler",
+        "stage": "CRAWLING",
+        "call_count": 7,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784424460
+      },
+      {
+        "provider": "crawler",
+        "stage": "CRAWLING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": "HTTP_ERROR",
+        "created_at": 1784424460
+      },
+      {
+        "provider": "crawler",
+        "stage": "CRAWLING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": "HTTP_ERROR",
+        "created_at": 1784424460
+      },
+      {
+        "provider": "deepseek",
+        "stage": "REPORT_PROFILE",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784431372
+      },
+      {
+        "provider": "deepseek",
+        "stage": "REPORT_SCORING",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784431377
+      },
+      {
+        "provider": "deepseek",
+        "stage": "REPORT_AI_VISIBILITY",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784431390
+      },
+      {
+        "provider": "deepseek",
+        "stage": "REPORT_CLAIMS",
+        "call_count": 1,
+        "retry_count": 0,
+        "error_code": null,
+        "created_at": 1784431406
+      }
+    ],
+    "repairAttemptsReadOnlyBaseline": [
+      {
+        "repair_attempt": 1,
+        "status": "SUCCEEDED",
+        "recovery_mode": "FROZEN_EVIDENCE_REANALYSIS",
+        "result_state": "READY",
+        "provider_call_delta": 4,
+        "frozen_evidence_snapshot_hash": "2d2d99380065b0b7b1f98b0e5fd6eae2582d315cc8a34b9f20d39b06b056c80d"
+      }
+    ]
+  },
+  "frozenThresholds": {
+    "quickCoreIssue": "at least one DIRECT_SUPPORT relation",
+    "strengthAndOpportunity": "at least one DIRECT_SUPPORT OR two independent PARTIAL_SUPPORT sources",
+    "negativeConclusion": "coverage-bounded wording and at least one MEASUREMENT_BOUNDARY relation",
+    "opportunityZeroAllowed": true
+  },
+  "presentation": {
+    "quickCoreIssueIds": [
+      "iss_1",
+      "iss_2",
+      "iss_3"
+    ],
+    "quickTopIssueId": "iss_1",
+    "quickTopStrengthId": "str_1",
+    "quickOpportunityIds": [],
+    "quickCompetitorGapSummary": "INSUFFICIENT_EVIDENCE",
+    "deepStrengthIds": [
+      "str_1",
+      "str_2"
+    ],
+    "deepCoreIssueIds": [
+      "iss_1",
+      "iss_2",
+      "iss_3"
+    ],
+    "deepOpportunityIds": [],
+    "deepCompetitorGapIds": [],
+    "demonstrationFixId": null
+  },
+  "publishedYield": {
+    "strengths": 2,
+    "coreIssues": 3,
+    "geoOpportunities": 0,
+    "competitorGaps": 0,
+    "demonstrationFix": false
+  },
+  "claims": [
+    {
+      "id": "str_1",
+      "kind": "strength",
+      "claimType": "DIAGNOSTIC_INFERENCE",
+      "statement": "影石Insta360在京东、天猫等主流电商平台设有官方旗舰店，消费者可通过多渠道购买产品并获得正品保障。",
+      "published": true,
+      "evidenceIds": [
+        "ev_bee405f0",
+        "ev_76d6b581",
+        "ev_ccbb9418",
+        "ev_ea504f5b"
+      ],
+      "relationCounts": {
+        "DIRECT_SUPPORT": 0,
+        "PARTIAL_SUPPORT": 4,
+        "CONTEXT_ONLY": 0
+      },
+      "relationDomains": [
+        "找券值值值",
+        "京东",
+        "九块邮"
+      ],
+      "partialSupportDomains": [
+        "找券值值值",
+        "京东",
+        "九块邮"
+      ],
+      "independentPartialSourceIdentities": [
+        "找券值值值",
+        "京东",
+        "九块邮"
+      ],
+      "locations": [
+        "Quick.topStrength",
+        "Deep.strengths[0]"
+      ],
+      "coverage": {
+        "isNegativeOrMissing": false,
+        "wordingBounded": false,
+        "boundingPhrase": null,
+        "measurementBoundaryRelationCount": 0,
+        "boundaryEstablishedForClaim": false,
+        "limitations": [
+          "仅覆盖本次保存的公开页面和搜索证据，不代表完整搜索覆盖。",
+          "历史查询计划不可验证，本次未重新搜索或抓取。"
+        ]
+      },
+      "thresholds": {
+        "quickCoreIssueRequiresAtLeastOneDirect": {
+          "applicable": false,
+          "required": "DIRECT_SUPPORT >= 1",
+          "observed": 0,
+          "status": "PASS"
+        },
+        "strengthOrOpportunityRequiresDirectOrTwoIndependentPartial": {
+          "applicable": true,
+          "required": "DIRECT_SUPPORT >= 1 OR independent PARTIAL_SUPPORT sources >= 2",
+          "observed": {
+            "direct": 0,
+            "independentPartialSources": 3
+          },
+          "status": "PASS"
+        }
+      },
+      "semanticAssessment": {
+        "status": "TRACEABLE",
+        "exactSignal": null,
+        "consequence": null
+      },
+      "relations": [
+        {
+          "evidenceId": "ev_76d6b581",
+          "supportLevel": "PARTIAL_SUPPORT",
+          "confidence": 0.6,
+          "basis": "CONTENT_MATCH",
+          "justification": "内容重叠较强(6 项),初判可直接支持(待确定性前置裁剪)。",
+          "sourceType": "OBSERVED_WEB_EVIDENCE",
+          "sourceDomain": "找券值值值",
+          "url": "https://quan.zhizhizhi.com/shop/tm-1x1ctyxa6da8",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        },
+        {
+          "evidenceId": "ev_bee405f0",
+          "supportLevel": "PARTIAL_SUPPORT",
+          "confidence": 0.6,
+          "basis": "CONTENT_MATCH",
+          "justification": "内容重叠较强(4 项),初判可直接支持(待确定性前置裁剪)。",
+          "sourceType": "OBSERVED_WEB_EVIDENCE",
+          "sourceDomain": "京东",
+          "url": "https://mall.jd.com/shopLevel-16292471.html",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        },
+        {
+          "evidenceId": "ev_ccbb9418",
+          "supportLevel": "PARTIAL_SUPPORT",
+          "confidence": 0.6,
+          "basis": "CONTENT_MATCH",
+          "justification": "内容重叠较强(6 项),初判可直接支持(待确定性前置裁剪)。",
+          "sourceType": "OBSERVED_WEB_EVIDENCE",
+          "sourceDomain": "九块邮",
+          "url": "https://jiu.ftxia.com/item.htm?id=y5PnZ5VS6766Rvmnuyq",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        },
+        {
+          "evidenceId": "ev_ea504f5b",
+          "supportLevel": "PARTIAL_SUPPORT",
+          "confidence": 0.6,
+          "basis": "CONTENT_MATCH",
+          "justification": "内容重叠较强(5 项),初判可直接支持(待确定性前置裁剪)。",
+          "sourceType": "OBSERVED_WEB_EVIDENCE",
+          "sourceDomain": "京东",
+          "url": "https://mall.jd.com/view_search-3672526-25923893-1-0-20-1.html",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        }
+      ]
+    },
+    {
+      "id": "str_2",
+      "kind": "strength",
+      "claimType": "DIAGNOSTIC_INFERENCE",
+      "statement": "影石Insta360提供全面的售后服务，包括在线申请寄修、服务进度查询、服务网点查找及延保服务。",
+      "published": true,
+      "evidenceIds": [
+        "ev_c3da0ba0"
+      ],
+      "relationCounts": {
+        "DIRECT_SUPPORT": 1,
+        "PARTIAL_SUPPORT": 0,
+        "CONTEXT_ONLY": 0
+      },
+      "relationDomains": [
+        "insta360.com"
+      ],
+      "partialSupportDomains": [],
+      "independentPartialSourceIdentities": [],
+      "locations": [
+        "Deep.strengths[1]"
+      ],
+      "coverage": {
+        "isNegativeOrMissing": false,
+        "wordingBounded": false,
+        "boundingPhrase": null,
+        "measurementBoundaryRelationCount": 0,
+        "boundaryEstablishedForClaim": false,
+        "limitations": [
+          "仅覆盖本次保存的公开页面和搜索证据，不代表完整搜索覆盖。",
+          "历史查询计划不可验证，本次未重新搜索或抓取。"
+        ]
+      },
+      "thresholds": {
+        "quickCoreIssueRequiresAtLeastOneDirect": {
+          "applicable": false,
+          "required": "DIRECT_SUPPORT >= 1",
+          "observed": 1,
+          "status": "PASS"
+        },
+        "strengthOrOpportunityRequiresDirectOrTwoIndependentPartial": {
+          "applicable": true,
+          "required": "DIRECT_SUPPORT >= 1 OR independent PARTIAL_SUPPORT sources >= 2",
+          "observed": {
+            "direct": 1,
+            "independentPartialSources": 0
+          },
+          "status": "PASS"
+        }
+      },
+      "semanticAssessment": {
+        "status": "TRACEABLE",
+        "exactSignal": null,
+        "consequence": null
+      },
+      "relations": [
+        {
+          "evidenceId": "ev_c3da0ba0",
+          "supportLevel": "DIRECT_SUPPORT",
+          "confidence": 0.85,
+          "basis": "CONTENT_MATCH",
+          "justification": "内容重叠较强(21 项),初判可直接支持(待确定性前置裁剪)。",
+          "sourceType": "FIRST_PARTY_EVIDENCE",
+          "sourceDomain": "insta360.com",
+          "url": "https://www.insta360.com/support",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        }
+      ]
+    },
+    {
+      "id": "iss_1",
+      "kind": "coreIssue",
+      "claimType": "DIAGNOSTIC_INFERENCE",
+      "statement": "在本次保存的公开证据中，暂未发现影石Insta360在官网或主流公开渠道系统性地展示产品对比、技术参数详解或用户实测对比内容，以帮助消费者在选购时进行直观决策。",
+      "published": true,
+      "evidenceIds": [
+        "ev_bee405f0",
+        "ev_4e33f5fd",
+        "ev_c3da0ba0"
+      ],
+      "relationCounts": {
+        "DIRECT_SUPPORT": 0,
+        "PARTIAL_SUPPORT": 2,
+        "CONTEXT_ONLY": 1
+      },
+      "relationDomains": [
+        "insta360.com",
+        "京东"
+      ],
+      "partialSupportDomains": [
+        "insta360.com"
+      ],
+      "independentPartialSourceIdentities": [
+        "insta360.com"
+      ],
+      "locations": [
+        "Quick.topIssue",
+        "Quick.headlineConclusion",
+        "Quick.coreIssues[0]",
+        "Deep.coreIssues[0]"
+      ],
+      "coverage": {
+        "isNegativeOrMissing": true,
+        "wordingBounded": true,
+        "boundingPhrase": "在本次保存的公开证据中，暂未发现",
+        "measurementBoundaryRelationCount": 2,
+        "boundaryEstablishedForClaim": true,
+        "limitations": [
+          "仅覆盖本次保存的公开页面和搜索证据，不代表完整搜索覆盖。",
+          "历史查询计划不可验证，本次未重新搜索或抓取。"
+        ]
+      },
+      "thresholds": {
+        "quickCoreIssueRequiresAtLeastOneDirect": {
+          "applicable": true,
+          "required": "DIRECT_SUPPORT >= 1",
+          "observed": 0,
+          "status": "FAIL"
+        },
+        "strengthOrOpportunityRequiresDirectOrTwoIndependentPartial": {
+          "applicable": false,
+          "required": "DIRECT_SUPPORT >= 1 OR independent PARTIAL_SUPPORT sources >= 2",
+          "observed": {
+            "direct": 0,
+            "independentPartialSources": 1
+          },
+          "status": "NOT_APPLICABLE"
+        }
+      },
+      "semanticAssessment": {
+        "status": "CONTRADICTORY_SIGNAL_REQUIRES_CONFIRMATION",
+        "exactSignal": "ev_4e33f5fd snippet contains ‘产品对比’ while the claim says the frozen public scope did not reveal systematic product-comparison content",
+        "consequence": "Not eligible for Quick; retain only as a bounded Deep needs-confirmation observation after offline refinalization."
+      },
+      "relations": [
+        {
+          "evidenceId": "ev_4e33f5fd",
+          "supportLevel": "PARTIAL_SUPPORT",
+          "confidence": 0.6,
+          "basis": "MEASUREMENT_BOUNDARY",
+          "justification": "负面/缺失型 Claim 由受控官网抓取范围内的首方页面提供边界支持:本次已检查的公开页面中未发现所述内容。",
+          "sourceType": "FIRST_PARTY_EVIDENCE",
+          "sourceDomain": "insta360.com",
+          "url": "https://www.insta360.com/",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        },
+        {
+          "evidenceId": "ev_bee405f0",
+          "supportLevel": "CONTEXT_ONLY",
+          "confidence": 0.4,
+          "basis": "CONTENT_MATCH",
+          "justification": "负面/缺失型 Claim 的非首方或范围外证据只能作为背景,不能单独支撑对本企业的缺失/落后判断。",
+          "sourceType": "OBSERVED_WEB_EVIDENCE",
+          "sourceDomain": "京东",
+          "url": "https://mall.jd.com/shopLevel-16292471.html",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        },
+        {
+          "evidenceId": "ev_c3da0ba0",
+          "supportLevel": "PARTIAL_SUPPORT",
+          "confidence": 0.6,
+          "basis": "MEASUREMENT_BOUNDARY",
+          "justification": "负面/缺失型 Claim 由受控官网抓取范围内的首方页面提供边界支持:本次已检查的公开页面中未发现所述内容。",
+          "sourceType": "FIRST_PARTY_EVIDENCE",
+          "sourceDomain": "insta360.com",
+          "url": "https://www.insta360.com/support",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        }
+      ]
+    },
+    {
+      "id": "iss_2",
+      "kind": "coreIssue",
+      "claimType": "DIAGNOSTIC_INFERENCE",
+      "statement": "基于本次保存的公开页面和搜索证据，相关说明仍不充分：影石Insta360的批量采购、定制、代理等企业级服务仅通过邮件联系，缺乏公开的案例展示、服务流程说明或资质证明。",
+      "published": true,
+      "evidenceIds": [
+        "ev_08d8fb26",
+        "ev_46b7297c",
+        "ev_11461056"
+      ],
+      "relationCounts": {
+        "DIRECT_SUPPORT": 0,
+        "PARTIAL_SUPPORT": 2,
+        "CONTEXT_ONLY": 1
+      },
+      "relationDomains": [
+        "insta360.cn",
+        "insta360.com",
+        "support.insta360.com"
+      ],
+      "partialSupportDomains": [
+        "insta360.com",
+        "support.insta360.com"
+      ],
+      "independentPartialSourceIdentities": [
+        "insta360.com"
+      ],
+      "locations": [
+        "Quick.coreIssues[1]",
+        "Deep.coreIssues[1]"
+      ],
+      "coverage": {
+        "isNegativeOrMissing": true,
+        "wordingBounded": true,
+        "boundingPhrase": "基于本次保存的公开页面和搜索证据，相关说明仍不充分",
+        "measurementBoundaryRelationCount": 2,
+        "boundaryEstablishedForClaim": true,
+        "limitations": [
+          "仅覆盖本次保存的公开页面和搜索证据，不代表完整搜索覆盖。",
+          "历史查询计划不可验证，本次未重新搜索或抓取。"
+        ]
+      },
+      "thresholds": {
+        "quickCoreIssueRequiresAtLeastOneDirect": {
+          "applicable": true,
+          "required": "DIRECT_SUPPORT >= 1",
+          "observed": 0,
+          "status": "FAIL"
+        },
+        "strengthOrOpportunityRequiresDirectOrTwoIndependentPartial": {
+          "applicable": false,
+          "required": "DIRECT_SUPPORT >= 1 OR independent PARTIAL_SUPPORT sources >= 2",
+          "observed": {
+            "direct": 0,
+            "independentPartialSources": 1
+          },
+          "status": "NOT_APPLICABLE"
+        }
+      },
+      "semanticAssessment": {
+        "status": "PARTIAL_BOUNDED_MATCH",
+        "exactSignal": "ev_08d8fb26 and ev_46b7297c explicitly show email-only contact for bulk purchase/customization/agency; absence of cases/process/credentials remains coverage-bounded, not direct.",
+        "consequence": "Not eligible for Quick; may remain a bounded Deep needs-confirmation observation."
+      },
+      "relations": [
+        {
+          "evidenceId": "ev_08d8fb26",
+          "supportLevel": "CONTEXT_ONLY",
+          "confidence": 0.4,
+          "basis": "CONTENT_MATCH",
+          "justification": "负面/缺失型 Claim 的非首方或范围外证据只能作为背景,不能单独支撑对本企业的缺失/落后判断。",
+          "sourceType": "OBSERVED_WEB_EVIDENCE",
+          "sourceDomain": "insta360.cn",
+          "url": "https://www.insta360.cn/support/buy?id=31",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        },
+        {
+          "evidenceId": "ev_11461056",
+          "supportLevel": "PARTIAL_SUPPORT",
+          "confidence": 0.6,
+          "basis": "MEASUREMENT_BOUNDARY",
+          "justification": "负面/缺失型 Claim 由受控官网抓取范围内的首方页面提供边界支持:本次已检查的公开页面中未发现所述内容。",
+          "sourceType": "FIRST_PARTY_EVIDENCE",
+          "sourceDomain": "insta360.com",
+          "url": "https://www.insta360.com/cn/reseller_application",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        },
+        {
+          "evidenceId": "ev_46b7297c",
+          "supportLevel": "PARTIAL_SUPPORT",
+          "confidence": 0.6,
+          "basis": "MEASUREMENT_BOUNDARY",
+          "justification": "负面/缺失型 Claim 由受控官网抓取范围内的首方页面提供边界支持:本次已检查的公开页面中未发现所述内容。",
+          "sourceType": "FIRST_PARTY_EVIDENCE",
+          "sourceDomain": "support.insta360.com",
+          "url": "http://support.insta360.com/buy?id=36&locale=en",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        }
+      ]
+    },
+    {
+      "id": "iss_3",
+      "kind": "coreIssue",
+      "claimType": "DIAGNOSTIC_INFERENCE",
+      "statement": "在本次保存的公开证据中，暂未发现影石Insta360在官网或公开渠道系统性地展示其产品在不同应用场景（如骑行、滑雪、Vlog等）下的使用案例、教程或用户生成内容。",
+      "published": true,
+      "evidenceIds": [
+        "ev_bee405f0",
+        "ev_4e33f5fd",
+        "ev_c3da0ba0"
+      ],
+      "relationCounts": {
+        "DIRECT_SUPPORT": 0,
+        "PARTIAL_SUPPORT": 2,
+        "CONTEXT_ONLY": 1
+      },
+      "relationDomains": [
+        "insta360.com",
+        "京东"
+      ],
+      "partialSupportDomains": [
+        "insta360.com"
+      ],
+      "independentPartialSourceIdentities": [
+        "insta360.com"
+      ],
+      "locations": [
+        "Quick.coreIssues[2]",
+        "Deep.coreIssues[2]"
+      ],
+      "coverage": {
+        "isNegativeOrMissing": true,
+        "wordingBounded": true,
+        "boundingPhrase": "在本次保存的公开证据中，暂未发现",
+        "measurementBoundaryRelationCount": 2,
+        "boundaryEstablishedForClaim": true,
+        "limitations": [
+          "仅覆盖本次保存的公开页面和搜索证据，不代表完整搜索覆盖。",
+          "历史查询计划不可验证，本次未重新搜索或抓取。"
+        ]
+      },
+      "thresholds": {
+        "quickCoreIssueRequiresAtLeastOneDirect": {
+          "applicable": true,
+          "required": "DIRECT_SUPPORT >= 1",
+          "observed": 0,
+          "status": "FAIL"
+        },
+        "strengthOrOpportunityRequiresDirectOrTwoIndependentPartial": {
+          "applicable": false,
+          "required": "DIRECT_SUPPORT >= 1 OR independent PARTIAL_SUPPORT sources >= 2",
+          "observed": {
+            "direct": 0,
+            "independentPartialSources": 1
+          },
+          "status": "NOT_APPLICABLE"
+        }
+      },
+      "semanticAssessment": {
+        "status": "CONTRADICTORY_SIGNAL_REQUIRES_CONFIRMATION",
+        "exactSignal": "ev_11461056 within the same frozen registry contains ‘日常家庭记录，外出旅拍还是运动拍摄’, a scenario signal inconsistent with a broad absence inference.",
+        "consequence": "Not eligible for Quick; retain only as a bounded Deep needs-confirmation observation after offline refinalization."
+      },
+      "relations": [
+        {
+          "evidenceId": "ev_4e33f5fd",
+          "supportLevel": "PARTIAL_SUPPORT",
+          "confidence": 0.6,
+          "basis": "MEASUREMENT_BOUNDARY",
+          "justification": "负面/缺失型 Claim 由受控官网抓取范围内的首方页面提供边界支持:本次已检查的公开页面中未发现所述内容。",
+          "sourceType": "FIRST_PARTY_EVIDENCE",
+          "sourceDomain": "insta360.com",
+          "url": "https://www.insta360.com/",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        },
+        {
+          "evidenceId": "ev_bee405f0",
+          "supportLevel": "CONTEXT_ONLY",
+          "confidence": 0.4,
+          "basis": "CONTENT_MATCH",
+          "justification": "负面/缺失型 Claim 的非首方或范围外证据只能作为背景,不能单独支撑对本企业的缺失/落后判断。",
+          "sourceType": "OBSERVED_WEB_EVIDENCE",
+          "sourceDomain": "京东",
+          "url": "https://mall.jd.com/shopLevel-16292471.html",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        },
+        {
+          "evidenceId": "ev_c3da0ba0",
+          "supportLevel": "PARTIAL_SUPPORT",
+          "confidence": 0.6,
+          "basis": "MEASUREMENT_BOUNDARY",
+          "justification": "负面/缺失型 Claim 由受控官网抓取范围内的首方页面提供边界支持:本次已检查的公开页面中未发现所述内容。",
+          "sourceType": "FIRST_PARTY_EVIDENCE",
+          "sourceDomain": "insta360.com",
+          "url": "https://www.insta360.com/support",
+          "canonicalEvidenceSupportLevel": "CONTEXT_ONLY"
+        }
+      ]
+    }
+  ],
+  "emptyPublishedKinds": [
+    "geoOpportunity",
+    "competitorGap",
+    "demonstrationFix"
+  ],
+  "systemFailureMasqueradeAudit": {
+    "publishedClaimMentionsRecoveryOrProviderFailure": false,
+    "deepProfileMeasurementLimitation": "本次恢复未重新确认竞品官方网站。",
+    "classification": "MEASUREMENT_LIMITATION_NOT_SCORED_OR_PUBLISHED_AS_ENTERPRISE_ISSUE"
+  },
+  "findings": [
+    {
+      "severity": "POLICY_VIOLATION",
+      "code": "QUICK_CORE_ISSUE_WITHOUT_DIRECT_SUPPORT",
+      "claimId": "iss_1",
+      "exact": "Quick publishes iss_1 with DIRECT_SUPPORT=0"
+    },
+    {
+      "severity": "POLICY_VIOLATION",
+      "code": "QUICK_CORE_ISSUE_WITHOUT_DIRECT_SUPPORT",
+      "claimId": "iss_2",
+      "exact": "Quick publishes iss_2 with DIRECT_SUPPORT=0"
+    },
+    {
+      "severity": "POLICY_VIOLATION",
+      "code": "QUICK_CORE_ISSUE_WITHOUT_DIRECT_SUPPORT",
+      "claimId": "iss_3",
+      "exact": "Quick publishes iss_3 with DIRECT_SUPPORT=0"
+    },
+    {
+      "severity": "POLICY_VIOLATION",
+      "code": "QUICK_HEADLINE_PROMOTES_UNDIRECTED_ISSUE",
+      "claimId": "iss_1",
+      "exact": "Quick.topIssue also enters Quick.headlineConclusion despite DIRECT_SUPPORT=0"
+    },
+    {
+      "severity": "POLICY_VIOLATION",
+      "code": "NEGATIVE_ISSUE_HAS_CONTRADICTORY_FROZEN_SIGNAL",
+      "claimId": "iss_1",
+      "exact": "ev_4e33f5fd snippet contains ‘产品对比’ while the claim says the frozen public scope did not reveal systematic product-comparison content"
+    },
+    {
+      "severity": "POLICY_VIOLATION",
+      "code": "NEGATIVE_ISSUE_HAS_CONTRADICTORY_FROZEN_SIGNAL",
+      "claimId": "iss_3",
+      "exact": "ev_11461056 within the same frozen registry contains ‘日常家庭记录，外出旅拍还是运动拍摄’, a scenario signal inconsistent with a broad absence inference."
+    }
+  ],
+  "checks": {
+    "everyPublishedClaimTraceableToEvidence": true,
+    "everyNegativeClaimCoverageBounded": true,
+    "noGlobalizedNegativeWording": true,
+    "noSystemFailurePublishedAsEnterpriseIssue": true,
+    "quickCoreIssueDirectThreshold": false,
+    "strengthAndOpportunityThreshold": true,
+    "noEvidenceMismatch": false
+  },
+  "requiredDisposition": {
+    "quick": "REMOVE_ALL_THREE_CORE_ISSUES_AND_DERIVED_TOP_ISSUE_HEADLINE_UNTIL_DIRECT_SUPPORT_EXISTS",
+    "deep": "RETAIN_PARTIAL_NEGATIVE_OBSERVATIONS_ONLY_AS_NEEDS_CONFIRMATION_WITH_COVERAGE_LIMITATIONS",
+    "providerCallsRequired": 0,
+    "recoveryRerunRequired": false,
+    "originalCanonicalMustRemainPreserved": true
+  },
+  "conclusion": "POLICY_VIOLATION"
+}
