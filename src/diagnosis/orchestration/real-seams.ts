@@ -10,7 +10,7 @@
 // Budget profile TECHNICAL_COMPANY_CANARY_V1 (frozen):
 //   Bocha    expected ≤10, HARD 12, retries 0
 //   DeepSeek expected ≤6,  HARD 8,  retries 0
-//   Crawl    ≤12 pages total, ≤8 per domain, ≤4 across competitor domains
+//   Crawl    ≤12 pages total, ≤8 first-party total, ≤4 competitor total
 //   Wallclock 15 minutes
 // Any hard-cap breach throws BudgetExceededError (code BUDGET_EXCEEDED): the
 // stage fails, the pipeline stops, budgets are NEVER auto-raised.
@@ -79,7 +79,12 @@ export const TECHNICAL_COMPANY_CANARY_V1 = {
   name: "TECHNICAL_COMPANY_CANARY_V1",
   bocha: { expectedMax: 10, hardMax: 12, retries: 0 },
   deepseek: { expectedMax: 6, hardMax: 8, retries: 0 },
-  crawl: { maxPagesTotal: 12, maxPagesPerDomain: 8, maxCompetitorPages: 4 },
+  crawl: {
+    maxPagesTotal: 12,
+    maxPagesPerDomain: 8,
+    maxFirstPartyPages: 8,
+    maxCompetitorPages: 4,
+  },
   wallClockMs: 15 * 60 * 1000,
   /** Planned main search queries (excl. competitor resolution) per run. */
   maxPlannedQueries: 8,
@@ -88,6 +93,15 @@ export const TECHNICAL_COMPANY_CANARY_V1 = {
 } as const;
 
 export type CanaryBudgetProfile = typeof TECHNICAL_COMPANY_CANARY_V1;
+
+export interface CanaryBudgetSnapshot {
+  bochaCalls: number;
+  deepseekCalls: number;
+  firstPartyPageCount: number;
+  competitorPageCount: number;
+  totalCrawlPageCount: number;
+  pagesPerDomain: Readonly<Record<string, number>>;
+}
 
 export class BudgetExceededError extends Error {
   readonly code = "BUDGET_EXCEEDED";
@@ -104,6 +118,7 @@ export class CanaryBudgetTracker {
   deepseekCalls = 0;
   crawledPages = 0;
   private readonly pagesPerDomain = new Map<string, number>();
+  firstPartyPages = 0;
   competitorPages = 0;
   private readonly startedAt: number;
   private readonly now: () => number;
@@ -143,10 +158,28 @@ export class CanaryBudgetTracker {
     const perDomain = this.pagesPerDomain.get(domain) ?? 0;
     if (perDomain >= this.profile.crawl.maxPagesPerDomain) return false;
     if (isCompetitor && this.competitorPages >= this.profile.crawl.maxCompetitorPages) return false;
+    if (!isCompetitor && this.firstPartyPages >= this.profile.crawl.maxFirstPartyPages) return false;
     this.crawledPages += 1;
     this.pagesPerDomain.set(domain, perDomain + 1);
-    if (isCompetitor) this.competitorPages += 1;
+    if (isCompetitor) {
+      this.competitorPages += 1;
+    } else {
+      this.firstPartyPages += 1;
+    }
     return true;
+  }
+
+  snapshot(): CanaryBudgetSnapshot {
+    return {
+      bochaCalls: this.bochaCalls,
+      deepseekCalls: this.deepseekCalls,
+      firstPartyPageCount: this.firstPartyPages,
+      competitorPageCount: this.competitorPages,
+      totalCrawlPageCount: this.crawledPages,
+      pagesPerDomain: Object.freeze(
+        Object.fromEntries([...this.pagesPerDomain.entries()].sort(([a], [b]) => a.localeCompare(b))),
+      ),
+    };
   }
 }
 
@@ -343,28 +376,39 @@ export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): Evid
       }
 
       const crawled = new Map<string, { title: string; text: string; fetchedAt: string }>();
-      let attempted = 0;
-      let rejected = 0;
+      let attemptedFirstParty = 0;
+      let attemptedCompetitor = 0;
       for (const t of targets) {
         if (!tracker.tryChargeCrawl(t.domain, t.competitor)) continue; // caps: skip, never breach
-        attempted += 1;
+        if (t.competitor) attemptedCompetitor += 1;
+        else attemptedFirstParty += 1;
         const outcome = await deps.crawler.crawl(t.url);
         if (outcome.ok) {
           const summary = extractPageSummary(outcome.body);
           crawled.set(t.url.toLowerCase(), { ...summary, fetchedAt: now() });
         } else {
-          rejected += 1;
           usage.push({
             provider: "crawler",
-            stage: "CRAWLING",
-            callCount: 1,
+            stage: t.competitor ? "CRAWLING_COMPETITOR" : "CRAWLING_FIRST_PARTY",
+            // The category summary below owns the attempt count. This detail row
+            // retains the failure code without double-counting provider usage.
+            callCount: 0,
             errorCode: outcome.reason,
           });
         }
       }
-      if (attempted > rejected) {
-        usage.push({ provider: "crawler", stage: "CRAWLING", callCount: attempted - rejected });
-      }
+      // Persist both category summaries even when one side is zero. The sample
+      // auditor must distinguish a measured zero from a missing/legacy record.
+      usage.push({
+        provider: "crawler",
+        stage: "CRAWLING_FIRST_PARTY",
+        callCount: attemptedFirstParty,
+      });
+      usage.push({
+        provider: "crawler",
+        stage: "CRAWLING_COMPETITOR",
+        callCount: attemptedCompetitor,
+      });
 
       // Enrich search results with crawled content; add the homepage as a
       // first-party result when the search set did not already include it.
@@ -508,6 +552,7 @@ export function createRealReportProducer(deps: RealReportProducerDeps): ReportPr
         aiVisibilityInput,
         evidence,
         stageOutputs,
+        coverage: ctx.coverage,
       });
       if (!built.ok) {
         const message = "issues" in built ? built.issues.join("; ") : built.error.message;
@@ -516,7 +561,12 @@ export function createRealReportProducer(deps: RealReportProducerDeps): ReportPr
           error: { code: `REPORT_${built.stage.toUpperCase()}_FAILED`, message },
         };
       }
-      return { ok: true, report: built.report, usage };
+      return {
+        ok: true,
+        report: built.report,
+        usage,
+        prunedCandidates: built.prunedCandidates,
+      };
     },
   };
 }

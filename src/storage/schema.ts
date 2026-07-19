@@ -132,3 +132,27 @@ export const analysisRepairAttempts = sqliteTable("analysis_repair_attempts", {
   frozenEvidenceSnapshotJson: text("frozen_evidence_snapshot_json"),
   frozenEvidenceSnapshotHash: text("frozen_evidence_snapshot_hash"),
 });
+
+// Round-6: immutable audit ledger for every candidate removed before public
+// report publication. The source analysis-stage output remains untouched;
+// decisions are appended as separate rows and never folded into Canonical JSON.
+export const pruneDecisions = sqliteTable("prune_decisions", {
+  id: text("id").primaryKey(),
+  diagnosisId: text("diagnosis_id").notNull(),
+  reportId: text("report_id"),
+  revisionId: text("revision_id"),
+  stageRunId: text("stage_run_id").notNull(),
+  claimKind: text("claim_kind").notNull(),
+  candidateRef: text("candidate_ref").notNull(),
+  sourceIssueId: text("source_issue_id"),
+  reasonCode: text("reason_code").notNull(),
+  guardRule: text("guard_rule").notNull(),
+  evidenceIdsJson: text("evidence_ids_json").notNull(),
+  independentSupportSourceCount: integer("independent_support_source_count").notNull(),
+  directCount: integer("direct_count").notNull(),
+  partialCount: integer("partial_count").notNull(),
+  contextCount: integer("context_count").notNull(),
+  coverageStatus: text("coverage_status").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  algorithmVersion: text("algorithm_version").notNull(),
+});

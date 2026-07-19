@@ -2,9 +2,18 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import type { ClaimPruneReasonCode } from "../src/contracts/claim-reason-codes";
+import type { EvidenceCoverage } from "../src/contracts/claim-evidence";
 import type { MeasurementComposition } from "../src/contracts";
+import {
+  evaluateClaimPublication,
+  type ClaimPublicationSourceContext,
+} from "../src/report/validation";
 
-export type EvidenceTier = "A" | "B" | "C";
+export type EvidenceTier = "A" | "B" | "C" | "D" | "E";
+export type SampleEvidenceSourceType =
+  | "FIRST_PARTY_EVIDENCE"
+  | "COMPETITOR_WEB_EVIDENCE"
+  | "OBSERVED_WEB_EVIDENCE";
 export type SampleClaimKind = "STRENGTH" | "ISSUE";
 export type VerificationVerdict = "SUPPORTED" | "UNSUPPORTED";
 export type ClaimPublicationStatus = "PUBLISHED" | "DEEP_NEEDS_CONFIRMATION" | "PRUNED";
@@ -16,16 +25,19 @@ export interface SampleEvidence {
   language: string;
   normalizedDomain: string;
   tier: EvidenceTier;
+  sourceType: SampleEvidenceSourceType;
 }
 
 export interface SampleSupportRelation {
   evidenceId: string;
   supportLevel: SupportLevel;
+  basis: "CONTENT_MATCH" | "MEASUREMENT_BOUNDARY";
 }
 
 export interface SampleClaimCandidate {
   id: string;
   kind: SampleClaimKind;
+  text: string;
   publicationStatus: ClaimPublicationStatus;
   verificationVerdict: VerificationVerdict;
   support: SampleSupportRelation[];
@@ -40,12 +52,14 @@ export interface SampleClaimCandidate {
 
 export interface SampleOpportunityCandidate {
   id: string;
+  text: string;
   publicationStatus: OpportunityPublicationStatus;
   verificationVerdict: VerificationVerdict;
   sourceIssueId: string;
   evidenceIds: string[];
   support: SampleSupportRelation[];
   customerQuestion: string;
+  contentGap: string;
   recommendedAction: string;
   priorityReason: string;
   /** Marks a generic template candidate, even when the guard correctly prunes it. */
@@ -71,6 +85,8 @@ export interface ProviderCallCounts {
 export interface CompanySampleFixture {
   companyId: string;
   evidence: SampleEvidence[];
+  coverage: EvidenceCoverage;
+  sourceContext: ClaimPublicationSourceContext;
   claims: SampleClaimCandidate[];
   opportunities: SampleOpportunityCandidate[];
   demonstrationFix: SampleDemonstrationFix | null;
@@ -97,7 +113,7 @@ export interface CompanySampleMetrics {
   demonstrationFixPublished: boolean;
   credibleDemonstrationFix: boolean;
   pruneReasons: Partial<Record<ClaimPruneReasonCode, number>>;
-  evidenceUtilization: number;
+  evidenceUtilizationRate: number;
   claimPublicationRate: number | null;
   opportunityYieldRate: number | null;
   quickVisibleCharacters: number;
@@ -160,56 +176,91 @@ function assertFraction(value: number, label: string): void {
   if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${label} must be between 0 and 1`);
 }
 
-function supportCounts(relations: readonly SampleSupportRelation[]): Record<SupportLevel, number> {
-  const counts: Record<SupportLevel, number> = {
-    DIRECT_SUPPORT: 0,
-    PARTIAL_SUPPORT: 0,
-    CONTEXT_ONLY: 0,
-    UNSUPPORTED: 0,
+function evidenceForPolicy(item: SampleEvidence) {
+  return {
+    id: item.id,
+    title: item.id,
+    sourceDomain: item.normalizedDomain,
+    sourceType: item.sourceType,
+    authorityLevel: `TIER_${item.tier}`,
+    supportLevel: "CONTEXT_ONLY" as const,
+    fetchedAt: "2026-07-20T00:00:00.000Z",
+    snippet: `${item.id} sample evidence`,
+    url: `https://${item.normalizedDomain}/sample/${encodeURIComponent(item.id)}`,
+    language: item.language.toLowerCase().startsWith("zh") ? "zh" as const : "other" as const,
+    sourceTier: item.tier,
+    normalizedDomain: item.normalizedDomain,
   };
-  for (const relation of relations) counts[relation.supportLevel] += 1;
-  return counts;
 }
 
-function independentPartialDomainCount(
-  relations: readonly SampleSupportRelation[],
-  evidenceById: ReadonlyMap<string, SampleEvidence>,
-): number {
-  return new Set(
-    relations
-      .filter((relation) => relation.supportLevel === "PARTIAL_SUPPORT")
-      .map((relation) => evidenceById.get(relation.evidenceId)?.normalizedDomain)
-      .filter((domain): domain is string => Boolean(domain)),
-  ).size;
+function policyDecision(
+  fixture: CompanySampleFixture,
+  claim: {
+    id: string;
+    kind: "coreIssue" | "strength" | "geoOpportunity";
+    text: string;
+    negativeScopeText: string;
+  },
+  evidenceIds: readonly string[],
+  support: readonly SampleSupportRelation[],
+) {
+  return evaluateClaimPublication({
+    claim: { ...claim, evidenceIds },
+    relations: support.map((relation) => ({
+      claimId: claim.id,
+      claimKind: claim.kind,
+      evidenceId: relation.evidenceId,
+      supportLevel: relation.supportLevel,
+      confidence: 1,
+      justification: "Round-6 deterministic sample fixture",
+      basis: relation.basis,
+      verifierMode: "MOCK_DETERMINISTIC" as const,
+      verifierVersion: "round6-sample.v1",
+    })),
+    evidence: fixture.evidence.map(evidenceForPolicy),
+    coverage: fixture.coverage,
+    sourceContext: fixture.sourceContext,
+  });
 }
 
 function publicClaimMeetsTruthGuard(
+  fixture: CompanySampleFixture,
   claim: SampleClaimCandidate,
   evidenceById: ReadonlyMap<string, SampleEvidence>,
 ): boolean {
   if (claim.publicationStatus === "PRUNED") return true;
   if (claim.verificationVerdict === "UNSUPPORTED") return false;
   if (claim.support.some((relation) => !evidenceById.has(relation.evidenceId))) return false;
-  const counts = supportCounts(claim.support);
   if (claim.negativeOrMissing && !claim.coverageLimited) return false;
+
+  const decision = policyDecision(
+    fixture,
+    {
+      id: claim.id,
+      kind: claim.kind === "ISSUE" ? "coreIssue" : "strength",
+      text: claim.text,
+      negativeScopeText: claim.text,
+    },
+    claim.support.map((relation) => relation.evidenceId),
+    claim.support,
+  );
 
   if (claim.publicationStatus === "DEEP_NEEDS_CONFIRMATION") {
     return (
       claim.kind === "ISSUE" &&
-      counts.DIRECT_SUPPORT === 0 &&
-      counts.PARTIAL_SUPPORT > 0 &&
-      counts.UNSUPPORTED === 0 &&
+      decision.outcome === "PRUNE" &&
+      decision.rule === "INSUFFICIENT_DIRECT_SUPPORT" &&
       claim.needsConfirmationNotice === true &&
       claim.savedEvidenceScopeNotice === true &&
       claim.notDeterministicConclusion === true
     );
   }
 
-  if (claim.kind === "ISSUE") return counts.DIRECT_SUPPORT >= 1;
-  return counts.DIRECT_SUPPORT >= 1 || independentPartialDomainCount(claim.support, evidenceById) >= 2;
+  return decision.outcome === "PUBLISH";
 }
 
 function opportunityLineageValid(
+  fixture: CompanySampleFixture,
   opportunity: SampleOpportunityCandidate,
   publishedIssueIds: ReadonlySet<string>,
   evidenceById: ReadonlyMap<string, SampleEvidence>,
@@ -234,11 +285,18 @@ function opportunityLineageValid(
   ) {
     return false;
   }
-  const counts = supportCounts(opportunity.support);
-  return (
-    counts.UNSUPPORTED === 0 &&
-    (counts.DIRECT_SUPPORT >= 1 || independentPartialDomainCount(opportunity.support, evidenceById) >= 2)
+  const decision = policyDecision(
+    fixture,
+    {
+      id: opportunity.id,
+      kind: "geoOpportunity",
+      text: `${opportunity.text} ${opportunity.customerQuestion} ${opportunity.contentGap}`,
+      negativeScopeText: opportunity.contentGap,
+    },
+    opportunity.evidenceIds,
+    opportunity.support,
   );
+  return decision.outcome === "PUBLISH";
 }
 
 function incrementReason(
@@ -273,6 +331,9 @@ function validateFixture(fixture: CompanySampleFixture): void {
   }
   const evidenceIds = fixture.evidence.map((item) => item.id);
   if (new Set(evidenceIds).size !== evidenceIds.length) throw new Error(`${fixture.companyId} has duplicate evidence ids`);
+  if (fixture.sourceContext.companyId !== fixture.companyId) {
+    throw new Error(`${fixture.companyId}.sourceContext.companyId must match companyId`);
+  }
   const claimIds = fixture.claims.map((item) => item.id);
   if (new Set(claimIds).size !== claimIds.length) throw new Error(`${fixture.companyId} has duplicate claim ids`);
   for (const claim of fixture.claims) {
@@ -304,7 +365,7 @@ export function computeCompanySampleMetrics(fixture: CompanySampleFixture): Comp
     (opportunity) => opportunity.publicationStatus === "PUBLISHED",
   );
   const validPublishedOpportunities = publishedOpportunities.filter((opportunity) =>
-    opportunityLineageValid(opportunity, publishedIssueIds, evidenceById),
+    opportunityLineageValid(fixture, opportunity, publishedIssueIds, evidenceById),
   );
   const credibleDemonstrationFix = Boolean(
     fixture.demonstrationFix?.publicationStatus === "PUBLISHED" &&
@@ -326,12 +387,12 @@ export function computeCompanySampleMetrics(fixture: CompanySampleFixture): Comp
   for (const opportunity of fixture.opportunities) incrementReason(pruneReasons, opportunity.pruneReason);
   incrementReason(pruneReasons, fixture.demonstrationFix?.pruneReason);
 
-  const tierDistribution: Record<EvidenceTier, number> = { A: 0, B: 0, C: 0 };
+  const tierDistribution: Record<EvidenceTier, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
   for (const item of fixture.evidence) tierDistribution[item.tier] += 1;
   const truthGuardPassed =
-    publicClaims.every((claim) => publicClaimMeetsTruthGuard(claim, evidenceById)) &&
+    publicClaims.every((claim) => publicClaimMeetsTruthGuard(fixture, claim, evidenceById)) &&
     publishedOpportunities.every((opportunity) =>
-      opportunityLineageValid(opportunity, publishedIssueIds, evidenceById),
+      opportunityLineageValid(fixture, opportunity, publishedIssueIds, evidenceById),
     ) &&
     (fixture.demonstrationFix?.publicationStatus !== "PUBLISHED" || credibleDemonstrationFix);
   const publishedUnsupportedClaimCount =
@@ -359,7 +420,7 @@ export function computeCompanySampleMetrics(fixture: CompanySampleFixture): Comp
     demonstrationFixPublished: fixture.demonstrationFix?.publicationStatus === "PUBLISHED",
     credibleDemonstrationFix,
     pruneReasons,
-    evidenceUtilization: ratio(usedEvidenceIds.size, fixture.evidence.length),
+    evidenceUtilizationRate: ratio(usedEvidenceIds.size, fixture.evidence.length),
     claimPublicationRate: optionalRatio(publishedCandidateCount, allCandidateCount),
     opportunityYieldRate: optionalRatio(publishedOpportunities.length, fixture.opportunities.length),
     quickVisibleCharacters: fixture.quickVisibleCharacters,

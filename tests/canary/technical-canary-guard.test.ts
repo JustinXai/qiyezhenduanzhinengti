@@ -192,6 +192,7 @@ describe("TECHNICAL_COMPANY_CANARY_V1 budget", () => {
     expect(TECHNICAL_COMPANY_CANARY_V1.crawl).toEqual({
       maxPagesTotal: 12,
       maxPagesPerDomain: 8,
+      maxFirstPartyPages: 8,
       maxCompetitorPages: 4,
     });
     expect(TECHNICAL_COMPANY_CANARY_V1.wallClockMs).toBe(15 * 60 * 1000);

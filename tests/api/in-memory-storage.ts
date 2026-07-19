@@ -11,6 +11,8 @@ import type {
   EvidenceRecordInput,
   ProviderUsageInput,
   ProviderUsageRecord,
+  PruneDecisionRecord,
+  PruneDecisionRecordInput,
   SaveReportInput,
   StorageAdapter,
   StoredReport,
@@ -35,6 +37,7 @@ export class InMemoryStorageAdapter implements StorageAdapter {
   private readonly reports = new Map<string, StoredReport>();
   private readonly usage: ProviderUsageRecord[] = [];
   private readonly checkpoints: CheckpointEntry[] = [];
+  private readonly pruneDecisions: PruneDecisionRecord[] = [];
   private readonly now: () => Date;
 
   constructor(now: () => Date = () => new Date()) {
@@ -120,6 +123,16 @@ export class InMemoryStorageAdapter implements StorageAdapter {
     return this.usage
       .filter((u) => u.diagnosisId === diagnosisId)
       .map((u) => ({ ...u }));
+  }
+
+  async appendPruneDecisions(items: PruneDecisionRecordInput[]): Promise<void> {
+    this.pruneDecisions.push(...items.map((item) => ({ ...structuredClone(item) })));
+  }
+
+  async getPruneDecisions(diagnosisId: string): Promise<PruneDecisionRecord[]> {
+    return this.pruneDecisions
+      .filter((item) => item.diagnosisId === diagnosisId)
+      .map((item) => structuredClone(item));
   }
 
   async saveCheckpoint(checkpoint: {

@@ -7,6 +7,8 @@ import { buildValidReport, codesOf, coverageOf, rel, verifiedRelations } from ".
 describe("evidenceGuard (relation-based, ROUND-3)", () => {
   it("passes the shared fixture when verified relations back every claim", async () => {
     const report = buildValidReport();
+    report.coreIssues = [];
+    report.geoOpportunities = [];
     const coverage = coverageOf(report);
     const relations = await verifiedRelations(report, coverage);
     expect(evidenceGuard({ report, relations, coverage })).toEqual({ ok: true });
@@ -22,12 +24,26 @@ describe("evidenceGuard (relation-based, ROUND-3)", () => {
     expect(codes).toContain("TRUTH_4_1_CORE_ISSUE_NEEDS_DIRECT_SUPPORT");
   });
 
-  it("a negative core issue WITH coverage-backed support passes", async () => {
+  it("a bounded negative core issue WITH DIRECT and coverage passes", () => {
     const report = buildValidReport();
+    report.strengths = [];
+    report.geoOpportunities = [];
+    report.coreIssues = [{
+      ...report.coreIssues[0]!,
+      statement: "本次检查的公开页面中未发现完整采购说明",
+      evidenceIds: ["ev_first_product"],
+    }];
     const coverage = coverageOf(report);
-    const relations = await verifiedRelations(report, coverage);
+    const relations: ClaimEvidenceRelation[] = [
+      rel({
+        claimId: report.coreIssues[0]!.id,
+        claimKind: "coreIssue",
+        evidenceId: "ev_first_product",
+        supportLevel: "DIRECT_SUPPORT",
+        basis: "MEASUREMENT_BOUNDARY",
+      }),
+    ];
     const res = evidenceGuard({ report, relations, coverage });
-    // iss_1 is a negative claim; it is satisfied by a MEASUREMENT_BOUNDARY relation.
     expect(res.ok).toBe(true);
   });
 
@@ -53,6 +69,7 @@ describe("evidenceGuard (relation-based, ROUND-3)", () => {
       item.id === "ev_first_about"
         ? {
             ...item,
+            sourceType: "OBSERVED_WEB_EVIDENCE" as const,
             sourceDomain: "independent-source.example.net",
             normalizedDomain: "independent-source.example.net",
             url: "https://independent-source.example.net/about",

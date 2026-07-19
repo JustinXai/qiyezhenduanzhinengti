@@ -101,6 +101,58 @@ export interface ProviderUsageRecord {
   createdAt: Date;
 }
 
+export const PRUNE_DECISION_REASON_CODES = [
+  "NO_VALID_EVIDENCE",
+  "INVALID_EVIDENCE_REFERENCE",
+  "INVALID_SOURCE_ISSUE_REFERENCE",
+  "INSUFFICIENT_DIRECT_SUPPORT",
+  "INSUFFICIENT_INDEPENDENT_SUPPORT",
+  "FROZEN_SCOPE_PREFIX_MISSING",
+  "COVERAGE_NOT_ESTABLISHED",
+  // Round-6 uses these precise runtime reasons. The two older codes above stay
+  // accepted for append-only historical rows and frozen-recovery compatibility.
+  "NO_MEASUREMENT_COVERAGE",
+  "MISSING_COVERAGE_PREFIX",
+  "DUPLICATED_EVIDENCE_SET",
+  "GENERIC_OR_UNACTIONABLE",
+  "UNVERIFIED_COMPETITOR_ASSERTION",
+  "BANNED_OR_OVERPROMISING_COPY",
+  "SYSTEM_FAILURE_NOT_BUSINESS_ISSUE",
+] as const;
+
+export type PruneDecisionReasonCode = (typeof PRUNE_DECISION_REASON_CODES)[number];
+
+export type PruneDecisionCoverageStatus =
+  | "NOT_REQUIRED"
+  | "ESTABLISHED_AND_BOUNDED"
+  | "NOT_ESTABLISHED"
+  | "SCOPE_LIMITATION_MISSING";
+
+/** Complete, internal-only audit record for one removed generation candidate. */
+export interface PruneDecisionRecordInput {
+  id: string;
+  diagnosisId: string;
+  /** Exactly one of reportId/revisionId must be present. */
+  reportId: string | null;
+  revisionId: string | null;
+  stageRunId: string;
+  claimKind: string;
+  candidateRef: string;
+  sourceIssueId: string | null;
+  reasonCode: PruneDecisionReasonCode;
+  guardRule: string;
+  evidenceIds: string[];
+  independentSupportSourceCount: number;
+  directCount: number;
+  partialCount: number;
+  contextCount: number;
+  coverageStatus: PruneDecisionCoverageStatus;
+  createdAt: Date;
+  algorithmVersion: string;
+}
+
+export type PruneDecisionRecord = PruneDecisionRecordInput;
+
 export const ANALYSIS_STAGES = [
   "REPORT_PROFILE",
   "REPORT_SCORING",
@@ -233,6 +285,10 @@ export interface StorageAdapter {
   // valid without implementing them; the state machine calls them only if present.
   saveClaimEvidenceRelations?(items: ClaimEvidenceRelationRecordInput[]): Promise<void>;
   getClaimEvidenceRelations?(diagnosisId: string): Promise<ClaimEvidenceRelationRecord[]>;
+
+  // -- prune_decisions (Round-6, internal append-only ledger) ----------------
+  appendPruneDecisions?(items: PruneDecisionRecordInput[]): Promise<void>;
+  getPruneDecisions?(diagnosisId: string): Promise<PruneDecisionRecord[]>;
 
   // -- analysis_checkpoints ---------------------------------------------------
   saveCheckpoint(checkpoint: {

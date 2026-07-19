@@ -17,6 +17,7 @@ import type {
   EvidenceStageContext,
   ReportProducerContext,
 } from "../../../src/diagnosis/orchestration/state-machine";
+import { applyClaimPublicationPolicyToReport } from "../../../src/runtime/claim-publication";
 
 const CLOCK = () => new Date("2026-07-18T00:00:00.000Z");
 
@@ -100,7 +101,12 @@ describe("live-seams competitor resolution wiring", () => {
         coverage: cov,
         strategy: createDeterministicVerifier(),
       });
-      const guard = publishGuard({ report: produced.report, relations, coverage: cov });
+      const published = applyClaimPublicationPolicyToReport({
+        report: produced.report,
+        relations,
+        coverage: cov,
+      }).report;
+      const guard = publishGuard({ report: published, relations, coverage: cov });
       expect(guard.ok).toBe(true);
     }
   });

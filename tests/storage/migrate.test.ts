@@ -21,6 +21,7 @@ describe("schema-driven migrate", () => {
       "diagnosis_requests",
       "evidence",
       "provider_usage",
+      "prune_decisions",
       "reports",
     ]);
   });
@@ -53,6 +54,7 @@ describe("schema-driven migrate", () => {
       "diagnosis_requests",
       "evidence",
       "provider_usage",
+      "prune_decisions",
       "reports",
     ]);
     db.close();

@@ -4,11 +4,13 @@ import {
   PRIMARY_CTA_LABEL,
   SECONDARY_CTA_LABEL,
 } from "../../src/report/validation/cta-guard";
-import { buildValidReport, codesOf, coverageOf, verifiedRelations } from "./support";
+import { buildValidReport, codesOf, coverageOf, rel, verifiedRelations } from "./support";
 
 describe("publishGuard (ROUND-3 — relations decide §4)", () => {
   it("passes a fully valid report (with frozen CTA labels)", async () => {
     const report = buildValidReport();
+    report.coreIssues = [];
+    report.geoOpportunities = [];
     const coverage = coverageOf(report);
     const relations = await verifiedRelations(report, coverage);
     const result = publishGuard({
@@ -74,10 +76,39 @@ describe("publishGuard (ROUND-3 — relations decide §4)", () => {
     expect(codes).toContain("CTA_BANNED_PHRASE");
   });
 
-  it("passes the corrected raw frozen sample through every guard", async () => {
-    const report = buildValidReport();
-    const coverage = coverageOf(report);
-    const relations = await verifiedRelations(report, coverage);
-    expect(publishGuard({ report, relations, coverage })).toEqual({ ok: true });
+  it("uses the same threshold in standard and frozen publication paths", () => {
+    const standard = buildValidReport();
+    standard.strengths = [];
+    standard.geoOpportunities = [];
+    standard.coreIssues = [{
+      ...standard.coreIssues[0]!,
+      statement: "本次检查的公开页面中未发现完整采购说明",
+      evidenceIds: ["ev_first_product"],
+    }];
+    const frozen = {
+      ...standard,
+      coreIssues: [{
+        ...standard.coreIssues[0]!,
+        statement: "在本次保存的公开证据中，暂未发现完整采购说明",
+      }],
+    };
+    const coverage = coverageOf(standard);
+    const relations = [rel({
+      claimId: standard.coreIssues[0]!.id,
+      claimKind: "coreIssue",
+      evidenceId: "ev_first_product",
+      supportLevel: "DIRECT_SUPPORT",
+      basis: "MEASUREMENT_BOUNDARY",
+    })];
+
+    expect(publishGuard({ report: standard, relations, coverage })).toEqual({ ok: true });
+    expect(
+      publishGuard({
+        report: frozen,
+        relations,
+        coverage,
+        coverageScope: "FROZEN_EVIDENCE",
+      }),
+    ).toEqual({ ok: true });
   });
 });

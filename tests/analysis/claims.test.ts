@@ -198,7 +198,7 @@ describe("buildClaims", () => {
 });
 
 describe("claims prompt and downstream guards", () => {
-  it("uses REPORT_CLAIMS_ZH_PROMPT_V2_1 and requests only the strict Candidate fields", () => {
+  it("uses the current claims prompt and requests bounded opportunity copy", () => {
     const prompt = buildClaimsPrompt(
       { website: "https://example.com" },
       EVIDENCE,
@@ -209,6 +209,9 @@ describe("claims prompt and downstream guards", () => {
     expect(prompt.userPrompt).toContain("不得输出currentIssue");
     expect(prompt.userPrompt).toContain("不得输出disclaimer");
     expect(prompt.userPrompt).toContain("无完整证据支持时必须返回null");
+    expect(prompt.userPrompt).toContain("本次已检查的公开页面和搜索结果中未发现");
+    expect(prompt.userPrompt).toContain("快速抢占");
+    expect(prompt.userPrompt).toContain("竞品已经积累");
   });
 
   it("does not loosen Publish Guard: unverified generated claims remain blocked", () => {

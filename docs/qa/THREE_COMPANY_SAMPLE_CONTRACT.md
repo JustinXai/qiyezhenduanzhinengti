@@ -24,12 +24,12 @@ Mock fixture：`tests/fixtures/round53-three-company-sample.ts`
 | --- | --- |
 | Evidence 数量 | Evidence 明细数量 |
 | 中文 Evidence 比例 | `language` 以 `zh` 开头的 Evidence / 全部 Evidence |
-| Tier 分布 | A/B/C 各自数量，合计必须等于 Evidence 数量 |
+| Tier 分布 | A/B/C/D/E 各自数量，五类合计必须等于 Evidence 数量；D/E 不得使统计失败 |
 | Issue 候选/发布 | `kind=ISSUE` 的候选数 / `publicationStatus=PUBLISHED` 数；Deep 待确认观察另计 |
 | Opportunity 候选/发布 | Opportunity 明细数 / `publicationStatus=PUBLISHED` 数 |
 | Demonstration Fix | 分别记录候选、发布以及血统可信状态 |
 | prune reasons | 汇总所有被剪枝 Claim、Opportunity 和 Fix 的 `reasonCode`；被剪枝项不得缺失原因 |
-| Evidence utilization | 被已公开 Claim、已发布 Opportunity 或已发布 Fix 引用的唯一有效 Evidence / 全部 Evidence |
+| Evidence utilization rate | 被已公开 Claim、已发布 Opportunity 或已发布 Fix 引用的唯一有效 Evidence / 全部 Evidence |
 | claim publication rate | 已发布 Strength + Issue + Opportunity / 对应全部候选；Deep 待确认观察不计作确定性发布 Claim |
 | opportunity yield rate | 已发布 Opportunity / Opportunity 候选；候选为 0 时返回 `null`，不伪装成 0% |
 | Quick 字符 | Quick 中文可见字符数，硬上限 1800 |
@@ -45,13 +45,19 @@ Mock fixture：`tests/fixtures/round53-three-company-sample.ts`
 统计器不放宽冻结 Claim–Evidence 阈值：
 
 - Quick/确定性发布 Issue 至少有 1 条 `DIRECT_SUPPORT`。
-- 发布 Strength 和 Opportunity 至少有 1 条 `DIRECT_SUPPORT`，或来自 2 个不同 `normalizedDomain` 的 `PARTIAL_SUPPORT`。
+- 发布 Strength 和 Opportunity 至少有 1 条 `DIRECT_SUPPORT`，或来自 2 个不同 `IndependentSupportSourceKey` 的 `PARTIAL_SUPPORT`。统计器只消费统一来源身份，不再从 Evidence ID 或 `normalizedDomain` 数量自行推断独立性。
 - `CONTEXT_ONLY` 不能单独支持公开结论；`UNSUPPORTED` Verdict 不得公开。
 - 负面或缺失型 Claim 必须带 Coverage 限定。
 - Deep 的 `DEEP_NEEDS_CONFIRMATION` 观察只允许 Issue 使用：无 Direct、至少 1 条 Partial，并同时明确“待进一步确认”“本次保存证据范围”“不作为确定性结论”。它不计为 Quick Issue 或确定性发布 Claim。
 - 已发布 Opportunity 必须关联已发布 Issue、存在的 Evidence、客户问题、具体动作和优先理由；其 pairwise support 也必须引用同一 Evidence 集合。
 - 已发布 Demonstration Fix 必须关联已发布 Issue 和存在的 Evidence。
 - 重复 Evidence ID、失效引用、空血统字段或通用模板都会使血统无效，不会被补齐或升级。
+
+`IndependentSupportSourceKey` 接缝遵循生产统一格式：当前企业第一方 Evidence 为
+`ENTITY:CURRENT_COMPANY:<companyId>`，已解析竞品为
+`ENTITY:COMPETITOR:<competitorEntityId>`，观察型公开网页为
+`DOMAIN:<registrableDomain>`。同一企业的主域、中文域、国际域、子域、support 域和官方商城域，
+在实体已确认时都只能计为同一个当前企业来源。
 
 ## 4. 三企业十项聚合门槛
 
@@ -74,6 +80,6 @@ Mock fixture：`tests/fixtures/round53-three-company-sample.ts`
 
 基准 fixture 故意设置：Alpha 和 Beta 各有 1 个可信 Opportunity，Alpha 有 1 个可信 Demonstration Fix，Gamma 的 Opportunity 候选和发布数均为 0。预期三企业聚合仍通过，Gamma 的 `opportunityYieldRate=null` 且 `sparseButTruthful=true`。
 
-反例覆盖：Partial-only Quick Issue、`UNSUPPORTED` 公开 Claim、Quick 1801 字、页面切换新增调用、无效 Opportunity 血统、通用模板 Opportunity、仅 1/3 公司有 Opportunity、0/3 Demonstration Fix、样本数量错误和测量构成不一致。
+反例覆盖：Partial-only Quick Issue、`UNSUPPORTED` 公开 Claim、Quick 1801 字、页面切换新增调用、无效 Opportunity 血统、通用模板 Opportunity、仅 1/3 公司有 Opportunity、0/3 Demonstration Fix、同企业多子域/.com/.cn 不得重复计数、两个不同第三方来源可独立计数、Tier D/E、样本数量错误和测量构成不一致。
 
 该 Mock 结果只证明统计和判定框架可用，不代表真实 Opportunity 整体产出率。不得把 V1 53.85 与 V2 59.95 描述为优化前后效果；两者证据集合和分析版本不同，只分别描述各自诊断结果。
