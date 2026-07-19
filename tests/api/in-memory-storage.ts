@@ -5,6 +5,7 @@
 // file, so vitest does not collect it as a suite.
 
 import type {
+  AnalysisCheckpointRecord,
   DiagnosisRequestRecord,
   DiagnosisStatus,
   EvidenceRecord,
@@ -21,6 +22,7 @@ import type {
 } from "../../src/storage/adapter";
 
 interface CheckpointEntry {
+  id: string;
   diagnosisId: string;
   stage: string;
   inputHash: string;
@@ -165,7 +167,11 @@ export class InMemoryStorageAdapter implements StorageAdapter {
     promptVersion: string;
     trustGuardVersion: string;
   }): Promise<void> {
-    this.checkpoints.push({ ...checkpoint, completedAt: this.now() });
+    this.checkpoints.push({
+      id: `${checkpoint.diagnosisId}:${checkpoint.stage}:${this.checkpoints.length + 1}`,
+      ...checkpoint,
+      completedAt: this.now(),
+    });
   }
 
   async findReusableCheckpoint(query: {
@@ -194,5 +200,15 @@ export class InMemoryStorageAdapter implements StorageAdapter {
       }
     }
     return null;
+  }
+
+  async getLatestCheckpoint(
+    diagnosisId: string,
+    stage: string,
+  ): Promise<AnalysisCheckpointRecord | null> {
+    const checkpoint = [...this.checkpoints]
+      .reverse()
+      .find((item) => item.diagnosisId === diagnosisId && item.stage === stage);
+    return checkpoint ? structuredClone(checkpoint) : null;
   }
 }

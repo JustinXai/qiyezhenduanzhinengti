@@ -31,8 +31,10 @@ import {
 } from "../../contracts/claim-evidence";
 import type { ClaimPublicationSourceContext } from "../../contracts/independent-support-source";
 import type {
+  ClaimPublicationDecisionRecordInput,
   DiagnosisStatus,
   AnalysisStage,
+  AnalysisStageRunRecord,
   EvidenceRecordInput,
   PruneDecisionRecordInput,
   StorageAdapter,
@@ -43,6 +45,12 @@ import {
   type DiagnosisInput,
 } from "../../runtime/diagnosis-input";
 import { publishGuard } from "../../report/validation";
+import {
+  evaluateClaimPublication,
+  negativeScopeTextFromReport,
+  publicationSourceContextFromReport,
+} from "../../report/validation/claim-publication-policy";
+import { independentSupportSourceKeys } from "../../report/validation/independent-support-source";
 import { applyClaimPublicationPolicyToReport } from "../../runtime/claim-publication";
 import {
   auditAnalysisPrune,
@@ -64,6 +72,8 @@ import {
 export const ANALYSIS_PROVIDER_MODEL = "deepseek-v4-flash";
 export const ANALYSIS_PROMPT_VERSION = "analysis.v2-prune-audit";
 export const ANALYSIS_TRUST_GUARD_VERSION = "trust-guard.v1";
+export const CLAIM_PUBLICATION_DECISION_ALGORITHM_VERSION =
+  "claim-publication-decision.v1";
 
 // Version of the deterministic Claim–Evidence publish-gate logic. Bumping it
 // (or the verifier version) invalidates a stored verification checkpoint.
@@ -222,6 +232,199 @@ function firstPartyDomainsOf(website: string): string[] {
   } catch {
     return [];
   }
+}
+
+type PublicationDecisionForStorage = Omit<
+  ClaimPublicationDecisionRecordInput,
+  "id" | "diagnosisId" | "reportId" | "revisionId"
+>;
+
+function reportCandidateItems(
+  report: DiagnosisReportType,
+  prunedCandidates: readonly AnalysisPruneCandidate[],
+): Array<{
+  candidateRef: string;
+  claimKind: string;
+  sourceIssueId: string | null;
+  evidenceIds: string[];
+}> {
+  return [
+    ...report.strengths.map((item) => ({
+      candidateRef: item.id,
+      claimKind: "strength",
+      sourceIssueId: null,
+      evidenceIds: [...item.evidenceIds],
+    })),
+    ...report.coreIssues.map((item) => ({
+      candidateRef: item.id,
+      claimKind: "coreIssue",
+      sourceIssueId: null,
+      evidenceIds: [...item.evidenceIds],
+    })),
+    ...report.competitorGaps.map((item) => ({
+      candidateRef: item.id,
+      claimKind: "competitorGap",
+      sourceIssueId: null,
+      evidenceIds: [...item.evidenceIds],
+    })),
+    ...report.geoOpportunities.map((item) => ({
+      candidateRef: item.id,
+      claimKind: "geoOpportunity",
+      sourceIssueId: item.sourceIssueId ?? null,
+      evidenceIds: [...item.evidenceIds],
+    })),
+    ...(report.demonstrationFix
+      ? [
+          {
+            candidateRef: report.demonstrationFix.id,
+            claimKind: "demonstrationFix",
+            sourceIssueId:
+              report.coreIssues.find(
+                (issue) => issue.statement === report.demonstrationFix?.currentIssue,
+              )?.id ?? null,
+            evidenceIds: [...report.demonstrationFix.evidenceIds],
+          },
+        ]
+      : []),
+    ...prunedCandidates.map((item) => ({
+      candidateRef: item.candidateRef,
+      claimKind: item.claimKind,
+      sourceIssueId: item.sourceIssueId,
+      evidenceIds: [...item.evidenceIds],
+    })),
+  ];
+}
+
+function publishedCandidateRefs(report: DiagnosisReportType): Set<string> {
+  return new Set([
+    ...report.strengths.map((item) => item.id),
+    ...report.coreIssues.map((item) => item.id),
+    ...report.competitorGaps.map((item) => item.id),
+    ...report.geoOpportunities.map((item) => item.id),
+    ...(report.demonstrationFix ? [report.demonstrationFix.id] : []),
+  ]);
+}
+
+function latestReportClaimsStageRun(
+  runs: readonly AnalysisStageRunRecord[],
+): AnalysisStageRunRecord | null {
+  return (
+    runs
+      .filter(
+        (run) =>
+          run.stage === "REPORT_CLAIMS" &&
+          run.status === "SUCCEEDED" &&
+          run.outputHash !== null,
+      )
+      .sort(
+        (a, b) =>
+          (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0) ||
+          b.attempt - a.attempt,
+      )[0] ?? null
+  );
+}
+
+function coverageStatusForStorage(
+  value: string,
+): PublicationDecisionForStorage["coverageStatus"] {
+  return value === "ESTABLISHED"
+    ? "ESTABLISHED_AND_BOUNDED"
+    : value as PublicationDecisionForStorage["coverageStatus"];
+}
+
+function publishedDecisionForCandidate(input: {
+  report: DiagnosisReportType;
+  candidate: ReturnType<typeof reportCandidateItems>[number];
+  relations: readonly ClaimEvidenceRelation[];
+  coverage: EvidenceCoverage;
+  sourceContext: ClaimPublicationSourceContext;
+}): Omit<
+  PublicationDecisionForStorage,
+  | "stageRunId"
+  | "legacyCheckpointId"
+  | "candidateSourceProvenance"
+  | "candidateSourcePayloadHash"
+  | "candidateRef"
+  | "claimKind"
+  | "evidenceIds"
+  | "algorithmVersion"
+  | "createdAt"
+> {
+  if (input.candidate.claimKind === "demonstrationFix") {
+    return {
+      publicationStatus: "PUBLISHED",
+      reasonCode: "PUBLISHED",
+      guardRule: "PUBLICATION_DEMONSTRATION_FIX_SOURCE_ISSUE_INTEGRITY",
+      directCount: 0,
+      partialCount: 0,
+      contextCount: 0,
+      independentSupportSourceCount: 0,
+      coverageStatus: "NOT_REQUIRED",
+    };
+  }
+  const claim = [
+    ...input.report.strengths.map((item) => ({
+      id: item.id,
+      kind: "strength" as const,
+      text: `${item.statement} ${item.businessImpact}`,
+      evidenceIds: item.evidenceIds,
+    })),
+    ...input.report.coreIssues.map((item) => ({
+      id: item.id,
+      kind: "coreIssue" as const,
+      text: `${item.statement} ${item.businessImpact} ${item.fixDirection}`,
+      evidenceIds: item.evidenceIds,
+    })),
+    ...input.report.geoOpportunities.map((item) => ({
+      id: item.id,
+      kind: "geoOpportunity" as const,
+      text: `${item.statement} ${item.businessImpact} ${item.customerQuestion} ${item.contentGap}`,
+      evidenceIds: item.evidenceIds,
+    })),
+  ].find(
+    (item) =>
+      item.id === input.candidate.candidateRef &&
+      item.kind === input.candidate.claimKind,
+  );
+  if (!claim) {
+    return {
+      publicationStatus: "PUBLISHED",
+      reasonCode: "PUBLISHED",
+      guardRule: "COMPETITOR_GAP_PUBLISHED",
+      directCount: 0,
+      partialCount: 0,
+      contextCount: 0,
+      independentSupportSourceCount: 0,
+      coverageStatus: "NOT_REQUIRED",
+    };
+  }
+  const decision = evaluateClaimPublication({
+    claim: {
+      id: claim.id,
+      kind: claim.kind,
+      text: claim.text,
+      negativeScopeText: negativeScopeTextFromReport(
+        input.report,
+        claim.kind,
+        claim.id,
+      ),
+      evidenceIds: claim.evidenceIds,
+    },
+    relations: input.relations.filter((relation) => relation.claimId === claim.id),
+    evidence: input.report.evidence,
+    coverage: input.coverage,
+    sourceContext: input.sourceContext,
+  });
+  return {
+    publicationStatus: "PUBLISHED",
+    reasonCode: "PUBLISHED",
+    guardRule: decision.policyVersion,
+    directCount: decision.directCount,
+    partialCount: decision.partialCount,
+    contextCount: decision.contextCount,
+    independentSupportSourceCount: decision.independentPartialSourceCount,
+    coverageStatus: decision.coverageStatus,
+  };
 }
 
 function stableStringify(value: unknown): string {
@@ -579,11 +782,16 @@ export async function runDiagnosisPipeline(
     });
   }
 
+  const sourceContext = publicationSourceContextFromReport(
+    canonical,
+    coverage,
+    deps.publicationSourceContext,
+  );
   const publication = applyClaimPublicationPolicyToReport({
     report: canonical,
     relations,
     coverage,
-    sourceContext: deps.publicationSourceContext,
+    sourceContext,
   });
   const published = publication.report;
   const reportId = idFactory();
@@ -641,6 +849,161 @@ export async function runDiagnosisPipeline(
     }
   }
 
+  if (!storage.appendClaimPublicationDecisionBatch) {
+    return fail("VALIDATING_REPORT", {
+      code: "CLAIM_PUBLICATION_DECISION_STORAGE_UNAVAILABLE",
+      message: "normal publication requires the complete candidate decision ledger",
+    });
+  }
+  const reportClaimsStageRun = storage.getAnalysisStageRuns
+    ? latestReportClaimsStageRun(await storage.getAnalysisStageRuns(diagnosisId))
+    : null;
+  const legacyAnalysisCheckpoint =
+    reportClaimsStageRun || !storage.getLatestCheckpoint
+      ? null
+      : await storage.getLatestCheckpoint(diagnosisId, "ANALYZING");
+  const candidateSource = reportClaimsStageRun
+    ? {
+        stageRunId: reportClaimsStageRun.id,
+        legacyCheckpointId: null,
+        provenance: "ANALYSIS_STAGE_RUN" as const,
+        payloadHash: reportClaimsStageRun.outputHash!,
+      }
+    : legacyAnalysisCheckpoint
+      ? {
+          stageRunId: null,
+          legacyCheckpointId: legacyAnalysisCheckpoint.id,
+          provenance: "LEGACY_ANALYSIS_CHECKPOINT" as const,
+          payloadHash: createHash("sha256")
+            .update(legacyAnalysisCheckpoint.outputJson)
+            .digest("hex"),
+        }
+      : null;
+  if (!candidateSource) {
+    return fail("VALIDATING_REPORT", {
+      code: "CLAIM_PUBLICATION_DECISION_SOURCE_UNAVAILABLE",
+      message: "normal publication requires a persisted candidate source",
+    });
+  }
+  const candidateItems = reportCandidateItems(canonical, analysisPrunedCandidates);
+  const publishedRefs = publishedCandidateRefs(published);
+  const publicationPrunes = new Map(
+    publication.prunes.map((item) => [item.candidate.candidateRef, item]),
+  );
+  const analysisPrunes = new Map(
+    analysisPrunedCandidates.map((item) => [item.candidateRef, item]),
+  );
+  const claimPublicationDecisions: ClaimPublicationDecisionRecordInput[] =
+    candidateItems.map((candidate) => {
+      const common = {
+        id: idFactory(),
+        diagnosisId,
+        reportId,
+        revisionId: null,
+        stageRunId: candidateSource.stageRunId,
+        legacyCheckpointId: candidateSource.legacyCheckpointId,
+        candidateSourceProvenance: candidateSource.provenance,
+        candidateSourcePayloadHash: candidateSource.payloadHash,
+        candidateRef: candidate.candidateRef,
+        claimKind: candidate.claimKind,
+        evidenceIds: [...candidate.evidenceIds],
+        algorithmVersion: CLAIM_PUBLICATION_DECISION_ALGORITHM_VERSION,
+        createdAt: auditCreatedAt,
+      };
+      if (publishedRefs.has(candidate.candidateRef)) {
+        return {
+          ...common,
+          ...publishedDecisionForCandidate({
+            report: published,
+            candidate,
+            relations,
+            coverage,
+            sourceContext,
+          }),
+        };
+      }
+      const publicationPrune = publicationPrunes.get(candidate.candidateRef);
+      if (publicationPrune) {
+        if (publicationPrune.type === "POLICY") {
+          return {
+            ...common,
+            publicationStatus: "PRUNED" as const,
+            reasonCode: publicationPrune.decision.rule,
+            guardRule: publicationPrune.decision.rule,
+            directCount: publicationPrune.decision.directCount,
+            partialCount: publicationPrune.decision.partialCount,
+            contextCount: publicationPrune.decision.contextCount,
+            independentSupportSourceCount:
+              publicationPrune.decision.independentPartialSourceCount,
+            coverageStatus: publicationPrune.decision.coverageStatus,
+          };
+        }
+        const competitorEvidenceIds = publicationPrune.competitorGapDecision
+          ? [
+              ...publicationPrune.competitorGapDecision.currentCompanyRelationEvidenceIds,
+              ...publicationPrune.competitorGapDecision.competitorOfficialRelationEvidenceIds,
+            ]
+          : [];
+        return {
+          ...common,
+          publicationStatus:
+            publicationPrune.competitorGapDecision?.outcome === "DEEP_NEEDS_CONFIRMATION"
+              ? "DEEP_NEEDS_CONFIRMATION" as const
+              : "PRUNED" as const,
+          reasonCode: publicationPrune.reasonCode,
+          guardRule: publicationPrune.guardRule,
+          directCount: publicationPrune.competitorGapDecision?.directCount ?? 0,
+          partialCount: publicationPrune.competitorGapDecision?.partialCount ?? 0,
+          contextCount: publicationPrune.competitorGapDecision?.contextCount ?? 0,
+          independentSupportSourceCount: independentSupportSourceKeys(
+            competitorEvidenceIds,
+            published.evidence,
+            sourceContext,
+          ).length,
+          coverageStatus: coverageStatusForStorage(publicationPrune.coverageStatus),
+        };
+      }
+      const analysisPrune = analysisPrunes.get(candidate.candidateRef);
+      if (!analysisPrune) {
+        return {
+          ...common,
+          publicationStatus: "PRUNED" as const,
+          reasonCode: "SYSTEM_FAILURE_NOT_BUSINESS_ISSUE",
+          guardRule: "CLAIM_PUBLICATION_DECISION_UNRESOLVED",
+          directCount: 0,
+          partialCount: 0,
+          contextCount: 0,
+          independentSupportSourceCount: 0,
+          coverageStatus: "NOT_REQUIRED" as const,
+        };
+      }
+      return {
+        ...common,
+        publicationStatus: "PRUNED" as const,
+        reasonCode: analysisPrune.reasonCode,
+        guardRule: analysisPrune.guardRule,
+        directCount: 0,
+        partialCount: 0,
+        contextCount: 0,
+        independentSupportSourceCount: 0,
+        coverageStatus: analysisPrune.coverageStatus ?? "NOT_REQUIRED",
+      };
+    });
+  try {
+    await storage.appendClaimPublicationDecisionBatch({
+      expectedCandidates: candidateItems.map((candidate) => ({
+        claimKind: candidate.claimKind,
+        candidateRef: candidate.candidateRef,
+      })),
+      decisions: claimPublicationDecisions,
+    });
+  } catch (error) {
+    return fail(
+      "VALIDATING_REPORT",
+      toPipelineError("CLAIM_PUBLICATION_DECISION_PERSISTENCE_FAILED", error),
+    );
+  }
+
   // Agent B publish guard (PRODUCT_TRUTH_RULES §4 evidence support, score
   // cross-field consistency, banned CTA copy). §4 is decided from the verified
   // ClaimEvidenceRelations + coverage, NOT from EvidenceItem.supportLevel. A
@@ -649,7 +1012,7 @@ export async function runDiagnosisPipeline(
     report: published,
     relations,
     coverage,
-    sourceContext: deps.publicationSourceContext,
+    sourceContext,
   });
   if (!guard.ok) {
     return fail("VALIDATING_REPORT", {
