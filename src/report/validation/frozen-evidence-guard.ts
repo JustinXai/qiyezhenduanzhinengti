@@ -16,7 +16,7 @@ import {
 } from "../../diagnosis/orchestration/recovery/frozen-evidence-contract";
 
 export const FROZEN_EVIDENCE_QUICK_COMPETITOR_LIMITATION =
-  "本次保存的公开证据不足以重新确认竞品官方网站，暂不做确定性比较。";
+  "已收到竞品输入,但本次公开证据不足,暂不做确定性比较。";
 export const FROZEN_EVIDENCE_DEEP_COMPETITOR_LIMITATION =
   "本次恢复未重新确认竞品官方网站。";
 
