@@ -31,6 +31,7 @@ import type {
 } from "../../contracts/claim-evidence";
 import type { GuardResult, GuardRuleCode, GuardViolation } from "../../contracts/guard-types";
 import { classifyPolarity, extractVerifiableClaims } from "../../diagnosis/verification";
+import { countIndependentEvidenceDomains } from "./evidence-independence";
 
 type GatedKind = "coreIssue" | "strength" | "geoOpportunity";
 
@@ -68,7 +69,14 @@ export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
   );
 
   for (const claim of claims) {
-    evaluateClaim(claim, relationsByClaim.get(claim.id) ?? [], evidenceIds, coverage, violations);
+    evaluateClaim(
+      claim,
+      relationsByClaim.get(claim.id) ?? [],
+      evidenceIds,
+      report.evidence,
+      coverage,
+      violations,
+    );
   }
 
   checkDuplicateOpportunityRelations(report, relationsByClaim, violations);
@@ -80,6 +88,7 @@ function evaluateClaim(
   claim: { id: string; kind: GatedKind; text: string; candidateEvidenceIds: string[] },
   rels: ClaimEvidenceRelation[],
   evidenceIds: Set<string>,
+  evidence: DiagnosisReport["evidence"],
   coverage: EvidenceCoverage,
   violations: GuardViolation[],
 ): void {
@@ -143,6 +152,12 @@ function evaluateClaim(
   const usable = rels.filter((r) => r.supportLevel !== "UNSUPPORTED");
   const direct = usable.filter((r) => r.supportLevel === "DIRECT_SUPPORT").length;
   const partial = usable.filter((r) => r.supportLevel === "PARTIAL_SUPPORT").length;
+  const independentPartial = countIndependentEvidenceDomains(
+    usable
+      .filter((relation) => relation.supportLevel === "PARTIAL_SUPPORT")
+      .map((relation) => relation.evidenceId),
+    evidence,
+  );
   const contextOnly = usable.filter((r) => r.supportLevel === "CONTEXT_ONLY").length;
 
   if (polarity === "NEGATIVE_MISSING") {
@@ -177,7 +192,8 @@ function evaluateClaim(
   }
 
   // Positive enterprise-capability claim.
-  const meets = claim.kind === "coreIssue" ? direct >= 1 : direct >= 1 || partial >= 2;
+  const meets =
+    claim.kind === "coreIssue" ? direct >= 1 : direct >= 1 || independentPartial >= 2;
   if (meets) return;
 
   if (contextOnly > 0 && direct === 0 && partial === 0) {
@@ -195,7 +211,7 @@ function evaluateClaim(
   violations.push({
     guard: "evidence",
     rule: REQUIREMENT_RULE[claim.kind],
-    message: `${claim.kind} ${claim.id} 未达到发布所需的证据支持等级(DIRECT=${direct}, PARTIAL=${partial})`,
+    message: `${claim.kind} ${claim.id} 未达到发布所需的证据支持等级(DIRECT=${direct}, PARTIAL=${partial}, INDEPENDENT_PARTIAL_DOMAINS=${independentPartial})`,
     claimType: claim.kind,
     claimId: claim.id,
     evidenceIds: claim.candidateEvidenceIds,

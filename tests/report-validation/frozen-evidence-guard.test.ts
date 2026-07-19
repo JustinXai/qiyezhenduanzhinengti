@@ -85,7 +85,7 @@ function report(evidence: EvidenceItem[]): DiagnosisReport {
         statement: "在本次保存的公开证据中，暂未发现完整的采购问答说明",
         businessImpact: "客户需要跨页面拼接关键信息",
         fixDirection: "整理已有材料并补充结构化问答",
-        evidenceIds: ["ev_00", "ev_01"],
+        evidenceIds: ["ev_00", "ev_08"],
       },
     ],
     competitorGaps: [],
@@ -95,7 +95,7 @@ function report(evidence: EvidenceItem[]): DiagnosisReport {
 }
 
 function relations(): ClaimEvidenceRelation[] {
-  return ["ev_00", "ev_01"].map((evidenceId) => ({
+  return ["ev_00", "ev_08"].map((evidenceId) => ({
     claimId: "iss_1",
     claimKind: "coreIssue",
     evidenceId,
