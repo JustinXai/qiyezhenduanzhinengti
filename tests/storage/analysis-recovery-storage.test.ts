@@ -88,7 +88,7 @@ describe("analysis recovery storage", () => {
         errorName: "ZodError",
         issueCount: 1,
         issuePaths: ["demonstrationFix.currentIssue"],
-        Authorization: "Bearer must-not-persist",
+        Authorization: "masked-auth-value-must-not-persist",
         prompt: "complete private prompt",
       }),
       providerUsageId: "usage_failed",
@@ -98,7 +98,7 @@ describe("analysis recovery storage", () => {
     expect(row.outputJson).toBeNull();
     expect(row.outputHash).toBeNull();
     expect(row.errorMetadataJson).toContain("issuePaths");
-    expect(row.errorMetadataJson).not.toContain("Bearer");
+    expect(row.errorMetadataJson).not.toContain("masked-auth-value");
     expect(row.errorMetadataJson).not.toContain("prompt");
   });
 
