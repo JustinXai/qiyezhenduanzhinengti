@@ -19,6 +19,10 @@ COMMIT: current branch HEAD (recorded by Supervisor from Git)
 - Added server-environment-only repair authorization.
 - Added `planFrozenEvidenceAnalysisRecovery` (read-only) and
   `resumeAnalysisFromFrozenEvidence` (single authorized attempt).
+- Added a required deterministic finalization seam. It is invoked only after all
+  four outputs validate, and must run Canonical assembly, Claim–Evidence
+  Verification, publication/language guards, report persistence, and the READY
+  transition without Provider calls or a new Diagnosis.
 - Recovery priority is validated stage run, then exact legacy checkpoint, then
   frozen-Evidence rerun. Claims is always rerun with the integrated repaired
   schema definition.
@@ -41,7 +45,7 @@ hash or stage output was inferred from Evidence, usage rows, logs, or summaries.
 - `pnpm lint`: PASS (0 errors; 1 pre-existing warning in
   `tests/canary/pre-real-sample-canary.test.ts`)
 - `pnpm typecheck`: PASS
-- `pnpm test`: PASS (47 files, 576 tests)
+- `pnpm test`: PASS (47 files, 578 tests)
 - `pnpm security:check`: PASS (52 SSRF adversarial cases; no secrets)
 - Focused Runtime/Storage tests: PASS (8 files, 64 tests)
 - `git diff --check`: PASS
@@ -68,7 +72,10 @@ calls, no database or private artifact mutation, and no new Diagnosis.
    executor, run-lock check, and trusted full competitor/query-plan snapshots.
 3. Add shared barrel exports only if desired; Agent O intentionally did not edit
    Supervisor-owned barrels.
-4. Integrate per-stage persistence into the normal real analysis producer so
+4. Implement the required deterministic finalizer using existing Canonical,
+   verifier and Guard components; recovery rejects missing report/READY state and
+   detects any persisted Provider or new-Diagnosis activity.
+5. Integrate per-stage persistence into the normal real analysis producer so
    future runs write each validated stage immediately. The recovery entry already
    enforces this behavior for repair execution.
 
