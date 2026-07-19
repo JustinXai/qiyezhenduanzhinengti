@@ -19,6 +19,7 @@ import {
 import {
   evaluateClaimPublication,
   FROZEN_EVIDENCE_NEGATIVE_SCOPE_PHRASES,
+  negativeScopeTextFromReport,
   publicationSourceContextFromReport,
 } from "./claim-publication-policy";
 
@@ -264,8 +265,9 @@ function checkNegativeClaims(
     }
     if (claim.kind === "competitorGap") continue;
     const detail = { claimId: claim.id, evidenceIds: claim.candidateEvidenceIds };
+    const negativeScopeText = negativeScopeTextFromReport(input.report, claim.kind, claim.id);
     const bounded = FROZEN_EVIDENCE_NEGATIVE_SCOPE_PREFIXES.some((prefix) =>
-      claim.text.includes(prefix),
+      negativeScopeText.trim().startsWith(prefix),
     );
     const forbidden = UNBOUNDED_NEGATIVE_PHRASES.find((phrase) =>
       claim.text.includes(phrase),
@@ -285,6 +287,7 @@ function checkNegativeClaims(
         id: claim.id,
         kind: claim.kind,
         text: claim.text,
+        negativeScopeText,
         evidenceIds: claim.candidateEvidenceIds,
       },
       relations,

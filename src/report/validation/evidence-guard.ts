@@ -34,6 +34,7 @@ import type { GuardResult, GuardRuleCode, GuardViolation } from "../../contracts
 import { extractVerifiableClaims } from "../../diagnosis/verification";
 import {
   evaluateClaimPublication,
+  negativeScopeTextFromReport,
   publicationSourceContextFromReport,
   type ClaimPublicationCoverageScope,
   type ClaimPublicationDecision,
@@ -84,6 +85,7 @@ export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
   for (const claim of claims) {
     evaluateClaim(
       claim,
+      negativeScopeTextFromReport(report, claim.kind, claim.id),
       relationsByClaim.get(claim.id) ?? [],
       report.evidence,
       coverage,
@@ -100,6 +102,7 @@ export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
 
 function evaluateClaim(
   claim: { id: string; kind: GatedKind; text: string; candidateEvidenceIds: string[] },
+  negativeScopeText: string,
   rels: ClaimEvidenceRelation[],
   evidence: DiagnosisReport["evidence"],
   coverage: EvidenceCoverage,
@@ -112,6 +115,7 @@ function evaluateClaim(
       id: claim.id,
       kind: claim.kind,
       text: claim.text,
+      negativeScopeText,
       evidenceIds: claim.candidateEvidenceIds,
     },
     relations: rels,

@@ -66,7 +66,13 @@ function candidate(
   evidenceIds: string[],
   text = "企业公开展示了可验证的产品能力",
 ): ClaimPublicationCandidate {
-  return { id: kind === "coreIssue" ? "iss_1" : kind === "strength" ? "str_1" : "geo_1", kind, text, evidenceIds };
+  return {
+    id: kind === "coreIssue" ? "iss_1" : kind === "strength" ? "str_1" : "geo_1",
+    kind,
+    text,
+    negativeScopeText: text,
+    evidenceIds,
+  };
 }
 
 function input(
@@ -251,6 +257,34 @@ describe("ClaimPublicationPolicy", () => {
       ]),
     );
     expect(result).toMatchObject({ outcome: "PUBLISH", coverageStatus: "ESTABLISHED_AND_BOUNDED" });
+  });
+
+  it("requires the approved prefix at the start of the exact negative field", () => {
+    const claim = {
+      ...candidate(
+        "geoOpportunity",
+        ["a"],
+        "本次已检查的公开页面和搜索结果中未发现采购说明，官网内容缺少采购说明",
+      ),
+      negativeScopeText: "官网内容缺少采购说明",
+    };
+    const evidence = [ev("a", "FIRST_PARTY_EVIDENCE", "company.com")];
+    expect(
+      evaluateClaimPublication(
+        input(claim, evidence, [relation(claim, "a", "DIRECT_SUPPORT")]),
+      ),
+    ).toMatchObject({ outcome: "PRUNE", rule: "SCOPE_LIMITATION_MISSING" });
+
+    const prefixedLater = {
+      ...claim,
+      negativeScopeText:
+        "官网内容缺少采购说明；本次已检查的公开页面和搜索结果中未发现采购说明",
+    };
+    expect(
+      evaluateClaimPublication(
+        input(prefixedLater, evidence, [relation(prefixedLater, "a", "DIRECT_SUPPORT")]),
+      ).rule,
+    ).toBe("SCOPE_LIMITATION_MISSING");
   });
 
   it("requires the frozen scope phrase in FROZEN_EVIDENCE mode", () => {
