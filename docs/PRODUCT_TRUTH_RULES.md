@@ -22,9 +22,12 @@
 
 ## 4. 发布规则（由 Evidence Semantic Guard 强制，src/report/validation/，Agent B）
 
-1. 核心问题至少需要 1 条 `DIRECT_SUPPORT`。
-2. 优势至少需要 1 条 `DIRECT_SUPPORT`，或 2 条 `PARTIAL_SUPPORT`。
-3. GEO 机会至少需要 1 条 `DIRECT_SUPPORT`，或 2 条 `PARTIAL_SUPPORT`。
+1. 核心问题至少需要 1 条 `DIRECT_SUPPORT`；该门槛逐条适用于 Quick 公开核心问题，
+   不得以多条 `PARTIAL_SUPPORT` 替代。
+2. 优势至少需要 1 条 `DIRECT_SUPPORT`，或来自 2 个独立归一化根域的
+   `PARTIAL_SUPPORT`。
+3. GEO 机会至少需要 1 条 `DIRECT_SUPPORT`，或来自 2 个独立归一化根域的
+   `PARTIAL_SUPPORT`。
 4. `CONTEXT_ONLY` 不能单独支撑核心事实。
 5. `UNSUPPORTED` 不能进入客户报告。
 6. 所有 Evidence ID 必须存在（引用完整性）。
@@ -33,6 +36,9 @@
 9. 系统抓取失败、Provider 失败、索引不足不能成为客户核心问题。
 10. 证据不足时允许减少优势、问题和机会数量。
 11. 不得固定数量强行填满。
+12. 负面/缺失型 Claim 的 Coverage 边界只允许其作为有范围限定的待确认观察；Coverage
+    不能替代 Quick 核心问题的 `DIRECT_SUPPORT` 门槛。
+13. Opportunity 为 0 是允许的稀疏结果，不得自动判定技术链路失败，也不得反向影响评分。
 
 ## 5. 绝对禁止
 

@@ -90,3 +90,15 @@
   Publish/中文/Frozen-Evidence Guard 与 390px 三视图均通过，但产品产出门槛未通过；状态定为
   `PASS_WITH_PRODUCT_YIELD_BLOCKER`，不重跑、不合 integration、不创建成功 Tag、不进入
   三企业样本。(来源: Supervisor Round-5.2C 最终审计)
+- [2026-07-19] CORRECTION Round-5.3 逐 Claim Truth Audit 发现 Round-5.2C 的 3 条 Quick
+  Issue 均为 0 DIRECT / 2 PARTIAL / 1 CONTEXT；Coverage 不能替代 Quick DIRECT 门槛，故
+  原报告 Truth Gate 违规。Supervisor 使用原四阶段输出、Evidence 与关系执行一次零 Provider
+  append-only refinalization：原 Canonical 字节保留，新 revision
+  `4680f7d3-fbdb-467a-841a-0352a12a478a` Quick Issue=0，Deep 以 3 条 bounded
+  needs-confirmation 观察承载，不修改关系、评分、AI tests 或 Evidence。(来源: Agent T/V +
+  SQLite/Public API 后置审计)
+- [2026-07-19] DECISION Canary 结论拆为 `TechnicalCanaryStatus` 与
+  `ProductYieldStatus`。Opportunity=0 不自动构成技术失败。本样本 3 个 Opportunity 候选均有
+  血统和具体行动，但只具 1 个独立 PARTIAL 根域，根因确认为
+  `D. INSUFFICIENT_SUPPORT`；最终为 `PASS / SPARSE_BUT_TRUTHFUL`，禁止固定补齐。
+  三企业阶段只运行 Mock Harness，真实样本尚未启动。(来源: Agent U/W + Supervisor Round-5.3)

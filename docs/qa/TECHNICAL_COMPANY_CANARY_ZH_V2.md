@@ -1,13 +1,17 @@
-# Round-5.2C Insta360 Chinese Technical Canary V2
+# Round-5.2C / Round-5.3 Insta360 Chinese Technical Canary V2
 
 ## 结论
 
-- 状态：`PASS_WITH_PRODUCT_YIELD_BLOCKER`。
+- Round-5.2C 原状态：`PASS_WITH_PRODUCT_YIELD_BLOCKER`（历史记录保留）。
+- Round-5.3 将结论拆为 `TechnicalCanaryStatus` 与 `ProductYieldStatus`；Opportunity 为 0
+  不再自动构成技术失败。
 - 恢复模式：`FROZEN_EVIDENCE_REANALYSIS`；不是 Strict Checkpoint Resume。
 - 同一真实 Diagnosis：`diag_d9d81ba3428f4696b088870ca7416e49`（短 ID `diag_d9d`）。
 - 最终状态：`READY`；Repair Attempt 1 为 `SUCCEEDED`。
-- 技术恢复链路通过，但发布 GEO Opportunity 为 0，未达到产品产出门槛。
-- 按冻结规则：未重跑、不合 integration、不创建成功 Tag、不启动第二家企业或三企业样本。
+- 技术恢复链路已通过；Round-5.3 对现有报告执行零 Provider Truth Gate 审计与追加式
+  离线再终结，不重跑 Recovery、不创建 Diagnosis、不补造 Opportunity。
+- Round-5.3 最终：`TechnicalCanaryStatus=PASS`，
+  `ProductYieldStatus=SPARSE_BUT_TRUTHFUL`。
 
 ## 原失败与冻结快照
 
@@ -62,19 +66,26 @@ Planner、Evidence Normalize 或 Competitor Resolver。
 
 ## Canonical、Claim–Evidence 与产品产出
 
-- Claims Schema：PASS；Canonical：PASS；Publish Guard：PASS；
-  ChinesePublicReportGuard：PASS；Frozen-Evidence Guard：PASS。
+- Round-5.2C 的 Claims Schema 与结构化解析通过；Round-5.3 复核发现当时的 Finalizer
+  错误地让 Coverage-bounded PARTIAL 负面观察绕过 Quick 核心问题的 DIRECT 门槛。
 - Claim–Evidence relations=22：DIRECT=1、PARTIAL=15、CONTEXT=6。
-- 发布 Strength=2、Issue=3、Opportunity=0、Competitor Gap=0、Demonstration Fix=null。
-- 三条 Issue 均使用保存证据范围限定语；不存在绝对化否定。
-- Opportunity 因验证后的发布阈值与 Issue lineage 约束未形成可信产出，没有模板补位。
-- 产品标准要求至少 1 个可信 Opportunity，因此结论为
-  `PASS_WITH_PRODUCT_YIELD_BLOCKER`。
+- 原 revision 发布 Strength=2、Issue=3、Opportunity=0、Competitor Gap=0、
+  Demonstration Fix=null。三条 Issue 虽有范围限定，但逐条均为
+  `DIRECT=0 / PARTIAL=2 / CONTEXT=1`，不满足 Quick 核心问题门槛。
+- REPORT_CLAIMS 阶段实际返回 3 个 Opportunity 候选；`sourceIssueId`、Evidence ID、
+  customerQuestion 与具体行动均完整。`geo_1` 只有 1 个 PARTIAL 来源；`geo_2`、`geo_3`
+  的 PARTIAL 均未形成两个独立根域，因此根因确认为 `D. INSUFFICIENT_SUPPORT`。
+- Opportunity=0 保持不变，不补位；产品产出分类为 `SPARSE_BUT_TRUTHFUL`。
 
 ## Quick / Deep / Evidence
 
 - reportLanguage=`zh-CN`；overallScore=59.95；scoreCoverage=1.0。
-- Quick 默认，1097 可见字符（≤1800）；冻结 CTA 未修改。
+- 原 Quick 默认，1097 可见字符（≤1800），但包含 3 条无 DIRECT 的核心问题，
+  Truth Gate 判定为违规；Round-5.3 revision 必须移除这些 Quick 问题。
+- 三条仅 PARTIAL 的负面观察只可进入 Deep“待确认信息”，并显式限定本次保存证据范围、
+  标明待进一步确认且不作为确定性结论。
+- 新 revision `4680f7d3-fbdb-467a-841a-0352a12a478a`：Quick Issue=0、
+  Opportunity=0、274 字；Deep 确定性 Issue=0、待确认观察=3；Evidence=22。
 - Quick 竞品说明保持冻结产品文案；Deep 记录“本次恢复未重新确认竞品官方网站”。
 - Evidence View=22；Quick/Deep/Evidence 同源于同一 Canonical。
 - 390px 真实页面检查：三视图均渲染、无横向溢出；切换期间 Provider usage 不变。
@@ -95,6 +106,10 @@ Planner、Evidence Normalize 或 Competitor Resolver。
 | DeepSeek（单次流程） | 4 | 4 |
 | retries | 0 | 0 |
 
+V1 与 V2 分数基于不同 Evidence 集合与分析版本，且 V2 为 Frozen-Evidence Reanalysis；
+历史 Query Plan Hash 缺失、竞品解析未重新确认。因此两次分数只分别描述各自诊断结果，
+不构成优化效果前后对照，不得表述为“中文优化后提升 6.1 分”。
+
 V1 私有目录哈希仍为
 `1465e42ff81e94858fed7e54d61272c4127dc171df94f5e0377912ba3763b934`，逐文件未修改。
 
@@ -102,7 +117,10 @@ V1 私有目录哈希仍为
 
 - lint PASS（0 error，1 个既存 warning）、typecheck PASS、650 tests PASS、build PASS、
   smoke:mock PASS、security PASS（52 SSRF）、16 E2E PASS、`audit --prod` 0 漏洞。
+- Round-5.3 最终集成：lint PASS（0 error，1 个既存 warning）、typecheck PASS、
+  60 files / 681 tests PASS、build PASS、smoke:mock PASS、security 扫描 264 个 tracked files
+  且 SSRF 52/52、16 E2E PASS、`audit --prod` 0 known vulnerabilities。
 - 报告产品契约、评分权重 20/20/25/20/15、AI Visibility 公式、Claim–Evidence
   阈值、固定免责声明、CTA 与 SSRF 规则均未修改。
-- main 与 integration 未修改；阻塞 Tag 未移动；未创建成功 Tag。
-
+- Round-5.2C 的 main、integration 与 Tag 状态按当时事实保留；Round-5.3 最终集成与 Tag
+  以本轮审计文档记录为准。

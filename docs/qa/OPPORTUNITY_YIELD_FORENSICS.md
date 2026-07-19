@@ -192,3 +192,11 @@ Opportunity 的“1 DIRECT 或 2 独立 PARTIAL”来源独立性检查。这是
    范围限定，而不只检查 source Issue。
 5. 保持当前 Canonical 不变；任何技术修复只能用已持久化 Stage Output 做 append-only
    离线 Refinalization，且不得生成当前证据不能支持的 Opportunity。
+
+## 8. Supervisor 离线再终结结果
+
+Truth Audit 随后确认三个来源 Issue 均没有 DIRECT，不能继续作为 Quick 核心问题。Supervisor
+以原 `REPORT_CLAIMS` 输出重建候选集，并在 append-only revision
+`4680f7d3-fbdb-467a-841a-0352a12a478a` 中移除 `iss_1..3` 及其派生的
+`geo_1..3`。六项均记录 `INSUFFICIENT_INDEPENDENT_SUPPORT`；原 Stage Run、关系等级和
+Evidence 未改。Opportunity 仍为 0，最终 `ProductYieldStatus=SPARSE_BUT_TRUTHFUL`。

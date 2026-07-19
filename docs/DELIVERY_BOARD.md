@@ -133,3 +133,19 @@ hash 不变；Bocha/Crawler delta=0、DeepSeek delta=4、retries=0；四阶段�
 产品产出为 Issue=3、Opportunity=0，因此状态为
 `PASS_WITH_PRODUCT_YIELD_BLOCKER`。按冻结规则不合 integration、不创建成功 Tag、
 `READY_FOR_THREE_COMPANY_SAMPLE=NO`。main 未修改。
+
+## Round-5.3 Truth Gate Audit & Product Yield Classification（2026-07-19）
+
+| Agent | 状态 | Supervisor 复核 |
+|---|---|---|
+| T Published Claim Truth Audit | VERIFIED | 原 3 条 Quick Issue 各 0 DIRECT / 2 PARTIAL / 1 CONTEXT，Truth Gate FAIL |
+| U Opportunity Yield Forensics | VERIFIED | Candidate Opportunity=3，根因 D `INSUFFICIENT_SUPPORT` |
+| V Status / Offline Finalizer | VERIFIED | 双状态解耦、独立根域、append-only revision、审计 reasonCode |
+| W Three-Company Sample Readiness | VERIFIED | 纯 Mock 10 项聚合门槛，未运行真实样本 |
+
+Supervisor 依决策树完成一次零 Provider 离线再终结。原 report
+`7fcafee7-1cdf-466c-bb9b-efc78d438e1c` 保留，新 revision
+`4680f7d3-fbdb-467a-841a-0352a12a478a` 成为常规 latest report：Quick 0 Issue / 0
+Opportunity / 274 字，Deep 0 确定性 Issue / 3 待确认观察，Evidence 22 且 hash 不变。
+最终 `TechnicalCanaryStatus=PASS`，`ProductYieldStatus=SPARSE_BUT_TRUTHFUL`；单家公司
+Opportunity=0 不再与技术失败耦合。三企业 Harness 已就绪，但未自动运行真实企业。
