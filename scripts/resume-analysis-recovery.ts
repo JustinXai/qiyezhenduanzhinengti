@@ -464,7 +464,9 @@ export function currentDiagD9dForensicPreflight(): FrozenRecoveryPreflight {
     originalFailureCode: "REPORT_CLAIMS_FAILED",
     runLockExists: true,
     repairAttemptCount: 0,
-    diagnosisCount: 2,
+    // The isolated V2 SQLite contains exactly one request. The cross-run total
+    // (V1 + V2 = 2) is an audit metric, not this database precondition.
+    diagnosisCount: 1,
     evidenceCount: 22,
     expectedEvidenceCount: 22,
     identities: {

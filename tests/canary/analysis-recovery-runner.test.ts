@@ -127,7 +127,9 @@ describe("analysis recovery planning", () => {
   });
 
   it("keeps the audited current diagnosis forensic-blocked with a zero-call plan", () => {
-    const plan = buildSanitizedRecoveryPlan(currentDiagD9dForensicPreflight(), AUTH);
+    const current = currentDiagD9dForensicPreflight();
+    expect(current.diagnosisCount).toBe(1);
+    const plan = buildSanitizedRecoveryPlan(current, AUTH);
     expect(plan.blockedBy).toEqual([
       "COMPETITOR_RESOLUTION_HASH_MISSING",
       "QUERY_PLAN_HASH_MISSING",
