@@ -52,7 +52,7 @@ describe("verifyReport — deterministic strategy over the canonical sample", ()
     expect(rel?.basis).toBe("CONTENT_MATCH");
   });
 
-  it("a negative core issue is coverage-backed PARTIAL, never DIRECT", async () => {
+  it("a negative core issue keeps content support while remaining coverage-bounded", async () => {
     const report = buildSampleReport();
     const res = await verifyReport({
       report,
@@ -61,10 +61,8 @@ describe("verifyReport — deterministic strategy over the canonical sample", ()
     });
     const rels = res.relations.filter((r) => r.claimId === "iss_1");
     expect(rels.length).toBeGreaterThan(0);
-    for (const r of rels) {
-      expect(r.supportLevel).not.toBe("DIRECT_SUPPORT");
-      expect(r.basis).toBe("MEASUREMENT_BOUNDARY");
-    }
+    expect(rels.every((r) => r.supportLevel === "CONTEXT_ONLY")).toBe(true);
+    expect(rels.every((r) => r.basis === "MEASUREMENT_BOUNDARY")).toBe(true);
   });
 
   it("a competitor gap backed by the competitor's own page is DIRECT", async () => {

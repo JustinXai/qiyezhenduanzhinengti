@@ -21,13 +21,17 @@ describe("Round-5.3 zero-Provider offline refinalizer", () => {
   let db: SqliteDatabase;
   let revisions: SqliteReportRevisionRepository;
   const report = buildSampleReport({
-    coreIssues: buildSampleReport().coreIssues.slice(0, 2),
+    coreIssues: buildSampleReport().coreIssues.slice(0, 2).map((issue) => ({
+      ...issue,
+      statement: `在本次保存的公开证据中，暂未发现${issue.statement}`,
+    })),
     geoOpportunities: [
       {
         ...buildSampleReport().geoOpportunities[0]!,
         sourceIssueId: "iss_1",
         recommendedAction: "发布含交付周期、选型条件和售后边界的采购问答页",
         priorityReason: "直接回答已发布问题并引用对应产品页证据",
+        contentGap: "在本次保存的公开证据中，暂未发现系统性的选型指南或对比框架",
       },
     ],
     demonstrationFix: null,
@@ -195,20 +199,43 @@ describe("Round-5.3 zero-Provider offline refinalizer", () => {
       removedNonDirectIssueIds: ["iss_2"],
       removedOrphanOpportunityIds: [],
       demonstrationFixRemoved: false,
-      deepNeedsConfirmation: [
-        "待进一步确认（仅限本次保存的公开证据范围，不作为确定性结论）：第三方可验证的信任证据不足",
-      ],
       providerCalls: 0,
     });
+    expect(result.deepNeedsConfirmation).toHaveLength(1);
+    expect(result.deepNeedsConfirmation[0]).toContain("第三方可验证的信任证据不足");
     expect(result.revision).toMatchObject({
       revisionNumber: 1,
       parentReportId: "report_original",
     });
+    expect(
+      db
+        .prepare(
+          `SELECT revision_id, stage_run_id, claim_kind, candidate_ref, reason_code,
+                  direct_count, partial_count, context_count, coverage_status,
+                  algorithm_version
+           FROM prune_decisions WHERE diagnosis_id = ?`,
+        )
+        .all(report.diagnosisId),
+    ).toEqual([
+      expect.objectContaining({
+        revision_id: "revision_1",
+        claim_kind: "coreIssue",
+        candidate_ref: "iss_2",
+        reason_code: "INSUFFICIENT_DIRECT_SUPPORT",
+        direct_count: 0,
+        partial_count: 1,
+        context_count: 0,
+        coverage_status: "ESTABLISHED_AND_BOUNDED",
+        algorithm_version: "round53-finalizer.v1",
+      }),
+    ]);
     const revised = JSON.parse(result.revision.canonicalJson) as typeof report;
     expect(revised.coreIssues.map((issue) => issue.id)).toEqual(["iss_1"]);
-    expect(revised.companyProfile.unresolvedQuestions).toContain(
-      "待进一步确认（仅限本次保存的公开证据范围，不作为确定性结论）：第三方可验证的信任证据不足",
-    );
+    expect(
+      revised.companyProfile.unresolvedQuestions.some(
+        (item) => item.includes("待进一步确认") && item.includes("第三方可验证的信任证据不足"),
+      ),
+    ).toBe(true);
     expect(
       (db.prepare("SELECT COUNT(*) count FROM reports").get() as { count: number }).count,
     ).toBe(2);
@@ -300,7 +327,7 @@ describe("Round-5.3 zero-Provider offline refinalizer", () => {
         {
           kind: "geoOpportunity",
           ref: "geo_1",
-          reasonCode: "INSUFFICIENT_INDEPENDENT_SUPPORT",
+          reasonCode: "INVALID_SOURCE_ISSUE_REFERENCE",
         },
       ]),
     );

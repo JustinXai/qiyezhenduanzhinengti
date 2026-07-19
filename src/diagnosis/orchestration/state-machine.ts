@@ -29,6 +29,7 @@ import {
   type ClaimEvidenceRelation,
   type EvidenceCoverage,
 } from "../../contracts/claim-evidence";
+import type { ClaimPublicationSourceContext } from "../../contracts/independent-support-source";
 import type {
   DiagnosisStatus,
   EvidenceRecordInput,
@@ -40,7 +41,13 @@ import {
   parseDiagnosisInput,
   type DiagnosisInput,
 } from "../../runtime/diagnosis-input";
-import { publishGuard, pruneUnsupportedClaims } from "../../report/validation";
+import { publishGuard } from "../../report/validation";
+import { applyClaimPublicationPolicyToReport } from "../../runtime/claim-publication";
+import {
+  auditAnalysisPrune,
+  auditPublicationPrune,
+  auditStructuralPrune,
+} from "../../runtime/prune-audit";
 import {
   createDeterministicVerifier,
   verifyReport,
@@ -155,6 +162,7 @@ export interface OrchestratorDeps {
    * provider call) verifier; a DeepSeek-backed strategy can be injected here.
    */
   verifier?: VerifierStrategy;
+  publicationSourceContext?: ClaimPublicationSourceContext;
   clock?: () => Date;
   idFactory?: () => string;
 }
@@ -481,17 +489,78 @@ export async function runDiagnosisPipeline(
     });
   }
 
-  // Round-3 §六: on the VALIDATED report, drop claims whose verified support is
-  // insufficient (e.g. a negative/missing claim with no measurement boundary) so
-  // an otherwise-valid report still reaches READY without them. Integrity /
-  // UNSUPPORTED / duplicate violations are NOT pruned — they remain hard blocks.
-  const published = pruneUnsupportedClaims(canonical, relations, coverage).report;
+  const publication = applyClaimPublicationPolicyToReport({
+    report: canonical,
+    relations,
+    coverage,
+    sourceContext: deps.publicationSourceContext,
+  });
+  const published = publication.report;
+  const reportId = idFactory();
+  const stageRunId = `ANALYZING:${analysisKey.inputHash}`;
+  const auditCreatedAt = deps.clock?.() ?? new Date();
+  const pruneDecisions: PruneDecisionRecordInput[] = [
+    ...analysisPrunedCandidates.map((candidate) =>
+      auditAnalysisPrune({
+        context: {
+          id: idFactory(),
+          diagnosisId,
+          reportId,
+          revisionId: null,
+          stageRunId,
+          createdAt: auditCreatedAt,
+        },
+        candidate,
+      }),
+    ),
+    ...publication.prunes.map((prune) => {
+      const context = {
+        id: idFactory(),
+        diagnosisId,
+        reportId,
+        revisionId: null,
+        stageRunId,
+        createdAt: auditCreatedAt,
+      };
+      return prune.type === "POLICY"
+        ? auditPublicationPrune({ context, candidate: prune.candidate, decision: prune.decision })
+        : auditStructuralPrune({
+            context,
+            candidate: prune.candidate,
+            reasonCode: prune.reasonCode,
+            guardRule: prune.guardRule,
+            coverageStatus: prune.coverageStatus,
+          });
+    }),
+  ];
+
+  if (pruneDecisions.length > 0) {
+    if (!storage.appendPruneDecisions) {
+      return fail("VALIDATING_REPORT", {
+        code: "PRUNE_AUDIT_STORAGE_UNAVAILABLE",
+        message: "candidate pruning requires the append-only prune decision ledger",
+      });
+    }
+    try {
+      await storage.appendPruneDecisions(pruneDecisions);
+    } catch (error) {
+      return fail(
+        "VALIDATING_REPORT",
+        toPipelineError("PRUNE_AUDIT_PERSISTENCE_FAILED", error),
+      );
+    }
+  }
 
   // Agent B publish guard (PRODUCT_TRUTH_RULES §4 evidence support, score
   // cross-field consistency, banned CTA copy). §4 is decided from the verified
   // ClaimEvidenceRelations + coverage, NOT from EvidenceItem.supportLevel. A
   // non-ok result blocks READY — the model output never decides publish.
-  const guard = publishGuard({ report: published, relations, coverage });
+  const guard = publishGuard({
+    report: published,
+    relations,
+    coverage,
+    sourceContext: deps.publicationSourceContext,
+  });
   if (!guard.ok) {
     return fail("VALIDATING_REPORT", {
       code: "PUBLISH_GUARD_BLOCKED",
@@ -502,7 +571,7 @@ export async function runDiagnosisPipeline(
   }
 
   await storage.saveReport({
-    id: idFactory(),
+    id: reportId,
     diagnosisId,
     reportContractVersion: published.reportContractVersion,
     scoreContractVersion: published.scoreContractVersion,

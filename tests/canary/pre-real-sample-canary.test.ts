@@ -21,7 +21,6 @@ import {
 } from "../../src/runtime/api/diagnoses-handlers";
 import { presentReport } from "../../src/report/presentation";
 import { countQuickVisibleChars } from "../../src/report/validation";
-import type { ClaimEvidenceRelation } from "../../src/contracts/claim-evidence";
 
 let db: BetterSqlite3.Database | null = null;
 
@@ -51,14 +50,9 @@ async function runCanary(input: Record<string, unknown>) {
   const got = await handleGetDiagnosis(d, { id: body.diagnosisId, publicToken: body.publicToken });
   const view = got.body as DiagnosisView;
   const relations = await d.storage.getClaimEvidenceRelations(body.diagnosisId);
+  const pruneDecisions = await d.storage.getPruneDecisions(body.diagnosisId);
   expect(fetchSpy).not.toHaveBeenCalled();
-  return { body, view, relations };
-}
-
-function distribution(relations: ClaimEvidenceRelation[]) {
-  const out: Record<string, number> = {};
-  for (const r of relations) out[r.supportLevel] = (out[r.supportLevel] ?? 0) + 1;
-  return out;
+  return { body, view, relations, pruneDecisions };
 }
 
 describe("Round-3 canaries (data plane, full boundary, MOCK)", () => {
@@ -88,7 +82,7 @@ describe("Round-3 canaries (data plane, full boundary, MOCK)", () => {
 
   it("Canary B — About-only: the negative 采购验收 claim is pruned (no coverage), report still READY", async () => {
     process.env.CANARY_MODE = "1";
-    const { body, view, relations } = await runCanary({
+    const { body, view, relations, pruneDecisions } = await runCanary({
       website: "https://about-only.canary.test",
       brandName: "金丝雀乙",
     });
@@ -102,6 +96,18 @@ describe("Round-3 canaries (data plane, full boundary, MOCK)", () => {
     ).toBe(false);
     // A content-supported About strength survives, so the report is non-empty.
     expect(report.strengths.length).toBeGreaterThan(0);
+    expect(pruneDecisions).toEqual([
+      expect.objectContaining({
+        diagnosisId: body.diagnosisId,
+        reportId: expect.any(String),
+        revisionId: null,
+        claimKind: "coreIssue",
+        candidateRef: "iss_1",
+        reasonCode: "NO_MEASUREMENT_COVERAGE",
+        guardRule: "COVERAGE_NOT_ESTABLISHED",
+        coverageStatus: "NOT_ESTABLISHED",
+      }),
+    ]);
     // Quick view surfaces no fabricated procurement core issue.
     const { quick } = presentReport(report);
     expect(quick.coreIssues.some((c) => c.statement.includes("采购"))).toBe(false);
@@ -128,6 +134,9 @@ describe("Round-3 canaries (data plane, full boundary, MOCK)", () => {
       "promptVersion",
       "trustGuardVersion",
       "checkpoint",
+      "pruneDecisions",
+      "independentSupportSourceCount",
+      "guardRule",
       "requestId",
       "coverage",
     ]) {

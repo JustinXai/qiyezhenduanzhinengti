@@ -4,27 +4,11 @@ import type {
   PruneDecisionReasonCode,
   PruneDecisionRecordInput,
 } from "../storage/adapter";
+import type { ClaimPublicationDecision } from "../report/validation/claim-publication-policy";
 
 export const PRUNE_AUDIT_ALGORITHM_VERSION = "round6-prune-audit.v1";
 
-export interface PublicationDecisionForAudit {
-  outcome: "PUBLISH" | "PRUNE" | "BLOCK";
-  rule:
-    | "PUBLISHED_DIRECT_SUPPORT"
-    | "PUBLISHED_INDEPENDENT_PARTIAL_SUPPORT"
-    | "EVIDENCE_REFERENCE_INVALID"
-    | "UNSUPPORTED_EVIDENCE"
-    | "COVERAGE_NOT_ESTABLISHED"
-    | "SCOPE_LIMITATION_MISSING"
-    | "INSUFFICIENT_DIRECT_SUPPORT"
-    | "INSUFFICIENT_INDEPENDENT_SUPPORT"
-    | "CONTEXT_ONLY_INSUFFICIENT";
-  directCount: number;
-  partialCount: number;
-  contextCount: number;
-  independentPartialSourceCount: number;
-  coverageStatus: PruneDecisionCoverageStatus;
-}
+export type PublicationDecisionForAudit = ClaimPublicationDecision;
 
 export interface PruneDecisionContext {
   id: string;
@@ -43,7 +27,7 @@ export interface AuditedPublicationCandidate {
   evidenceIds: string[];
 }
 
-function reasonForPolicyRule(
+export function pruneReasonForPolicyDecision(
   rule: PublicationDecisionForAudit["rule"],
 ): PruneDecisionReasonCode {
   switch (rule) {
@@ -104,7 +88,7 @@ export function auditPublicationPrune(input: {
   }
   return {
     ...baseDecision(input.context, input.candidate),
-    reasonCode: reasonForPolicyRule(input.decision.rule),
+    reasonCode: pruneReasonForPolicyDecision(input.decision.rule),
     guardRule: input.decision.rule,
     independentSupportSourceCount: input.decision.independentPartialSourceCount,
     directCount: input.decision.directCount,
@@ -133,5 +117,24 @@ export function auditAnalysisPrune(input: {
     partialCount: 0,
     contextCount: 0,
     coverageStatus: input.candidate.coverageStatus ?? "NOT_REQUIRED",
+  };
+}
+
+export function auditStructuralPrune(input: {
+  context: PruneDecisionContext;
+  candidate: AuditedPublicationCandidate;
+  reasonCode: PruneDecisionReasonCode;
+  guardRule: string;
+  coverageStatus: PruneDecisionCoverageStatus;
+}): PruneDecisionRecordInput {
+  return {
+    ...baseDecision(input.context, input.candidate),
+    reasonCode: input.reasonCode,
+    guardRule: input.guardRule,
+    independentSupportSourceCount: 0,
+    directCount: 0,
+    partialCount: 0,
+    contextCount: 0,
+    coverageStatus: input.coverageStatus,
   };
 }

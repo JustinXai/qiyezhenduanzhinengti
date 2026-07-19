@@ -11,7 +11,7 @@
 //   - first-party page => DIRECT                         (never; needs content match)
 //   - competitor page => DIRECT for the enterprise       (never; at most CONTEXT_ONLY)
 //   - source authority substituted for semantic support  (never)
-//   - a single page DIRECTLY proving a negative/missing   (never; boundary only)
+//   - coverage alone upgrading a negative/missing verdict (never)
 //   - a negative/missing claim published without coverage (rejected → CONTEXT_ONLY)
 // ============================================================================
 
@@ -62,8 +62,9 @@ export function clampVerdict(
   const inScope = coverage.crawledFirstPartyUrls.includes(evidence.url);
 
   // ---- Negative / missing / "behind competitor" claims --------------------
-  // A single page can never DIRECTLY prove an absence. Support is coverage-backed
-  // and only from first-party pages actually inside the checked scope.
+  // A negative claim needs an established measurement boundary in addition to
+  // its ordinary semantic-support threshold. Coverage bounds the claim; it does
+  // not manufacture or cap the verifier's content-match verdict.
   if (polarity === "NEGATIVE_MISSING") {
     if (!coverage.boundaryEstablished) {
       // Nothing was checked broadly enough — the page is context, not proof.
@@ -76,16 +77,16 @@ export function clampVerdict(
       };
     }
     if (source === "FIRST_PARTY_EVIDENCE" && inScope) {
-      // The page is part of the checked enterprise surface; that scope membership
-      // (NOT its content overlap or authority) is what bounds the negative claim:
-      // "本次已检查的公开页面中未发现所述内容". Coverage-backed support is capped
-      // at PARTIAL — a bounded absence is never DIRECT proof.
+      // Preserve the content-backed raw level. A DIRECT raw verdict may therefore
+      // remain DIRECT, while PARTIAL/CONTEXT are never upgraded merely because the
+      // page belongs to the measured first-party scope.
       return {
-        supportLevel: "PARTIAL_SUPPORT",
+        supportLevel: raw.supportLevel,
         basis: "MEASUREMENT_BOUNDARY",
-        confidence: 0.6,
+        confidence: raw.confidence,
         justification:
-          "负面/缺失型 Claim 由受控官网抓取范围内的首方页面提供边界支持:本次已检查的公开页面中未发现所述内容。",
+          raw.justification ||
+          "负面/缺失型 Claim 的语义支持来自已核验内容,并由受控官网抓取范围限定为本次测量结论。",
       };
     }
     // Competitor / observed / out-of-scope evidence can only contextualise a

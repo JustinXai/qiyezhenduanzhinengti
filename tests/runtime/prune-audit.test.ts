@@ -13,6 +13,13 @@ const context = {
   createdAt: new Date("2026-07-19T12:00:00.000Z"),
 };
 
+const policyDecisionBase = {
+  policyVersion: "claim-publication-policy.v1" as const,
+  polarity: "NEGATIVE_MISSING" as const,
+  unsupportedCount: 0,
+  independentPartialSourceKeys: [],
+};
+
 describe("unified prune audit mapping", () => {
   it("maps the shared publication-policy decision without recalculating thresholds", () => {
     expect(
@@ -25,6 +32,7 @@ describe("unified prune audit mapping", () => {
           evidenceIds: ["ev_1", "ev_2"],
         },
         decision: {
+          ...policyDecisionBase,
           outcome: "PRUNE",
           rule: "SCOPE_LIMITATION_MISSING",
           directCount: 1,
@@ -57,6 +65,7 @@ describe("unified prune audit mapping", () => {
     const noCoverage = auditPublicationPrune({
       ...common,
       decision: {
+        ...policyDecisionBase,
         outcome: "PRUNE",
         rule: "COVERAGE_NOT_ESTABLISHED",
         directCount: 1,
@@ -69,6 +78,7 @@ describe("unified prune audit mapping", () => {
     const noPrefix = auditPublicationPrune({
       ...common,
       decision: {
+        ...policyDecisionBase,
         outcome: "PRUNE",
         rule: "SCOPE_LIMITATION_MISSING",
         directCount: 1,
@@ -117,6 +127,7 @@ describe("unified prune audit mapping", () => {
         context,
         candidate,
         decision: {
+          ...policyDecisionBase,
           outcome: "BLOCK",
           rule: "UNSUPPORTED_EVIDENCE",
           directCount: 0,

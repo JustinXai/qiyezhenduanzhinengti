@@ -14,7 +14,6 @@ import {
   DiagnosisReport,
   REPORT_CONTRACT_VERSION,
   SCORE_CONTRACT_VERSION,
-  type DiagnosisReport as DiagnosisReportType,
   type EvidenceItem,
 } from "../src/contracts";
 import { competitorNames, DiagnosisInputSchema } from "../src/runtime/diagnosis-input";
@@ -60,16 +59,13 @@ import type {
   ProviderUsageRecord,
 } from "../src/storage/adapter";
 import {
-  classifyPolarity,
   createDeterministicVerifier,
-  extractVerifiableClaims,
   verifyReport,
   DETERMINISTIC_VERIFIER_VERSION,
 } from "../src/diagnosis/verification";
 import {
   chinesePublicReportGuard,
   countQuickVisibleChars,
-  pruneUnsupportedClaims,
   publishGuard,
 } from "../src/report/validation";
 import { presentReport } from "../src/report/presentation";
@@ -78,6 +74,12 @@ import {
   FROZEN_EVIDENCE_NEGATIVE_SCOPE_PREFIXES,
   frozenEvidenceGuard,
 } from "../src/report/validation/frozen-evidence-guard";
+import { applyClaimPublicationPolicyToReport } from "../src/runtime/claim-publication";
+import {
+  auditAnalysisPrune,
+  auditPublicationPrune,
+  auditStructuralPrune,
+} from "../src/runtime/prune-audit";
 import {
   assertNoFrozenEvidenceReanalysisLeak,
   FROZEN_EVIDENCE_REANALYSIS_MODE,
@@ -221,65 +223,6 @@ function stageDefinitions(model: string): RuntimeDependencies["stages"] {
   };
 }
 
-function removeFrozenUnsupportedClaims(
-  report: DiagnosisReportType,
-  relations: Awaited<ReturnType<typeof verifyReport>> extends { relations: infer R } ? R : never,
-): DiagnosisReportType {
-  const relationList = relations as Awaited<ReturnType<typeof verifyReport>>["relations"];
-  const byClaim = new Map<string, typeof relationList>();
-  for (const relation of relationList) {
-    const current = byClaim.get(relation.claimId) ?? [];
-    current.push(relation);
-    byClaim.set(relation.claimId, current);
-  }
-  const drop = new Set<string>();
-  for (const claim of extractVerifiableClaims(report)) {
-    if (classifyPolarity({ kind: claim.kind, text: claim.text }) !== "NEGATIVE_MISSING") continue;
-    const claimRelations = byClaim.get(claim.id) ?? [];
-    const bounded = FROZEN_EVIDENCE_NEGATIVE_SCOPE_PREFIXES.some((prefix) =>
-      claim.text.includes(prefix),
-    );
-    const partial = new Set(
-      claimRelations
-        .filter(
-          (relation) =>
-            relation.supportLevel === "PARTIAL_SUPPORT" &&
-            relation.basis === "MEASUREMENT_BOUNDARY",
-        )
-        .map((relation) => relation.evidenceId),
-    );
-    if (!bounded || partial.size < 2) drop.add(claim.id);
-  }
-
-  const coreIssues = report.coreIssues.filter((item) => !drop.has(item.id));
-  const issueById = new Map(coreIssues.map((item) => [item.id, item]));
-  const geoOpportunities = report.geoOpportunities.filter((item) => {
-    if (drop.has(item.id) || !item.sourceIssueId || !issueById.has(item.sourceIssueId)) return false;
-    if (!item.customerQuestion.trim() || !item.recommendedAction?.trim() || !item.priorityReason?.trim()) {
-      return false;
-    }
-    return !/^(多发内容|优化内容|提升曝光|加强宣传)[。！!]?$/u.test(item.recommendedAction.trim());
-  });
-  const demonstrationFix = report.demonstrationFix;
-  const demoIssue = demonstrationFix
-    ? coreIssues.find((item) => item.statement === demonstrationFix.currentIssue)
-    : undefined;
-
-  return DiagnosisReport.parse({
-    ...report,
-    strengths: report.strengths.filter((item) => !drop.has(item.id)),
-    coreIssues,
-    geoOpportunities,
-    competitorGaps: [],
-    demonstrationFix:
-      demonstrationFix &&
-      demoIssue &&
-      demonstrationFix.evidenceIds.some((id) => demoIssue.evidenceIds.includes(id))
-        ? demonstrationFix
-        : null,
-  });
-}
-
 async function deterministicFinalizer(
   storage: AnalysisRecoveryStorage,
   input: FrozenEvidenceFinalizationInput,
@@ -345,12 +288,13 @@ async function deterministicFinalizer(
   });
   if (!verification.ok) throw new Error("CLAIM_EVIDENCE_ILLEGAL_REFERENCE");
 
-  const generallyPruned = pruneUnsupportedClaims(
-    candidate,
-    verification.relations,
+  const publicationResult = applyClaimPublicationPolicyToReport({
+    report: candidate,
+    relations: verification.relations,
     coverage,
-  ).report;
-  const published = removeFrozenUnsupportedClaims(generallyPruned, verification.relations);
+    coverageScope: "FROZEN_EVIDENCE",
+  });
+  const published = publicationResult.report;
   const views = presentReport(published);
   const publicPayload = {
     diagnosisId: input.diagnosisId,
@@ -362,6 +306,7 @@ async function deterministicFinalizer(
     report: published,
     relations: verification.relations,
     coverage,
+    coverageScope: "FROZEN_EVIDENCE",
     viewModels: {
       quick: views.quick,
       deep: views.deep,
@@ -442,8 +387,49 @@ async function deterministicFinalizer(
     promptVersion: DETERMINISTIC_VERIFIER_VERSION,
     trustGuardVersion: "claim-evidence-gate.v1",
   });
+  const reportId = randomUUID();
+  const stageRunId = `REPORT_CLAIMS:${input.snapshotHash}`;
+  const createdAt = new Date();
+  const pruneDecisions = [
+    ...built.prunedCandidates.map((candidate) =>
+      auditAnalysisPrune({
+        context: {
+          id: randomUUID(),
+          diagnosisId: input.diagnosisId,
+          reportId,
+          revisionId: null,
+          stageRunId,
+          createdAt,
+        },
+        candidate,
+      }),
+    ),
+    ...publicationResult.prunes.map((prune) => {
+      const context = {
+        id: randomUUID(),
+        diagnosisId: input.diagnosisId,
+        reportId,
+        revisionId: null,
+        stageRunId,
+        createdAt,
+      };
+      return prune.type === "POLICY"
+        ? auditPublicationPrune({ context, candidate: prune.candidate, decision: prune.decision })
+        : auditStructuralPrune({
+            context,
+            candidate: prune.candidate,
+            reasonCode: prune.reasonCode,
+            guardRule: prune.guardRule,
+            coverageStatus: prune.coverageStatus,
+          });
+    }),
+  ];
+  if (pruneDecisions.length > 0) {
+    if (!storage.appendPruneDecisions) throw new Error("PRUNE_AUDIT_STORAGE_UNAVAILABLE");
+    await storage.appendPruneDecisions(pruneDecisions);
+  }
   await storage.saveReport({
-    id: randomUUID(),
+    id: reportId,
     diagnosisId: input.diagnosisId,
     reportContractVersion: published.reportContractVersion,
     scoreContractVersion: published.scoreContractVersion,
