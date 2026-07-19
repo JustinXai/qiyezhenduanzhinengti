@@ -32,8 +32,10 @@ import {
 import type {
   DiagnosisStatus,
   EvidenceRecordInput,
+  PruneDecisionRecordInput,
   StorageAdapter,
 } from "../../storage/adapter";
+import type { AnalysisPruneCandidate } from "../analysis/claims";
 import {
   parseDiagnosisInput,
   type DiagnosisInput,
@@ -52,7 +54,7 @@ import {
 // ---------------------------------------------------------------------------
 
 export const ANALYSIS_PROVIDER_MODEL = "deepseek-v4-flash";
-export const ANALYSIS_PROMPT_VERSION = "analysis.v1";
+export const ANALYSIS_PROMPT_VERSION = "analysis.v2-prune-audit";
 export const ANALYSIS_TRUST_GUARD_VERSION = "trust-guard.v1";
 
 // Version of the deterministic Claim–Evidence publish-gate logic. Bumping it
@@ -124,10 +126,16 @@ export interface ReportProducerContext {
   publicToken: string;
   input: DiagnosisInput;
   evidence: EvidenceItem[];
+  coverage?: EvidenceCoverage;
 }
 
 export type ReportProducerResult =
-  | { ok: true; report: DiagnosisReportType; usage?: ProviderUsageSample[] }
+  | {
+      ok: true;
+      report: DiagnosisReportType;
+      usage?: ProviderUsageSample[];
+      prunedCandidates?: AnalysisPruneCandidate[];
+    }
   | { ok: false; error: PipelineError };
 
 export interface ReportProducer {
@@ -322,6 +330,13 @@ export async function runDiagnosisPipeline(
     trustGuardVersion: "n/a",
   });
 
+  const coverage: EvidenceCoverage =
+    normalized.coverage ??
+    deriveCoverage({
+      evidence: normalized.evidence,
+      firstPartyDomains: firstPartyDomainsOf(input.website),
+    });
+
   // -- ANALYZING --------------------------------------------------------------
   await setStatus("ANALYZING");
   const analysisKey = {
@@ -336,10 +351,16 @@ export async function runDiagnosisPipeline(
   };
 
   let report: DiagnosisReportType;
+  let analysisPrunedCandidates: AnalysisPruneCandidate[] = [];
   const reusable = await storage.findReusableCheckpoint(analysisKey);
   if (reusable) {
     try {
-      report = JSON.parse(reusable.outputJson) as DiagnosisReportType;
+      const checkpoint = JSON.parse(reusable.outputJson) as {
+        report: DiagnosisReportType;
+        prunedCandidates?: AnalysisPruneCandidate[];
+      };
+      report = checkpoint.report;
+      analysisPrunedCandidates = checkpoint.prunedCandidates ?? [];
     } catch (e) {
       return fail("ANALYZING", toPipelineError("CHECKPOINT_CORRUPT", e));
     }
@@ -351,6 +372,7 @@ export async function runDiagnosisPipeline(
         publicToken,
         input,
         evidence: normalized.evidence,
+        coverage,
       });
     } catch (e) {
       return fail("ANALYZING", toPipelineError("ANALYSIS_FAILED", e));
@@ -358,9 +380,10 @@ export async function runDiagnosisPipeline(
     if (!produced.ok) return fail("ANALYZING", produced.error);
     await recordUsage(produced.usage);
     report = produced.report;
+    analysisPrunedCandidates = produced.prunedCandidates ?? [];
     await storage.saveCheckpoint({
       ...analysisKey,
-      outputJson: JSON.stringify(report),
+      outputJson: JSON.stringify({ report, prunedCandidates: analysisPrunedCandidates }),
     });
   }
 
@@ -371,13 +394,6 @@ export async function runDiagnosisPipeline(
   // deterministic publish guard uses as the sole basis for the §4 decision.
   await setStatus("CLAIM_EVIDENCE_VERIFICATION");
   const verifier = deps.verifier ?? createDeterministicVerifier();
-  const coverage: EvidenceCoverage =
-    normalized.coverage ??
-    deriveCoverage({
-      evidence: normalized.evidence,
-      firstPartyDomains: firstPartyDomainsOf(input.website),
-    });
-
   let relations: ClaimEvidenceRelation[];
   // Checkpoint keyed on the verifier mode+version + gate version; a version bump
   // invalidates the stored relations so they are re-verified (职责 8, test 11).

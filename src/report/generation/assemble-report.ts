@@ -15,8 +15,12 @@ import {
   type EvidenceItem,
   type ScoreBlock,
 } from "../../contracts";
+import type { EvidenceCoverage } from "../../contracts/claim-evidence";
 import type { AiVisibilityResult } from "../../diagnosis/analysis/ai-visibility";
-import type { ClaimsResult } from "../../diagnosis/analysis/claims";
+import type {
+  AnalysisPruneCandidate,
+  ClaimsResult,
+} from "../../diagnosis/analysis/claims";
 import type { CompanyProfileInput } from "../../diagnosis/analysis/company-profile";
 import type { NonAiScoreBlock } from "../../diagnosis/analysis/dimension-scoring";
 import {
@@ -120,10 +124,11 @@ export interface BuildReportInput {
   aiVisibilityInput: AiVisibilityInput;
   evidence: readonly EvidenceItem[];
   stageOutputs: StageOutputs;
+  coverage?: EvidenceCoverage;
 }
 
 export type BuildReportResult =
-  | { ok: true; report: DiagnosisReportType }
+  | { ok: true; report: DiagnosisReportType; prunedCandidates: AnalysisPruneCandidate[] }
   | { ok: false; stage: string; error: ProviderFailure }
   | { ok: false; stage: "assemble"; issues: string[] };
 
@@ -144,7 +149,7 @@ export function buildReportFromStageOutputs(input: BuildReportInput): BuildRepor
   const aiVisibility = buildAiVisibility(evidence, input.aiVisibilityInput, stageOutputs.aiVisibility);
   if (!aiVisibility.ok) return { ok: false, stage: "ai_visibility", error: aiVisibility.error };
 
-  const claims = buildClaims(evidence, stageOutputs.claims);
+  const claims = buildClaims(evidence, stageOutputs.claims, input.coverage);
   if (!claims.ok) return { ok: false, stage: "claims", error: claims.error };
 
   const assembled = assembleReport({
@@ -156,5 +161,9 @@ export function buildReportFromStageOutputs(input: BuildReportInput): BuildRepor
     evidence,
   });
   if (!assembled.ok) return { ok: false, stage: "assemble", issues: assembled.issues };
-  return { ok: true, report: assembled.report };
+  return {
+    ok: true,
+    report: assembled.report,
+    prunedCandidates: structuredClone(claims.value.dropped),
+  };
 }

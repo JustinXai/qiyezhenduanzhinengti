@@ -511,7 +511,10 @@ function scenarioStageOutput(
             businessImpact: "承接高意向搜索与 AI 问答流量",
             claimType: "DIAGNOSTIC_INFERENCE",
             customerQuestion: "该如何选择合适的供应商?",
-            contentGap: "官网无系统性的选型指南或对比框架",
+            contentGap: "本次已检查的公开页面和搜索结果中未发现系统性的选型指南或对比框架",
+            sourceIssueId: "iss_1",
+            recommendedAction: "围绕交付、售后与选型条件建立结构化问答页",
+            priorityReason: "优先回应采购决策阶段的高意向问题",
             evidenceIds: [fp(1)],
           },
           {
@@ -519,7 +522,10 @@ function scenarioStageOutput(
             businessImpact: "为 AI 提供可引用的实体事实,提升被准确提及的概率",
             claimType: "DIAGNOSTIC_INFERENCE",
             customerQuestion: "这家供应商有没有类似规模的成功案例?",
-            contentGap: "缺少可公开、可验证的案例结构化内容",
+            contentGap: "本次已检查的公开页面和搜索结果中未发现可公开、可验证的案例结构化内容",
+            sourceIssueId: "iss_2",
+            recommendedAction: "按场景、过程与可核验结果整理案例内容结构",
+            priorityReason: "补充客户与AI可引用的事实型信任材料",
             evidenceIds: [fp(2)],
           },
         ],
@@ -607,6 +613,7 @@ export function createLiveReportProducer(clock: () => Date = () => new Date()): 
         aiVisibilityInput,
         evidence,
         stageOutputs,
+        coverage: ctx.coverage,
       });
       if (!built.ok) {
         const message =
@@ -616,6 +623,7 @@ export function createLiveReportProducer(clock: () => Date = () => new Date()): 
       return {
         ok: true,
         report: built.report,
+        prunedCandidates: built.prunedCandidates,
         usage: [{ provider: "deepseek", stage: "ANALYZING", callCount: stageNames.length }],
       };
     },

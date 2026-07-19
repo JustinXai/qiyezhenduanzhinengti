@@ -508,6 +508,7 @@ export function createRealReportProducer(deps: RealReportProducerDeps): ReportPr
         aiVisibilityInput,
         evidence,
         stageOutputs,
+        coverage: ctx.coverage,
       });
       if (!built.ok) {
         const message = "issues" in built ? built.issues.join("; ") : built.error.message;
@@ -516,7 +517,12 @@ export function createRealReportProducer(deps: RealReportProducerDeps): ReportPr
           error: { code: `REPORT_${built.stage.toUpperCase()}_FAILED`, message },
         };
       }
-      return { ok: true, report: built.report, usage };
+      return {
+        ok: true,
+        report: built.report,
+        usage,
+        prunedCandidates: built.prunedCandidates,
+      };
     },
   };
 }

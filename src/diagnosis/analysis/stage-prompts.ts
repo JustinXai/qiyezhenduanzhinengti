@@ -20,7 +20,7 @@ import { competitorNames } from "../../runtime/diagnosis-input";
 
 export const REAL_ANALYSIS_PROMPT_VERSION = "analysis.real.v1";
 /** Per-stage version used by frozen-evidence claims recovery. */
-export const REPORT_CLAIMS_ZH_PROMPT_VERSION = "REPORT_CLAIMS_ZH_PROMPT_V2_1";
+export const REPORT_CLAIMS_ZH_PROMPT_VERSION = "REPORT_CLAIMS_ZH_PROMPT_V2_2";
 
 /** Per-stage completion budgets (never a blanket 256; sized to expected output). */
 export const STAGE_MAX_TOKENS: Record<string, number> = {
@@ -41,8 +41,8 @@ const SYSTEM_PROMPT =
   "你是企业GEO诊断系统的结构化JSON分析接口。规则:" +
   "1) 只输出一个合法JSON对象,不得输出Markdown代码块、解释或多余文本;" +
   "2) 只能引用证据摘要中出现的证据id,禁止编造id、URL、数据或事实;" +
-  "3) 证据不足时明确保守表述(如\"本次检查的公开页面中未发现\"),禁止绝对化否定;" +
-  "4) 禁止营销承诺词(如:保证、必然、第一、领先地位承诺);" +
+  "3) 证据不足时明确保守表述(如\"本次已检查的公开页面和搜索结果中未发现\"),禁止绝对化否定;" +
+  "4) 禁止营销承诺或未验证竞品判断(显著提升、快速抢占、必然增长、全面领先、保证排名、竞品已经积累);" +
   "5) 不输出任何数值评分或百分比,评分由系统程序计算;" +
   "6) 所有文本使用简体中文,表述克制、可核验。";
 
@@ -224,7 +224,8 @@ export function buildClaimsPrompt(
     "任务: 基于证据摘要生成诊断主张。硬性规则:",
     "1) 每条主张的evidenceIds必须引用能实际支撑该表述的证据id(来自摘要);无充分证据的主张不要输出;",
     "2) claimType: 证据直接支撑的推断用DIAGNOSTIC_INFERENCE;合理但证据不足的假设用UNVERIFIED_HYPOTHESIS(最多1条);",
-    "3) 负面表述必须限定范围(\"本次检查的公开页面中未发现X\"),禁止绝对化(\"完全没有/不存在\");",
+    "3) 负面表述必须限定范围;geoOpportunity.contentGap只要表达缺少/不足/未覆盖,必须以\"本次已检查的公开页面和搜索结果中未发现\"开头,禁止绝对化(\"完全没有/不存在\");",
+    "3b) 所有候选禁止使用:显著提升、快速抢占、必然增长、全面领先、保证排名、竞品已经积累;不得输出未由竞品证据验证的竞争优势判断;",
     "4) strengths最多2条;coreIssues最多3条;geoOpportunities最多3条;不足不硬凑;",
     "4b) 每条geoOpportunity必须包含sourceIssueId,取值为其来源问题在coreIssues数组中的位置编号(第1条为\"iss_1\",第2条为\"iss_2\",以此类推),并写明它解决的customerQuestion;不能对应任何coreIssue的机会不要输出;",
     "4c) 每条geoOpportunity必须给出recommendedAction(具体可落地的GEO内容动作,不允许\"多发内容\"式空泛建议)和priorityReason(为什么现在优先做,结合证据与业务影响);",
