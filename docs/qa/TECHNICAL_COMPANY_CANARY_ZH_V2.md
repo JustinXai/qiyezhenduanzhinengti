@@ -1,138 +1,108 @@
-# Round-5.2 Insta360 Chinese Technical Canary V2
+# Round-5.2C Insta360 Chinese Technical Canary V2
 
 ## 结论
 
-- 状态：`BLOCKED_REAL_ANALYSIS_SCHEMA_MISMATCH`
-- 技术 Canary：未通过；`READY_FOR_THREE_COMPANY_SAMPLE=NO`
-- 唯一真实 Diagnosis：`diag_d9d81ba3428f4696b088870ca7416e49`（对外仅使用短 ID `diag_d9d`）
-- 最终状态：`FAILED`，失败阶段 `ANALYZING`
-- 错误：`REPORT_CLAIMS_FAILED`；`claims.demonstrationFix.currentIssue` 缺失
-- 未重跑、未修补 Provider JSON、未放宽 schema、Evidence Guard 或 Publish Guard。
+- 状态：`PASS_WITH_PRODUCT_YIELD_BLOCKER`。
+- 恢复模式：`FROZEN_EVIDENCE_REANALYSIS`；不是 Strict Checkpoint Resume。
+- 同一真实 Diagnosis：`diag_d9d81ba3428f4696b088870ca7416e49`（短 ID `diag_d9d`）。
+- 最终状态：`READY`；Repair Attempt 1 为 `SUCCEEDED`。
+- 技术恢复链路通过，但发布 GEO Opportunity 为 0，未达到产品产出门槛。
+- 按冻结规则：未重跑、不合 integration、不创建成功 Tag、不启动第二家企业或三企业样本。
 
-## 状态时间线
+## 原失败与冻结快照
 
-时间为 UTC，来自 V2 私有 run-lock、数据库与失败摘要。
+首次失败文件和 run-lock 均逐字节保留：`FAILED / ANALYZING /
+REPORT_CLAIMS_FAILED`，错误路径仍为 `demonstrationFix.currentIssue: Required`。
+阻塞基线 Tag `rebuild-technical-company-canary-zh-v2-blocked-v1` 仍指向
+`4a4b7569b3fd3edc6458114f06a53b7cc756a0cb`。
 
-| 状态 | 时间 |
-|---|---:|
-| Runner 启动 | 2026-07-19 01:27:27 |
-| SEARCHING | 2026-07-19 01:27:37 |
-| CRAWLING | 2026-07-19 01:27:39 |
-| ANALYZING | 2026-07-19 01:27:41 |
-| FAILED | 2026-07-19 01:28:10 |
-| V2 run-lock 写为 failed | 2026-07-19 01:28:12 |
+`FrozenEvidenceSnapshotV1`：
 
-正式 POST 耗时 35.7 秒（Runner 显示 36 秒）。未到达
-`CLAIM_EVIDENCE_VERIFICATION`、`VALIDATING_REPORT` 或 `READY`。
+| 字段 | 值 |
+|---|---|
+| diagnosisInputHash | `7f83796f15c71668550d3b281055c11830f4d302d93bffc21c8de0fe02b73038` |
+| evidenceRegistryHash | `9b4ca22dc268d338c8614ba86c17b756594a2a47718b0d883093f9f957e5e7ce` |
+| normalizedEvidenceHash | `b55c9c779c88815ac36e243fb3a19b0f73296e503646f507cd0ea46010eee4fd` |
+| evidenceCount | 22 |
+| sortedEvidenceIdsHash | `e2481085ba6b53c404505b450095a6dcde5e40d8ddcfc35db4742d3835bae428` |
+| evidenceUrlsHash | `843a9980b2689a697f7bc94ebbcff58a712a7ae7788215d3de71bd448dadfb34` |
+| 来源分布 | first-party=6 / observed=14 / competitor=2 |
+| 语言分布 | zh=22 / other=0 |
+| Tier 分布 | A=6 / B=2 / C=14 / D=0 / E=0 |
+| queryPlanProvenance | `UNAVAILABLE` |
+| competitorResolutionProvenance | `UNAVAILABLE` |
 
-## V1 / V2 确定性对比
+没有生成 queryPlanHash 或 competitorResolutionHash；四个 stage run 的对应字段均为
+SQL `NULL`。`coverageMode=FROZEN_EVIDENCE_SCOPE_ONLY`，
+`competitorResolutionStatus=UNVERIFIED_LEGACY_STATE`。
 
-| 指标 | V1 审计产物 | V2 |
+## Repair Attempt 与阶段持久化
+
+Repair Attempt 1 记录：
+
+- originalFailure：`REPORT_CLAIMS_FAILED`
+- reusedStages：`EVIDENCE_REGISTRY`
+- rerunStages：`REPORT_PROFILE → REPORT_SCORING → REPORT_AI_VISIBILITY → REPORT_CLAIMS`
+- missingHistoricalProvenance：`QUERY_PLAN_HASH`、`COMPETITOR_RESOLUTION_HASH`
+- providerCallDelta：4；resultState：`READY`
+
+四阶段均严格 JSON 解析、Zod 验证后立即写入 `analysis_stage_runs`，状态均为
+`SUCCEEDED`，模型均为 `deepseek-v4-flash`。输出哈希依次为：
+
+1. Profile：`e4c373a3e7bed25f1c1dd9e5323b8598280f36f66e443148ffe70f296c9ab4a3`
+2. Scoring：`82ba6ef1d63f35cfdfb2303fee45e71a1ecf1945b240c3cf68f393fe82273385`
+3. AI Visibility：`20a43a183848fa7f1b4a63ab7d6067d05504cd283846f5003bb4a7d7842b45e8`
+4. Claims：`6ed82de1c9917c61b9af3ad81242f1b0c432e04884d1ee5eba1c64cdee0e1761`
+
+## Provider 差量
+
+本次恢复：Bocha=0、Crawler=0、DeepSeek=4、retries=0、新 Diagnosis=0。
+首次运行实际 DeepSeek 4 次，本次 4 次，历史总量保持硬上限 8。恢复没有调用 Query
+Planner、Evidence Normalize 或 Competitor Resolver。
+
+## Canonical、Claim–Evidence 与产品产出
+
+- Claims Schema：PASS；Canonical：PASS；Publish Guard：PASS；
+  ChinesePublicReportGuard：PASS；Frozen-Evidence Guard：PASS。
+- Claim–Evidence relations=22：DIRECT=1、PARTIAL=15、CONTEXT=6。
+- 发布 Strength=2、Issue=3、Opportunity=0、Competitor Gap=0、Demonstration Fix=null。
+- 三条 Issue 均使用保存证据范围限定语；不存在绝对化否定。
+- Opportunity 因验证后的发布阈值与 Issue lineage 约束未形成可信产出，没有模板补位。
+- 产品标准要求至少 1 个可信 Opportunity，因此结论为
+  `PASS_WITH_PRODUCT_YIELD_BLOCKER`。
+
+## Quick / Deep / Evidence
+
+- reportLanguage=`zh-CN`；overallScore=59.95；scoreCoverage=1.0。
+- Quick 默认，1097 可见字符（≤1800）；冻结 CTA 未修改。
+- Quick 竞品说明保持冻结产品文案；Deep 记录“本次恢复未重新确认竞品官方网站”。
+- Evidence View=22；Quick/Deep/Evidence 同源于同一 Canonical。
+- 390px 真实页面检查：三视图均渲染、无横向溢出；切换期间 Provider usage 不变。
+- Public API HTTP 200，未发现 Recovery mode、快照哈希、Repair Attempt 或 stage 字段泄漏。
+
+## V1 / V2 对比
+
+| 指标 | V1 | V2 Recovery |
 |---|---:|---:|
-| Final state | READY | FAILED / ANALYZING |
-| Evidence after dedup | 35 | 22 |
-| First-party | 3 | 6 |
-| Observed | 32 | 14 |
-| Competitor | 0 | 2 |
-| Claim–Evidence relations | 10 | 0（未到验证阶段） |
-| DIRECT / PARTIAL / CONTEXT | 0 / 5 / 5 | 不适用 |
-| Published strengths | 1 | 0 |
-| Published issues | 1 | 0 |
-| Published opportunities | 0 | 0 |
-| Demonstration Fix | null | 未生成 Canonical |
-| Quick 可见字符 | 669 | 不适用 |
-| Bocha | 8 | 9 |
-| DeepSeek | 4 | 4 次实际请求；失败路径未写 usage 表 |
+| Final state | READY | READY |
+| Evidence | 35 | 22 |
+| Strength / Issue / Opportunity | 1 / 1 / 0 | 2 / 3 / 0 |
+| Claim–Evidence relations | 10 | 22 |
+| Competitor Gap | 0 | 0 |
+| Demonstration Fix | null | null |
+| Quick 字符 | 669 | 1097 |
+| overallScore | 53.85 | 59.95 |
+| DeepSeek（单次流程） | 4 | 4 |
 | retries | 0 | 0 |
-| overallScore | 53.85 | 不适用 |
-| measurementComposition | 实测 15% / 估算 85% | 不适用 |
 
-V1 授权说明中的 Quick 基线为 665 字；保留的 V1 `summary.json` 实际记录为 669 字，
-本表采用审计产物值。
+V1 私有目录哈希仍为
+`1465e42ff81e94858fed7e54d61272c4127dc171df94f5e0377912ba3763b934`，逐文件未修改。
 
-## Evidence 与 Query Policy
+## 质量、安全与冻结契约
 
-- `afterDedup=22`。
-- `beforeDedup` 未由当前正式管线持久化，不能可靠重建；不以 22 冒充该值。
-- `chineseEvidenceCount=22`；`englishOfficialFallbackCount=0`。
-- Tier 分布：A=6，B=2，C=14，D=0，E=0。
-- 类型分布：first-party=6，observed=14，competitor=2。
-- `evidenceUsedByClaims=0`、`unusedEvidenceCount=22`、`evidenceUtilizationRate=0%`；原因是
-  claims schema 失败后没有 Canonical Claim，而不是 Evidence 被 Publish Guard 剪枝。
-- 所有持久化 Evidence 的 `language=zh`，中文 Evidence 数高于英文官方 fallback。
-- 查询结果体现中文网络优先；但正式数据库不持久化完整 query plan，无法从运行后产物逐条审计
-  查询文本。原始 Provider 响应按安全边界未落盘。
-
-### GoPro 解析
-
-未确认 GoPro 英文官方域名。V2 中两条 `COMPETITOR_WEB_EVIDENCE` 均为中文第三方页面，
-不是 GoPro 官方站；因此国际竞品官方身份确认目标未通过。未手工填写 GoPro 官网。
-
-## Content Yield 与 Opportunity lineage
-
-`claims` 是第 4 个且最后一个 DeepSeek 结构化阶段。响应通过 JSON 解析，但不符合严格 schema：
-返回了非 null `demonstrationFix`，却缺少必填 `currentIssue`。管线立即失败。
-
-- candidateStrengthCount / candidateIssueCount / candidateOpportunityCount /
-  candidateDemonstrationFixCount：不可报告。无效 stage 输出按安全设计未持久化，不能从错误文本
-  反推候选数量。
-- publishedStrengthCount=0、publishedIssueCount=0、publishedOpportunityCount=0、
-  publishedDemonstrationFixCount=0。
-- claimPublicationRate：不适用（候选分母不可审计）。
-- opportunityYieldRate：不适用（候选分母不可审计）。
-- pruneReasonDistribution：`SCHEMA_MISMATCH=1`；这发生在发布前，不是 Publish Guard 剪枝。
-- Opportunity `sourceIssueId`、有效 Evidence、客户问题 lineage：未生成，产品通过条件未满足。
-
-## Provider 预算
-
-- Bocha：9 次，低于 12 次硬上限。
-- DeepSeek：4 次，低于 8 次硬上限。正式 producer 固定顺序为 company profile、dimension
-  signals、AI visibility、claims；错误发生于 claims 响应 schema 校验，因此实际完成了 4 次请求。
-- retries=0。
-- Crawler：9 次尝试（8 次成功、1 次 HTTP error），低于总页面 12 上限。
-- 总耗时：POST 35.7 秒。
-- token usage 与逐调用 latency：当前 provider usage schema 未持久化，不能可靠报告。
-- 观测缺口：producer 失败时 state machine 在 `recordUsage(produced.usage)` 前返回，因此 V2
-  `provider_usage` 表显示 DeepSeek 0；本报告没有把该持久化缺口误写成零真实调用。
-
-## Quick / Deep / Evidence / Score
-
-没有 Canonical Report，因此 Quick、Deep、Evidence 客户视图、reportLanguage、中文公开报告
-Guard、评分覆盖、measurementComposition、页面切换零调用和 390px 截图均不适用，不能判定通过。
-私有目录没有生成截图，这是失败即停的预期结果。
-
-评分权重代码未修改；事后完整 Gate 中评分契约测试通过。Publish Guard、Evidence Guard、
-ChinesePublicReportGuard 均未放宽，但 V2 没有走到可对真实 Canonical 执行这些 Guard 的阶段。
-
-## 根因、影响与通用 Guard
-
-- 现象：`REPORT_CLAIMS_FAILED`，缺少 `demonstrationFix.currentIssue`。
-- 根因：Prompt 对 Demonstration Fix 使用 `{...}` 占位描述，没有逐字段呈现严格 schema；模型返回
-  非 null 对象时漏掉必填字段。严格解析按契约正确拒绝。
-- 影响范围：本次 V2 无 Canonical、无评分、无 Claim 发布、无客户视图；Evidence 与前 3 个分析
-  请求已发生，但不能转化为报告。
-- 上下游：上游为 claims prompt/schema 对齐；下游为 Claim–Evidence verifier、Publish Guard、
-  Presentation 与截图，均未执行。
-- 同类风险：任何 Prompt 以省略号描述、但 schema 要求完整字段的嵌套对象都可能产生同类失败。
-- 系统不变量：不修补 Provider JSON、不放宽 schema、不把失败响应直接送入 Report Builder、
-  不自动重跑。
-- 建议的通用 Guard（本轮不实施并重跑）：由 schema 派生完整 JSON 形状或在 Prompt 中列全所有
-  required 字段；增加缺失每个 Demonstration Fix 必填字段的 Mock 回归；失败路径先脱敏记录
-  provider usage 再返回。
-
-## 质量、安全与隔离
-
-- 运行前与运行后 Gate 均通过：lint（0 error，1 个既存 warning）、typecheck、564 tests、build、
-  Mock smoke、security check、16 E2E、`pnpm audit --prod` 0 known vulnerabilities。
-- SSRF strict 行为门：52 个对抗用例全部通过。
-- `.env.local` 保持 Git ignored；两个 Provider key 仅检查为 PRESENT，未输出值。
-- V1 私有目录逐文件 SHA-256 与运行前一致，V1 run-lock 未删除或修改。
-- V2 目录、SQLite、run-lock 与失败摘要位于仓库外，未进入 Git。
-- main 与 integration 未切换、未合并、未推送；未创建成功 Tag。
-
-## CTO 成交判断
-
-本轮证明了中文 Evidence 策略能得到 22/22 中文标注证据，且第一方证据从 V1 的 3 条增至
-6 条；但竞品官方身份确认失败，分析阶段又因 Prompt/schema 对齐问题中止，无法形成可成交的
-中文 Canonical，更无法证明 Opportunity lineage。结论是阻塞，不应进入三企业样本。
+- lint PASS（0 error，1 个既存 warning）、typecheck PASS、650 tests PASS、build PASS、
+  smoke:mock PASS、security PASS（52 SSRF）、16 E2E PASS、`audit --prod` 0 漏洞。
+- 报告产品契约、评分权重 20/20/25/20/15、AI Visibility 公式、Claim–Evidence
+  阈值、固定免责声明、CTA 与 SSRF 规则均未修改。
+- main 与 integration 未修改；阻塞 Tag 未移动；未创建成功 Tag。
 

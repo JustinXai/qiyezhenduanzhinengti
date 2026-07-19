@@ -119,3 +119,17 @@ security:check(SSRF strict)/ test:e2e **16**(含 3 Canary)/ audit + audit --prod
 - `rebuild-provider-canary-v1` — Round-4B 真实 Provider Canary 双 PASS(`522d8c0`)
 - `rebuild-technical-company-canary-v1` — Round-5 单企业真实诊断 PASS(integration `9777e7c`)
 - `rebuild-chinese-conversion-hardening-v1` — Round-5.1 中文成交版硬化(分支最终 HEAD)
+
+## Round-5.2C Frozen-Evidence Reanalysis（2026-07-19）
+
+| Agent | 状态 | Supervisor 复核 |
+|---|---|---|
+| Q Recovery Contract / Guard | VERIFIED | Snapshot V1、冻结 scope、竞品降级、负面主张与 API 泄漏 Guard；0 Provider |
+| R Runtime / Stage Persistence | VERIFIED | Repair Attempt 1、四阶段逐段提交、NULL 缺失 provenance、预算与 Finalizer 接缝；0 Provider |
+| S Runner / QA | VERIFIED | 进程级授权、一次性执行、预算/页面/API Guard；0 Provider |
+
+V2 分支真实执行结果：同一 `diag_d9d` 已 `READY`；22 Evidence 与 registry/normalized
+hash 不变；Bocha/Crawler delta=0、DeepSeek delta=4、retries=0；四阶段及现有发布 Guard 全绿。
+产品产出为 Issue=3、Opportunity=0，因此状态为
+`PASS_WITH_PRODUCT_YIELD_BLOCKER`。按冻结规则不合 integration、不创建成功 Tag、
+`READY_FOR_THREE_COMPANY_SAMPLE=NO`。main 未修改。

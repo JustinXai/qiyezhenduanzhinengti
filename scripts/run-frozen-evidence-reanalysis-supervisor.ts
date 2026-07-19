@@ -468,7 +468,7 @@ async function waitForUi(): Promise<void> {
 }
 
 function startUiServer(): ChildProcess {
-  return spawn("pnpm", ["exec", "next", "start", "-p", String(UI_PORT)], {
+  return spawn("pnpm", ["exec", "next", "dev", "-p", String(UI_PORT)], {
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -528,7 +528,7 @@ async function verifyRenderedPages(
       );
       await page.screenshot({ path: join(PRIVATE_DIR, "recovery-quick-mobile.png"), fullPage: true });
 
-      await page.getByRole("button", { name: "完整诊断" }).click();
+      await page.getByRole("button", { name: "完整诊断", exact: true }).click();
       const deepRendered = (await page.locator("body").innerText()).includes(
         FROZEN_EVIDENCE_DEEP_COMPETITOR_LIMITATION,
       );

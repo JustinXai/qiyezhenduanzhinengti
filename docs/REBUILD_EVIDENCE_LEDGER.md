@@ -77,3 +77,16 @@
   verify-only 复核已存 Insta360 报告 15/15,零 Provider 调用、零新 Diagnosis。
   Mock Canary 不构成真实企业验证;中文查询/Prompt 的真实链路需下一次授权的
   Insta360 真实诊断确认。(来源: Supervisor Round-5.1)
+
+- [2026-07-19] DECISION Round-5.2C 将严格历史恢复与冻结 Evidence 再分析分离：
+  `STRICT_CHECKPOINT_RESUME` 继续因 query/competitor hash 缺失而阻塞；
+  `FROZEN_EVIDENCE_REANALYSIS` 显式记录两项 provenance 为 `UNAVAILABLE`，不生成假 hash，
+  只消费原 Input 与 22 条 Evidence。(来源: Supervisor Round-5.2C 授权)
+- [2026-07-19] KNOWN Round-5.2C 唯一真实 Repair Attempt 已成功：同一 `diag_d9d` READY，
+  四分析阶段顺序持久化，Bocha/Crawler delta=0、DeepSeek delta=4、retries=0，Evidence
+  registry `9b4ca22d…` 与 normalized `b55c9c77…` 未变，V1 逐文件未变；原
+  `REPORT_CLAIMS_FAILED` 摘要与 run-lock 保留。(来源: SQLite 与只读 forensic audit)
+- [2026-07-19] KNOWN 恢复后发布 Issue=3、Opportunity=0。技术链路、Canonical、Verifier、
+  Publish/中文/Frozen-Evidence Guard 与 390px 三视图均通过，但产品产出门槛未通过；状态定为
+  `PASS_WITH_PRODUCT_YIELD_BLOCKER`，不重跑、不合 integration、不创建成功 Tag、不进入
+  三企业样本。(来源: Supervisor Round-5.2C 最终审计)
