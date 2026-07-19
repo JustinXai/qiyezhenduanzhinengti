@@ -77,3 +77,47 @@ export const analysisCheckpoints = sqliteTable("analysis_checkpoints", {
   trustGuardVersion: text("trust_guard_version").notNull(),
   completedAt: integer("completed_at", { mode: "timestamp" }).notNull(),
 });
+
+// Round-5.2B: append-only attempt rows for individually validated analysis
+// outputs. Failed rows retain only a category plus sanitized metadata; raw
+// provider responses and prompts never belong in this table.
+export const analysisStageRuns = sqliteTable("analysis_stage_runs", {
+  id: text("id").primaryKey(),
+  diagnosisId: text("diagnosis_id").notNull(),
+  stage: text("stage").notNull(),
+  attempt: integer("attempt").notNull(),
+  status: text("status").notNull(),
+  inputHash: text("input_hash").notNull(),
+  evidenceRegistryHash: text("evidence_registry_hash").notNull(),
+  competitorResolutionHash: text("competitor_resolution_hash").notNull(),
+  queryPlanHash: text("query_plan_hash").notNull(),
+  outputJson: text("output_json"),
+  outputHash: text("output_hash"),
+  schemaVersion: text("schema_version").notNull(),
+  promptVersion: text("prompt_version").notNull(),
+  providerModel: text("provider_model").notNull(),
+  providerUsageId: text("provider_usage_id"),
+  startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+  errorCategory: text("error_category"),
+  errorMetadataJson: text("error_metadata_json"),
+});
+
+// The original diagnosis failure remains untouched. This ledger records the
+// separately authorized repair and is deliberately limited to one attempt by
+// the adapter's atomic begin operation.
+export const analysisRepairAttempts = sqliteTable("analysis_repair_attempts", {
+  id: text("id").primaryKey(),
+  diagnosisId: text("diagnosis_id").notNull(),
+  repairAttempt: integer("repair_attempt").notNull(),
+  originalFailureStage: text("original_failure_stage").notNull(),
+  authorizedAt: integer("authorized_at", { mode: "timestamp" }).notNull(),
+  startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+  status: text("status").notNull(),
+  reusedStages: text("reused_stages").notNull(),
+  rerunStages: text("rerun_stages").notNull(),
+  providerCallDelta: integer("provider_call_delta").notNull().default(0),
+  resultState: text("result_state"),
+  failureCategory: text("failure_category"),
+});

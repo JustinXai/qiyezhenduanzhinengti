@@ -101,6 +101,78 @@ export interface ProviderUsageRecord {
   createdAt: Date;
 }
 
+export const ANALYSIS_STAGES = [
+  "REPORT_PROFILE",
+  "REPORT_SCORING",
+  "REPORT_AI_VISIBILITY",
+  "REPORT_CLAIMS",
+] as const;
+
+export type AnalysisStage = (typeof ANALYSIS_STAGES)[number];
+export type AnalysisStageRunStatus = "RUNNING" | "SUCCEEDED" | "FAILED";
+
+export interface AnalysisStageRunRecord {
+  id: string;
+  diagnosisId: string;
+  stage: AnalysisStage;
+  attempt: number;
+  status: AnalysisStageRunStatus;
+  inputHash: string;
+  evidenceRegistryHash: string;
+  competitorResolutionHash: string;
+  queryPlanHash: string;
+  outputJson: string | null;
+  outputHash: string | null;
+  schemaVersion: string;
+  promptVersion: string;
+  providerModel: string;
+  providerUsageId: string | null;
+  startedAt: Date;
+  completedAt: Date | null;
+  errorCategory: string | null;
+  errorMetadataJson: string | null;
+}
+
+export interface StartAnalysisStageRunInput {
+  id: string;
+  diagnosisId: string;
+  stage: AnalysisStage;
+  attempt: number;
+  inputHash: string;
+  evidenceRegistryHash: string;
+  competitorResolutionHash: string;
+  queryPlanHash: string;
+  schemaVersion: string;
+  promptVersion: string;
+  providerModel: string;
+}
+
+export type AnalysisRepairStatus = "RUNNING" | "SUCCEEDED" | "FAILED";
+
+export interface AnalysisRepairAttemptRecord {
+  diagnosisId: string;
+  repairAttempt: number;
+  originalFailureStage: string;
+  authorizedAt: Date;
+  startedAt: Date;
+  completedAt: Date | null;
+  status: AnalysisRepairStatus;
+  reusedStages: AnalysisStage[];
+  rerunStages: AnalysisStage[];
+  providerCallDelta: number;
+  resultState: string | null;
+  failureCategory: string | null;
+}
+
+export interface BeginAnalysisRepairAttemptInput {
+  diagnosisId: string;
+  repairAttempt: number;
+  originalFailureStage: string;
+  authorizedAt: Date;
+  reusedStages: AnalysisStage[];
+  rerunStages: AnalysisStage[];
+}
+
 // ---------------------------------------------------------------------------
 // StorageAdapter contract.
 // ---------------------------------------------------------------------------
@@ -158,4 +230,84 @@ export interface StorageAdapter {
     promptVersion: string;
     trustGuardVersion: string;
   }): Promise<{ outputJson: string } | null>;
+
+  // -- Round-5.2B analysis recovery (optional for legacy/in-memory adapters) --
+  countDiagnosisRequests?(): Promise<number>;
+  startAnalysisStageRun?(input: StartAnalysisStageRunInput): Promise<void>;
+  completeAnalysisStageRun?(input: {
+    id: string;
+    outputJson: string;
+    outputHash: string;
+    providerUsageId: string | null;
+  }): Promise<void>;
+  failAnalysisStageRun?(input: {
+    id: string;
+    errorCategory: string;
+    errorMetadataJson: string;
+    providerUsageId: string | null;
+  }): Promise<void>;
+  findReusableAnalysisStageRun?(query: {
+    diagnosisId: string;
+    stage: AnalysisStage;
+    inputHash: string;
+    evidenceRegistryHash: string;
+    competitorResolutionHash: string;
+    queryPlanHash: string;
+    schemaVersion: string;
+    promptVersion: string;
+    providerModel: string;
+  }): Promise<AnalysisStageRunRecord | null>;
+  getAnalysisStageRuns?(diagnosisId: string): Promise<AnalysisStageRunRecord[]>;
+  beginAnalysisRepairAttempt?(input: BeginAnalysisRepairAttemptInput): Promise<void>;
+  completeAnalysisRepairAttempt?(input: {
+    diagnosisId: string;
+    repairAttempt: number;
+    status: Exclude<AnalysisRepairStatus, "RUNNING">;
+    providerCallDelta: number;
+    resultState: string;
+    failureCategory: string | null;
+  }): Promise<void>;
+  getAnalysisRepairAttempts?(
+    diagnosisId: string,
+  ): Promise<AnalysisRepairAttemptRecord[]>;
+}
+
+/** Storage capabilities required by the non-public frozen-Evidence recovery. */
+export interface AnalysisRecoveryStorage extends StorageAdapter {
+  countDiagnosisRequests(): Promise<number>;
+  startAnalysisStageRun(input: StartAnalysisStageRunInput): Promise<void>;
+  completeAnalysisStageRun(input: {
+    id: string;
+    outputJson: string;
+    outputHash: string;
+    providerUsageId: string | null;
+  }): Promise<void>;
+  failAnalysisStageRun(input: {
+    id: string;
+    errorCategory: string;
+    errorMetadataJson: string;
+    providerUsageId: string | null;
+  }): Promise<void>;
+  findReusableAnalysisStageRun(query: {
+    diagnosisId: string;
+    stage: AnalysisStage;
+    inputHash: string;
+    evidenceRegistryHash: string;
+    competitorResolutionHash: string;
+    queryPlanHash: string;
+    schemaVersion: string;
+    promptVersion: string;
+    providerModel: string;
+  }): Promise<AnalysisStageRunRecord | null>;
+  getAnalysisStageRuns(diagnosisId: string): Promise<AnalysisStageRunRecord[]>;
+  beginAnalysisRepairAttempt(input: BeginAnalysisRepairAttemptInput): Promise<void>;
+  completeAnalysisRepairAttempt(input: {
+    diagnosisId: string;
+    repairAttempt: number;
+    status: Exclude<AnalysisRepairStatus, "RUNNING">;
+    providerCallDelta: number;
+    resultState: string;
+    failureCategory: string | null;
+  }): Promise<void>;
+  getAnalysisRepairAttempts(diagnosisId: string): Promise<AnalysisRepairAttemptRecord[]>;
 }
