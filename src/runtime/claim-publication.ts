@@ -14,6 +14,7 @@ import {
 } from "../report/validation/claim-publication-policy";
 import type { AuditedPublicationCandidate } from "./prune-audit";
 import type { PruneDecisionReasonCode } from "../storage/adapter";
+import { competitorGapHasVerifiedOfficialSupport } from "../report/validation/competitor-gap-policy";
 
 export const FROZEN_NEEDS_CONFIRMATION_PREFIX =
   "待进一步确认（仅限本次保存的公开证据范围，不作为确定性结论）：";
@@ -143,6 +144,30 @@ export function applyClaimPublicationPolicyToReport(input: {
     });
     return false;
   });
+  const competitorGaps = input.report.competitorGaps.filter((item) => {
+    if (
+      competitorGapHasVerifiedOfficialSupport({
+        report: input.report,
+        gapId: item.id,
+        relations: input.relations,
+      })
+    ) {
+      return true;
+    }
+    prunes.push({
+      type: "STRUCTURAL",
+      candidate: {
+        claimKind: "competitorGap",
+        candidateRef: item.id,
+        sourceIssueId: null,
+        evidenceIds: [...item.evidenceIds],
+      },
+      reasonCode: "UNVERIFIED_COMPETITOR_ASSERTION",
+      guardRule: "TRUTH_4_9_COMPETITOR_ASSERTION_NEEDS_CONFIRMED_EVIDENCE",
+      coverageStatus: "NOT_REQUIRED",
+    });
+    return false;
+  });
   const removedOpportunityIds = input.report.geoOpportunities
     .filter((item) => !geoOpportunities.some((retained) => retained.id === item.id))
     .map((item) => item.id);
@@ -186,6 +211,7 @@ export function applyClaimPublicationPolicyToReport(input: {
       strengths,
       coreIssues,
       geoOpportunities,
+      competitorGaps,
       demonstrationFix: keepDemonstrationFix ? demonstrationFix : null,
     },
     prunes,

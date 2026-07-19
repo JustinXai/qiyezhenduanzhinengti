@@ -39,6 +39,7 @@ import {
   type ClaimPublicationCoverageScope,
   type ClaimPublicationDecision,
 } from "./claim-publication-policy";
+import { competitorGapHasVerifiedOfficialSupport } from "./competitor-gap-policy";
 
 type GatedKind = "coreIssue" | "strength" | "geoOpportunity";
 
@@ -76,8 +77,8 @@ export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
     relationsByClaim.set(r.claimId, list);
   }
 
-  // Only the three gated claim kinds are publish-gated (competitorGaps are
-  // verified for traceability but not §4-gated, preserving prior behavior).
+  // The shared ClaimPublicationPolicy handles the three threshold-gated kinds;
+  // competitor gaps are checked separately against their stricter §4.9 source rule.
   const claims = extractVerifiableClaims(report).filter(
     (c): c is typeof c & { kind: GatedKind } => c.kind !== "competitorGap",
   );
@@ -93,6 +94,25 @@ export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
       input.coverageScope,
       violations,
     );
+  }
+
+  for (const gap of report.competitorGaps) {
+    if (
+      !competitorGapHasVerifiedOfficialSupport({
+        report,
+        gapId: gap.id,
+        relations,
+      })
+    ) {
+      violations.push({
+        guard: "evidence",
+        rule: "TRUTH_4_9_COMPETITOR_ASSERTION_NEEDS_CONFIRMED_EVIDENCE",
+        message: `competitorGap ${gap.id} 缺少已确认的竞品官网证据关系`,
+        claimType: "competitorGap",
+        claimId: gap.id,
+        evidenceIds: gap.evidenceIds,
+      });
+    }
   }
 
   checkDuplicateOpportunityRelations(report, relationsByClaim, violations);

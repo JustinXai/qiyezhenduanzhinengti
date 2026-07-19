@@ -7,10 +7,12 @@ import {
   THREE_COMPANY_SAMPLE_BUDGET,
   THREE_COMPANY_SAMPLE_PRIVATE_ROOT,
   THREE_COMPANY_SAMPLE_TARGETS,
+  allDroppedCandidatesAudited,
   assessThreeCompanySampleAuthorization,
   batchBudgetStopReasons,
   buildIsolatedChildEnvironment,
   buildThreeCompanySamplePlan,
+  candidateRefsFromAnalysisCheckpoint,
   companyStopReasons,
   resolveCompanyPaths,
   requiredCompanyArtifactPaths,
@@ -155,6 +157,37 @@ describe("Round-6 server-only authorization", () => {
 });
 
 describe("Round-6 fixed targets and private isolation", () => {
+  it("recovers candidate refs from the durable ANALYZING checkpoint", () => {
+    const refs = candidateRefsFromAnalysisCheckpoint({
+      report: {
+        strengths: [{ id: "str_1" }],
+        coreIssues: [{ id: "iss_1" }],
+        geoOpportunities: [{ id: "geo_1" }],
+        competitorGaps: [],
+        demonstrationFix: { id: "demo_1" },
+      },
+      prunedCandidates: [{ candidateRef: "geo_generation_pruned" }],
+    });
+    expect(refs).toEqual(["str_1", "iss_1", "geo_1", "demo_1", "geo_generation_pruned"]);
+    expect(
+      allDroppedCandidatesAudited(
+        refs!,
+        new Set(["str_1"]),
+        new Set(["iss_1", "geo_1", "demo_1", "geo_generation_pruned"]),
+      ),
+    ).toBe(true);
+  });
+
+  it("fails closed when any dropped checkpoint candidate lacks a ledger row", () => {
+    expect(
+      allDroppedCandidatesAudited(
+        ["str_1", "iss_1"],
+        new Set(["str_1"]),
+        new Set<string>(),
+      ),
+    ).toBe(false);
+  });
+
   it("freezes qiaqia → iflytek → heli with the exact sites, competitors, focus, and five questions", () => {
     expect(THREE_COMPANY_SAMPLE_TARGETS.map((target) => target.slug)).toEqual([
       "qiaqia",

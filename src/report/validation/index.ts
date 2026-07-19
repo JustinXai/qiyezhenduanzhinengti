@@ -52,6 +52,8 @@ export {
 
 export { publishGuard, type PublishGuardInput } from "./publish-guard";
 
+export { competitorGapHasVerifiedOfficialSupport } from "./competitor-gap-policy";
+
 export { pruneUnsupportedClaims, type PruneResult } from "./prune-claims";
 
 export {

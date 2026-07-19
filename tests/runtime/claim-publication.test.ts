@@ -105,4 +105,71 @@ describe("shared report publication projection", () => {
     );
     expect(result.deepNeedsConfirmation[0]).toContain("仅限本次保存的公开证据范围");
   });
+
+  it("prunes an observed-only competitor assertion with an exact structural audit reason", () => {
+    const { report, coverage } = setup();
+    const base = buildSampleReport();
+    report.coreIssues = [];
+    report.geoOpportunities = [];
+    report.demonstrationFix = null;
+    report.competitorGaps = [
+      { ...base.competitorGaps[0]!, evidenceIds: ["ev_observed_news"] },
+    ];
+    const result = applyClaimPublicationPolicyToReport({
+      report,
+      coverage,
+      relations: [
+        {
+          claimId: report.competitorGaps[0]!.id,
+          claimKind: "competitorGap",
+          evidenceId: "ev_observed_news",
+          supportLevel: "DIRECT_SUPPORT",
+          confidence: 0.9,
+          justification: "test",
+          basis: "CONTENT_MATCH",
+          verifierMode: "MOCK_DETERMINISTIC",
+          verifierVersion: "test.v1",
+        },
+      ],
+    });
+
+    expect(result.report.competitorGaps).toEqual([]);
+    expect(result.prunes).toContainEqual(
+      expect.objectContaining({
+        type: "STRUCTURAL",
+        reasonCode: "UNVERIFIED_COMPETITOR_ASSERTION",
+        guardRule: "TRUTH_4_9_COMPETITOR_ASSERTION_NEEDS_CONFIRMED_EVIDENCE",
+      }),
+    );
+  });
+
+  it("retains a competitor assertion with a verified official-source relation", () => {
+    const { report, coverage } = setup();
+    const base = buildSampleReport();
+    report.coreIssues = [];
+    report.geoOpportunities = [];
+    report.demonstrationFix = null;
+    const gap = base.competitorGaps[0]!;
+    report.competitorGaps = [gap];
+    const result = applyClaimPublicationPolicyToReport({
+      report,
+      coverage,
+      relations: [
+        {
+          claimId: gap.id,
+          claimKind: "competitorGap",
+          evidenceId: gap.evidenceIds[0]!,
+          supportLevel: "PARTIAL_SUPPORT",
+          confidence: 0.7,
+          justification: "test",
+          basis: "CONTENT_MATCH",
+          verifierMode: "MOCK_DETERMINISTIC",
+          verifierVersion: "test.v1",
+        },
+      ],
+    });
+
+    expect(result.report.competitorGaps).toEqual([gap]);
+    expect(result.prunes).toEqual([]);
+  });
 });

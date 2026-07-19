@@ -24,6 +24,7 @@ import { deriveCoverage, type ClaimEvidenceRelation } from "../src/contracts/cla
 import { presentReport } from "../src/report/presentation";
 import {
   chinesePublicReportGuard,
+  competitorGapHasVerifiedOfficialSupport,
   countQuickVisibleChars,
   evaluateClaimPublication,
   type ClaimPublicationSourceContext,
@@ -642,6 +643,31 @@ function candidateRefsFromClaimsOutput(output: unknown): string[] | null {
   return refs;
 }
 
+export function candidateRefsFromAnalysisCheckpoint(output: unknown): string[] | null {
+  if (output === null || Array.isArray(output) || typeof output !== "object") return null;
+  const value = output as Record<string, unknown>;
+  const reportRefs = candidateRefsFromClaimsOutput(value.report);
+  if (reportRefs === null || !Array.isArray(value.prunedCandidates)) return null;
+  const generationPrunedRefs: string[] = [];
+  for (const candidate of value.prunedCandidates) {
+    if (candidate === null || typeof candidate !== "object") return null;
+    const ref = (candidate as Record<string, unknown>).candidateRef;
+    if (typeof ref !== "string" || !ref) return null;
+    generationPrunedRefs.push(ref);
+  }
+  return [...new Set([...reportRefs, ...generationPrunedRefs])];
+}
+
+export function allDroppedCandidatesAudited(
+  candidateRefs: readonly string[],
+  publishedRefs: ReadonlySet<string>,
+  auditedRefs: ReadonlySet<string>,
+): boolean {
+  return candidateRefs
+    .filter((ref) => !publishedRefs.has(ref))
+    .every((ref) => auditedRefs.has(ref));
+}
+
 /**
  * Fail-closed audit over persisted canonical, pairwise relations, stage output,
  * prune ledger and crawler usage. Independent partial publication is left to
@@ -768,20 +794,55 @@ function readPersistedTruthAudit(
       truthGuardViolation = true;
     }
 
+    const persistedRelations: ClaimEvidenceRelation[] = relations.map((row) => ({
+      claimId: row.claim_id,
+      claimKind: row.claim_kind,
+      evidenceId: row.evidence_id,
+      supportLevel: row.support_level,
+      confidence: row.confidence,
+      justification: row.justification ?? "",
+      basis: row.basis,
+      verifierMode: row.verifier_mode,
+      verifierVersion: row.verifier_version,
+    }));
+    if (
+      report.competitorGaps.some(
+        (gap) =>
+          !competitorGapHasVerifiedOfficialSupport({
+            report,
+            gapId: gap.id,
+            relations: persistedRelations,
+          }),
+      )
+    ) {
+      truthGuardViolation = true;
+    }
+
     let pruneAuditComplete = false;
-    if (tableExists(db, "prune_decisions") && tableExists(db, "analysis_stage_runs")) {
+    if (tableExists(db, "prune_decisions")) {
       const reportRow = db
-        .prepare("SELECT id FROM reports WHERE diagnosis_id = ? ORDER BY created_at DESC LIMIT 1")
+        .prepare("SELECT id FROM reports WHERE diagnosis_id = ? ORDER BY rowid DESC LIMIT 1")
         .get(diagnosisId) as { id: string } | undefined;
-      const stageRun = db
-        .prepare(
-          "SELECT id, output_json FROM analysis_stage_runs WHERE diagnosis_id = ? AND stage = 'REPORT_CLAIMS' AND status = 'SUCCEEDED' ORDER BY attempt DESC, completed_at DESC LIMIT 1",
-        )
-        .get(diagnosisId) as { id: string; output_json: string } | undefined;
-      if (reportRow && stageRun) {
+      const stageRun = tableExists(db, "analysis_stage_runs")
+        ? db
+            .prepare(
+              "SELECT id, output_json FROM analysis_stage_runs WHERE diagnosis_id = ? AND stage = 'REPORT_CLAIMS' AND status = 'SUCCEEDED' ORDER BY attempt DESC, completed_at DESC LIMIT 1",
+            )
+            .get(diagnosisId) as { id: string; output_json: string } | undefined
+        : undefined;
+      const analysisCheckpoint = tableExists(db, "analysis_checkpoints")
+        ? db
+            .prepare(
+              "SELECT output_json FROM analysis_checkpoints WHERE diagnosis_id = ? AND stage = 'ANALYZING' ORDER BY completed_at DESC LIMIT 1",
+            )
+            .get(diagnosisId) as { output_json: string } | undefined
+        : undefined;
+      if (reportRow && (stageRun || analysisCheckpoint)) {
         let candidateRefs: string[] | null = null;
         try {
-          candidateRefs = candidateRefsFromClaimsOutput(JSON.parse(stageRun.output_json));
+          candidateRefs = stageRun
+            ? candidateRefsFromClaimsOutput(JSON.parse(stageRun.output_json))
+            : candidateRefsFromAnalysisCheckpoint(JSON.parse(analysisCheckpoint!.output_json));
         } catch {
           candidateRefs = null;
         }
@@ -793,14 +854,13 @@ function readPersistedTruthAudit(
             ...report.competitorGaps.map((claim) => claim.id),
             ...(report.demonstrationFix ? [report.demonstrationFix.id] : []),
           ]);
-          const droppedRefs = candidateRefs.filter((ref) => !publishedRefs.has(ref));
           const decisions = db
             .prepare(
-              "SELECT candidate_ref FROM prune_decisions WHERE diagnosis_id = ? AND report_id = ? AND stage_run_id = ?",
+              "SELECT candidate_ref FROM prune_decisions WHERE diagnosis_id = ? AND report_id = ?",
             )
-            .all(diagnosisId, reportRow.id, stageRun.id) as Array<{ candidate_ref: string }>;
+            .all(diagnosisId, reportRow.id) as Array<{ candidate_ref: string }>;
           const auditedRefs = new Set(decisions.map((decision) => decision.candidate_ref));
-          pruneAuditComplete = droppedRefs.every((ref) => auditedRefs.has(ref));
+          pruneAuditComplete = allDroppedCandidatesAudited(candidateRefs, publishedRefs, auditedRefs);
         }
       }
     }

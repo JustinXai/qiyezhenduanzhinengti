@@ -80,6 +80,7 @@ describe("publishGuard (ROUND-3 — relations decide §4)", () => {
     const standard = buildValidReport();
     standard.strengths = [];
     standard.geoOpportunities = [];
+    standard.competitorGaps = [];
     standard.coreIssues = [{
       ...standard.coreIssues[0]!,
       statement: "本次检查的公开页面中未发现完整采购说明",

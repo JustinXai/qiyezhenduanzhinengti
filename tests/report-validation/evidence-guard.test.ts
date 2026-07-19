@@ -28,6 +28,7 @@ describe("evidenceGuard (relation-based, ROUND-3)", () => {
     const report = buildValidReport();
     report.strengths = [];
     report.geoOpportunities = [];
+    report.competitorGaps = [];
     report.coreIssues = [{
       ...report.coreIssues[0]!,
       statement: "本次检查的公开页面中未发现完整采购说明",
@@ -86,6 +87,7 @@ describe("evidenceGuard (relation-based, ROUND-3)", () => {
     // Only assert the strength itself is satisfied (ignore other claims' relations).
     report.coreIssues = [];
     report.geoOpportunities = [];
+    report.competitorGaps = [];
     expect(evidenceGuard({ report, relations, coverage: coverageOf(report) })).toEqual({ ok: true });
   });
 
@@ -180,5 +182,47 @@ describe("evidenceGuard (relation-based, ROUND-3)", () => {
     expect(codesOf(evidenceGuard({ report, relations, coverage: coverageOf(report) }))).not.toContain(
       "TRUTH_4_8_DUPLICATE_OPPORTUNITY_EVIDENCE_SET",
     );
+  });
+
+  it("§4.9 — blocks a competitor gap backed only by observed-web evidence", () => {
+    const report = buildValidReport();
+    report.coreIssues = [];
+    report.strengths = [];
+    report.geoOpportunities = [];
+    report.competitorGaps = [
+      { ...report.competitorGaps[0]!, evidenceIds: ["ev_observed_news"] },
+    ];
+    const relations: ClaimEvidenceRelation[] = [
+      rel({
+        claimId: report.competitorGaps[0]!.id,
+        claimKind: "competitorGap",
+        evidenceId: "ev_observed_news",
+        supportLevel: "DIRECT_SUPPORT",
+        basis: "CONTENT_MATCH",
+      }),
+    ];
+
+    expect(codesOf(evidenceGuard({ report, relations, coverage: coverageOf(report) }))).toContain(
+      "TRUTH_4_9_COMPETITOR_ASSERTION_NEEDS_CONFIRMED_EVIDENCE",
+    );
+  });
+
+  it("§4.9 — accepts a provided competitor with a verified official-source relation", () => {
+    const report = buildValidReport();
+    report.coreIssues = [];
+    report.strengths = [];
+    report.geoOpportunities = [];
+    const gap = report.competitorGaps[0]!;
+    const relations: ClaimEvidenceRelation[] = [
+      rel({
+        claimId: gap.id,
+        claimKind: "competitorGap",
+        evidenceId: gap.evidenceIds[0],
+        supportLevel: "PARTIAL_SUPPORT",
+        basis: "CONTENT_MATCH",
+      }),
+    ];
+
+    expect(evidenceGuard({ report, relations, coverage: coverageOf(report) })).toEqual({ ok: true });
   });
 });
