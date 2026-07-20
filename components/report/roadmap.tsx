@@ -25,17 +25,17 @@ const PHASES = [
 
 export function Roadmap() {
   return (
-    <ol className="space-y-2.5">
+    <ol className="space-y-3">
       {PHASES.map((p, i) => (
-        <li key={p.phase} className="flex gap-3 rounded-xl border border-neutral-200 p-3">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-semibold text-neutral-700">
+        <li key={p.phase} className="flex gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-neutral-900 text-sm font-bold text-white">
             {i + 1}
           </span>
-          <div>
-            <p className="text-sm font-medium text-neutral-900">
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-neutral-900">
               {p.phase} · {p.goal}
             </p>
-            <p className="mt-0.5 text-xs text-neutral-600">{p.outcome}</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-neutral-600">{p.outcome}</p>
           </div>
         </li>
       ))}
