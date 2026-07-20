@@ -13,12 +13,6 @@ type EvidenceItemView = EvidenceViewModel["items"][number];
  * <details> (no client JS). URLs arrive already sanitised from the presentation
  * service. Each row shows: title, source domain, source type, authority level,
  * support level, fetched time, snippet, and the cleaned link.
- *
- * Collapsed state shows: title, source type badge, support level badge, language
- * label, source domain, and a "查看来源" link.
- *
- * Internal fields withheld from public view: Verifier reason, confidence, prompt
- * version, request ID, token count, internal hash.
  */
 export function EvidenceList({ items }: { items: readonly EvidenceItemView[] }) {
   if (items.length === 0) {
@@ -29,9 +23,8 @@ export function EvidenceList({ items }: { items: readonly EvidenceItemView[] }) 
       {items.map((item) => (
         <li key={item.id}>
           <details className="group rounded-xl border border-neutral-200 open:bg-neutral-50">
-            <summary className="flex cursor-pointer list-none items-start justify-between gap-2 p-3">
-              {/* Left: title + badges */}
-              <span className="min-w-0 flex-1">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-3">
+              <span className="min-w-0">
                 <span className="block truncate text-sm font-medium text-neutral-900">
                   {item.title}
                 </span>
@@ -45,23 +38,11 @@ export function EvidenceList({ items }: { items: readonly EvidenceItemView[] }) 
                   )}
                 </span>
               </span>
-              {/* Right: expand hint + source domain when collapsed */}
-              <span className="shrink-0 space-y-0.5 text-right">
-                <span className="block text-xs text-neutral-400 group-open:hidden">
-                  展开
-                </span>
-                <span className="hidden text-xs text-neutral-400 group-open:inline">
-                  收起
-                </span>
-                <span className="block truncate text-[11px] text-neutral-400 group-open:hidden max-w-[120px]">
-                  {item.sourceDomain}
-                </span>
-              </span>
+              <span className="shrink-0 text-xs text-neutral-400 group-open:hidden">展开</span>
+              <span className="hidden shrink-0 text-xs text-neutral-400 group-open:inline">收起</span>
             </summary>
             <div className="space-y-1.5 px-3 pb-3 text-xs text-neutral-600">
-              {item.summaryZh && (
-                <p className="font-medium text-neutral-800">{item.summaryZh}</p>
-              )}
+              {item.summaryZh && <p className="font-medium text-neutral-800">{item.summaryZh}</p>}
               <p className="text-neutral-700">{item.snippet}</p>
               <dl className="grid grid-cols-2 gap-1">
                 <div>
@@ -81,7 +62,7 @@ export function EvidenceList({ items }: { items: readonly EvidenceItemView[] }) 
                 href={item.url}
                 target="_blank"
                 rel="noopener noreferrer nofollow"
-                className="inline-block max-w-full break-words text-sky-600 underline"
+                className="inline-block break-all text-sky-600 underline"
               >
                 {item.url}
               </a>

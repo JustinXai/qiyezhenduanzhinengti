@@ -1,10 +1,8 @@
-<# Enterprise Diagnosis Demo - Startup Script v1.2
+<# Enterprise Diagnosis Demo - Startup Script
 # Validates environment and starts the demo server on port 36120
-# Branch: release/quick-first-mvp-v1.2
 
 param(
-    [switch]$SkipHealthCheck,
-    [switch]$Force
+    [switch]$SkipHealthCheck
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,22 +14,12 @@ $DB_PATH = "./data/lejinji-canary.db"
 $DIAGNOSIS_ID = "diag_577375be226c4c2f862af6e5bc6c8580"
 $EXPECTED_REPORT_ID = "369855b3-5273-44e5-b8ca-f717b5fadb41"
 $REPORT_TOKEN = "tok_1e28531d23774261af449977b88d9319"
-$EXPECTED_BRANCH = "release/quick-first-mvp-v1.2"
-$V1_1_BRANCH = "release/quick-first-mvp-v1"
+$EXPECTED_BRANCH = "release/quick-first-mvp-v1"
 
 function Write-Step {
     param([string]$Message, [string]$Status = "OK")
     $color = if ($Status -eq "OK") { "Green" } elseif ($Status -eq "FAIL") { "Red" } else { "Yellow" }
     Write-Host "[$Status] $Message" -ForegroundColor $color
-}
-
-function Write-Banner {
-    param([string]$Title, [string]$Color = "Cyan")
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor $Color
-    Write-Host " $Title" -ForegroundColor $Color
-    Write-Host "========================================" -ForegroundColor $Color
-    Write-Host ""
 }
 
 function Test-AppId {
@@ -43,14 +31,7 @@ function Test-AppId {
             return $true
         }
     }
-    $envLocal = Join-Path $PROJECT_ROOT ".env.local"
-    if (Test-Path $envLocal) {
-        $content = Get-Content $envLocal -Raw
-        if ($content -match "APP_ID=$APP_ID" -or $content -match "APP_ID.*ENTERPRISE_DIAGNOSIS") {
-            Write-Step "APP_ID=$APP_ID" "OK"
-            return $true
-        }
-    }
+    # Check package.json as fallback
     $pkgFile = Join-Path $PROJECT_ROOT "package.json"
     if (Test-Path $pkgFile) {
         $content = Get-Content $pkgFile -Raw
@@ -64,6 +45,7 @@ function Test-AppId {
 }
 
 function Test-AppName {
+    # The app name is hardcoded in package.json description
     Write-Step "APP_NAME=企业诊断智能体" "OK"
     return $true
 }
@@ -71,7 +53,7 @@ function Test-AppName {
 function Test-PortAvailable {
     $connection = Get-NetTCPConnection -LocalPort $EXPECTED_PORT -ErrorAction SilentlyContinue
     if ($connection) {
-        Write-Step "Port $EXPECTED_PORT is already in use" "WARN"
+        Write-Step "Port $EXPECTED_PORT is already in use (server may be running)" "WARN"
         return $false
     }
     Write-Step "Port $EXPECTED_PORT is available" "OK"
@@ -89,10 +71,6 @@ function Test-GitBranch {
         if ($branch -eq $EXPECTED_BRANCH) {
             Write-Step "Git branch: $EXPECTED_BRANCH" "OK"
             return $true
-        } elseif ($branch -eq $V1_1_BRANCH) {
-            Write-Step "Git branch: $branch (detected v1.1, expected v1.2)" "FAIL"
-            Write-Host "  -> Run: git checkout $EXPECTED_BRANCH" -ForegroundColor Yellow
-            return $false
         } else {
             Write-Step "Git branch mismatch: expected $EXPECTED_BRANCH, got '$branch'" "FAIL"
             return $false
@@ -115,14 +93,9 @@ function Test-DatabaseExists {
 }
 
 function Test-DatabaseContent {
-    $dbFullPath = Join-Path $PROJECT_ROOT $DB_PATH
-    if (-not (Test-Path $dbFullPath)) {
-        Write-Step "DB not found, skipping content check" "WARN"
-        return $true
-    }
-
+    # Use Node.js to query the database
     $queryScript = @"
-const db = require('better-sqlite3')('$($dbFullPath.Replace('\','\\\\'))');
+const db = require('better-sqlite3')('./data/lejinji-canary.db');
 const r = db.prepare("SELECT id FROM reports WHERE diagnosis_id='$DIAGNOSIS_ID'").get();
 if (r && r.id === '$EXPECTED_REPORT_ID') {
     console.log('OK');
@@ -140,51 +113,10 @@ db.close();
         if ($LASTEXITCODE -eq 0 -and $result -match "OK") {
             Write-Step "Lejinji report found in DB (id=$EXPECTED_REPORT_ID)" "OK"
             return $true
-        } elseif ($result -match "NOT_FOUND") {
-            Write-Step "Lejinji report not in DB — may need to re-run diagnosis" "WARN"
-            return $true
         } else {
-            Write-Step "DB query: $result" "FAIL"
+            Write-Step "DB query failed: $result" "FAIL"
             return $false
         }
-    } catch {
-        Write-Step "DB query failed (node/better-sqlite3 not available): $($_.Exception.Message)" "WARN"
-        return $true
-    } finally {
-        Pop-Location
-    }
-}
-
-function Test-ReportExists {
-    $dbFullPath = Join-Path $PROJECT_ROOT $DB_PATH
-    if (-not (Test-Path $dbFullPath)) {
-        Write-Step "DB not found, skipping report token check" "WARN"
-        return $true
-    }
-
-    $queryScript = @"
-const db = require('better-sqlite3')('$($dbFullPath.Replace('\','\\\\'))');
-const r = db.prepare("SELECT id FROM reports WHERE public_token='$REPORT_TOKEN'").get();
-console.log(r ? 'OK' : 'NOT_FOUND');
-db.close();
-"@
-
-    Push-Location $PROJECT_ROOT
-    try {
-        $result = node -e $queryScript 2>&1
-        if ($LASTEXITCODE -eq 0 -and $result -match "OK") {
-            Write-Step "Report token '$REPORT_TOKEN' exists in DB" "OK"
-            return $true
-        } elseif ($result -match "NOT_FOUND") {
-            Write-Step "Report token '$REPORT_TOKEN' not in DB — query latest via DB" "WARN"
-            return $true
-        } else {
-            Write-Step "Report token check: $result" "WARN"
-            return $true
-        }
-    } catch {
-        Write-Step "Report token check skipped (node/better-sqlite3 not available)" "WARN"
-        return $true
     } finally {
         Pop-Location
     }
@@ -202,7 +134,7 @@ function Test-ReportEndpoint {
             return $false
         }
     } catch {
-        Write-Step "Report endpoint unreachable (server not running yet)" "WARN"
+        Write-Step "Report endpoint unreachable (server not running)" "WARN"
         return $false
     }
 }
@@ -213,15 +145,17 @@ function Start-Server {
 
     Push-Location $PROJECT_ROOT
     try {
+        # Start the server in background
         $process = Start-Process -FilePath "npx" -ArgumentList "next", "start", "-p", $EXPECTED_PORT -PassThru -NoNewWindow
         if ($process) {
             Write-Host "Server process started (PID: $($process.Id))" -ForegroundColor Cyan
-            $maxWait = 45
+            # Wait for server to be ready
+            $maxWait = 30
             $waited = 0
             $ready = $false
             while ($waited -lt $maxWait) {
-                Start-Sleep -Seconds 3
-                $waited += 3
+                Start-Sleep -Seconds 2
+                $waited += 2
                 $conn = Get-NetTCPConnection -LocalPort $EXPECTED_PORT -ErrorAction SilentlyContinue
                 if ($conn) {
                     $ready = $true
@@ -229,10 +163,17 @@ function Start-Server {
                 }
             }
             if ($ready) {
+                Write-Host ""
                 Write-Step "Server started successfully!" "OK"
+                Write-Host ""
+                Write-Host "============================================" -ForegroundColor Cyan
+                Write-Host "  Enterprise Diagnosis Demo Ready" -ForegroundColor Cyan
+                Write-Host "  Homepage: http://localhost:$EXPECTED_PORT/" -ForegroundColor White
+                Write-Host "  Lejinji Report: http://localhost:$EXPECTED_PORT/report/$REPORT_TOKEN" -ForegroundColor White
+                Write-Host "============================================" -ForegroundColor Cyan
                 return $true
             } else {
-                Write-Step "Server started but port not listening after $maxWait seconds" "FAIL"
+                Write-Step "Server process started but port not listening after $maxWait seconds" "FAIL"
                 return $false
             }
         } else {
@@ -244,68 +185,56 @@ function Start-Server {
     }
 }
 
-function Show-Rollback-Hint {
-    Write-Host ""
-    Write-Host "----------------------------------------" -ForegroundColor Yellow
-    Write-Host "  To rollback to v1.1, run:" -ForegroundColor Yellow
-    Write-Host "    git checkout $V1_1_BRANCH" -ForegroundColor White
-    Write-Host "    .\scripts\start-enterprise-diagnosis-demo.ps1" -ForegroundColor White
-    Write-Host "----------------------------------------" -ForegroundColor Yellow
-}
-
 # Main execution
-Write-Banner "Enterprise Diagnosis Demo Launcher v1.2"
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host " Enterprise Diagnosis Demo Launcher" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
 
 $checks = @()
 
-if (-not $SkipHealthCheck) {
-    Write-Host "--- Pre-flight Checks ---" -ForegroundColor Yellow
+# Run checks
+Write-Host "--- Pre-flight Checks ---" -ForegroundColor Yellow
 
+if (-not $SkipHealthCheck) {
     $checks += Test-AppId
     $checks += Test-AppName
     $checks += Test-PortAvailable
     $checks += Test-GitBranch
     $checks += Test-DatabaseExists
     $checks += Test-DatabaseContent
-    $checks += Test-ReportExists
+    $checks += Test-ReportEndpoint
 
-    $failedCount = ($checks | Where-Object { $_ -eq $false }).Count
-    if ($failedCount -gt 0) {
+    if ($checks -contains $false) {
         Write-Host ""
-        Write-Step "Pre-flight checks failed ($failedCount issue(s)). Please fix above." "FAIL"
-        Show-Rollback-Hint
+        Write-Step "Pre-flight checks failed. Please fix the issues above." "FAIL"
         exit 1
     }
 } else {
-    Write-Step "Skipping pre-flight checks (-SkipHealthCheck)" "WARN"
+    Write-Step "Skipping pre-flight checks" "WARN"
 }
 
+# Check if server is already running
 $existingConn = Get-NetTCPConnection -LocalPort $EXPECTED_PORT -ErrorAction SilentlyContinue
 if ($existingConn) {
+    Write-Host ""
     Write-Step "Server already running on port $EXPECTED_PORT" "OK"
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Cyan
-    Write-Host "  Enterprise Diagnosis Demo v1.2 Ready" -ForegroundColor Cyan
+    Write-Host "  Enterprise Diagnosis Demo Ready" -ForegroundColor Cyan
     Write-Host "  Homepage: http://localhost:$EXPECTED_PORT/" -ForegroundColor White
     Write-Host "  Lejinji Report: http://localhost:$EXPECTED_PORT/report/$REPORT_TOKEN" -ForegroundColor White
     Write-Host "============================================" -ForegroundColor Cyan
-    Show-Rollback-Hint
     exit 0
 }
 
-$serverStarted = Start-Server
-if (-not $serverStarted) {
+# Start the server
+Start-Server
+if ($LASTEXITCODE -ne 0 -and $null -eq $?) {
     Write-Host ""
     Write-Step "Server startup failed" "FAIL"
-    Show-Rollback-Hint
     exit 1
 }
 
-Write-Host ""
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "  Enterprise Diagnosis Demo v1.2 Ready" -ForegroundColor Cyan
-Write-Host "  Homepage: http://localhost:$EXPECTED_PORT/" -ForegroundColor White
-Write-Host "  Lejinji Report: http://localhost:$EXPECTED_PORT/report/$REPORT_TOKEN" -ForegroundColor White
-Write-Host "============================================" -ForegroundColor Cyan
-Show-Rollback-Hint
 exit 0
