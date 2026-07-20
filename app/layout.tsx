@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "企业诊断智能体",
-  description: "企业 AI 可见度诊断 - GEO 优化承接",
+  description: "输入企业官网与客户常问问题,生成一份基于公开证据的企业诊断报告。",
 };
 
 export default function RootLayout({
