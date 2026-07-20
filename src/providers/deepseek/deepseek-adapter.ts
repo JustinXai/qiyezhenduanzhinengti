@@ -23,6 +23,8 @@ export interface DeepSeekConfig {
   baseUrl?: string;
   model?: string;
   timeoutMs?: number;
+  /** Optional explicit sampling temperature. Shadow comparisons set this equally for both models. */
+  temperature?: number;
 }
 
 export interface DeepSeekDeps {
@@ -45,6 +47,7 @@ function buildRequestBody(
   systemPrompt: string,
   userPrompt: string,
   maxTokens: number,
+  temperature?: number,
 ): string {
   return JSON.stringify({
     model,
@@ -52,6 +55,7 @@ function buildRequestBody(
     response_format: { type: "json_object" },
     thinking: { type: "disabled" },
     max_tokens: maxTokens,
+    ...(temperature !== undefined ? { temperature } : {}),
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
@@ -86,6 +90,15 @@ export function createDeepSeekProvider(
       if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
         return { ok: false, error: fail("PROVIDER_INVALID_REQUEST", `Invalid maxTokens: ${maxTokens}`) };
       }
+      if (
+        config.temperature !== undefined &&
+        (!Number.isFinite(config.temperature) || config.temperature < 0 || config.temperature > 2)
+      ) {
+        return {
+          ok: false,
+          error: fail("PROVIDER_INVALID_REQUEST", `Invalid temperature: ${config.temperature}`),
+        };
+      }
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -98,7 +111,13 @@ export function createDeepSeekProvider(
             "content-type": "application/json",
             authorization: `Bearer ${config.apiKey}`,
           },
-          body: buildRequestBody(model, systemPrompt, userPrompt, maxTokens),
+          body: buildRequestBody(
+            model,
+            systemPrompt,
+            userPrompt,
+            maxTokens,
+            config.temperature,
+          ),
           signal: controller.signal,
         });
       } catch (err) {
