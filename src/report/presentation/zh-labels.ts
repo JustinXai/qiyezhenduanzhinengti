@@ -67,3 +67,55 @@ export const ZH_DIMENSION_LABEL: Record<ScoreDimensionKey, string> = {
 export function zhSupportLabel(level: EvidenceSupportLevel): string {
   return level === "UNSUPPORTED" ? ZH_SUPPORT_LABEL.CONTEXT_ONLY : ZH_SUPPORT_LABEL[level];
 }
+
+// ---------------------------------------------------------------------------
+// Round-7: PublicInformationOpportunity 标签映射
+// 来源于 docs/product/ROUND7_QUICK_FIRST_SME_CONVERSION.md
+// ---------------------------------------------------------------------------
+
+/** PublicInformationOpportunity 覆盖状态 → 公开中文标签 */
+export const ZH_PUBLIC_INFO_COVERAGE_LABEL: Record<
+  "PARTIALLY_SUPPORTED" | "UNANSWERED",
+  string
+> = {
+  PARTIALLY_SUPPORTED: "部分覆盖",
+  UNANSWERED: "未覆盖",
+};
+
+/**
+ * Round-7 首屏固定模块标题
+ * 源自 docs/product/ROUND7_QUICK_FIRST_SME_CONVERSION.md §四
+ */
+export const QUICK_FIRST_SCREEN_MODULE = {
+  /** 一句话诊断结论 */
+  headline: "一句话诊断结论",
+  /** 综合分 */
+  score: "GEO可见度基础指数",
+  /** 测量构成 */
+  composition: "实测/公开网页估算构成",
+  /** 最重要的公开信息完善机会 */
+  topOpportunity: "最重要的公开信息完善机会",
+  /** 主 CTA */
+  primaryCta: "预约报告解读",
+} as const;
+
+/**
+ * Round-7 Quick 模块标题（用于后续模块）
+ * 动态显示，空模块隐藏
+ */
+export const QUICK_MODULE_TITLES = {
+  /** AI 当前理解 */
+  aiUnderstanding: "AI 当前如何谈论企业",
+  /** 公开信息完善机会 */
+  publicInfoOpportunities: "公开信息完善机会",
+  /** 核心问题 */
+  coreIssues: "核心问题",
+  /** GEO 机会 */
+  geoOpportunities: "GEO 机会",
+  /** 行动建议 */
+  actionSuggestions: "建议先做的 3 件事",
+  /** 三阶段路线图 */
+  roadmap: "三阶段路线图",
+  /** 下一步 */
+  nextSteps: "下一步",
+} as const;

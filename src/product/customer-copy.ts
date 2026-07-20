@@ -144,3 +144,57 @@ export const ROADMAP_PHASE_GOALS = [
   "覆盖高意向客户问题",
   "持续测试和更新",
 ] as const;
+
+// ---------------------------------------------------------------------------
+// Round-7: 销售用词边界 (docs/product/ROUND7_QUICK_FIRST_SME_CONVERSION.md §六)
+// 用于指导客户沟通语言，不得在无真实数据时使用夸大承诺
+// ---------------------------------------------------------------------------
+
+/**
+ * Round-7 推荐使用的销售词汇
+ * 在客户沟通和报告文案中优先使用这些表达
+ */
+export const RECOMMENDED_SALES_TERMS = [
+  "AI问答覆盖机会",
+  "公开信息完善机会",
+  "品牌事实表达机会",
+  "客户决策内容机会",
+  "产品与服务结构化机会",
+] as const;
+
+/**
+ * Round-7 禁用销售词汇
+ * 在没有真实排名、Probe 或需求数据时不得使用
+ * 这些词汇涉及效果承诺，需要真实数据支撑
+ */
+export const BANNED_SALES_TERMS = [
+  "排名提升空间巨大",   // security-check:allow 夸大效果
+  "曝光一定增长",       // security-check:allow 绝对化承诺
+  "AI排名靠后",         // security-check:allow 缺乏客观基准
+  "能快速霸屏",         // security-check:allow 不切实际
+  "抢占第一",           // security-check:allow 无法保证
+  "保证推荐",           // security-check:allow 违反真实性
+  "保证排名",           // security-check:allow 已有 §9 禁止
+  "保证流量",           // security-check:allow 已有 §9 禁止
+  "保证线索",           // security-check:allow 已有 §9 禁止
+  "保证收入",           // security-check:allow 已有 §9 禁止
+] as const;
+
+/**
+ * Round-7 PublicInformationOpportunity 必需限定语
+ * 用于限定检查范围，避免绝对化表述
+ */
+export const PUBLIC_INFO_REQUIRED_QUALIFIER =
+  "在本次已检查的公开页面和搜索结果中，";
+
+/**
+ * Round-7 PublicInformationOpportunity 禁用表述
+ * 不得使用的绝对化或否定性表述
+ */
+export const PUBLIC_INFO_BANNED_PHRASES = [
+  "企业没有",
+  "官网完全缺失",
+  "用户一定找不到",
+  "AI不会推荐",
+  "排名很差",
+] as const;

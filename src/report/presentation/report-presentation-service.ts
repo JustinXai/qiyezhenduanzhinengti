@@ -25,6 +25,9 @@ import type {
   QuickReportViewModel,
   EvidenceViewModel,
   Strength,
+  PublicInformationOpportunity,
+  PublicInformationAction,
+  QuestionCoverageGap,
 } from "../../contracts";
 import { sanitizeEvidenceUrl } from "./evidence-url";
 import {
@@ -301,6 +304,75 @@ function buildMeasurementNotes(
 }
 
 // ---------------------------------------------------------------------------
+// Round-7: QuestionCoverageGap → PublicInformationOpportunity 映射
+// 来源于 docs/product/ROUND7_QUICK_FIRST_SME_CONVERSION.md §三
+// 仅处理 PARTIALLY_SUPPORTED 或 UNANSWERED 状态
+// ---------------------------------------------------------------------------
+
+const QUICK_PUBLIC_INFO_OPPORTUNITY_LIMIT = 3;
+
+function buildPublicInformationOpportunity(
+  gap: QuestionCoverageGap,
+  index: EvidenceIndex,
+): PublicInformationOpportunity {
+  return {
+    relatedQuestionId: gap.questionId,
+    customerQuestion: gap.questionText,
+    // 只处理 PARTIALLY_SUPPORTED 或 UNANSWERED，FULLY_SUPPORTED 在 filter 中已过滤
+    currentCoverageStatus: gap.coverageStatus === "PARTIALLY_SUPPORTED"
+      ? "PARTIALLY_SUPPORTED"
+      : "UNANSWERED",
+    observedScope: gap.observedScope,
+    missingPublicInformation: gap.missingInformation,
+    suggestedContentAction: gap.suggestedAction,
+    potentialBusinessValue: gap.businessValue,
+    evidenceIds: gap.evidenceIds.filter((id: string) => index.has(id)),
+    wordingMode: "WITHIN_CHECKED_SCOPE",
+  };
+}
+
+function buildPublicInformationAction(
+  gap: QuestionCoverageGap,
+): PublicInformationAction {
+  return {
+    actionText: gap.suggestedAction,
+    sourceType: "PUBLIC_INFORMATION_ACTION",
+    relatedQuestion: gap.questionText,
+  };
+}
+
+function selectPublicInformationOpportunities(
+  gaps: QuestionCoverageGap[] | undefined,
+  index: EvidenceIndex,
+): PublicInformationOpportunity[] {
+  if (!gaps || gaps.length === 0) return [];
+
+  return gaps
+    .filter(
+      (gap) =>
+        gap.coverageStatus === "PARTIALLY_SUPPORTED" ||
+        gap.coverageStatus === "UNANSWERED",
+    )
+    .map((gap) => buildPublicInformationOpportunity(gap, index))
+    .slice(0, QUICK_PUBLIC_INFO_OPPORTUNITY_LIMIT);
+}
+
+function selectPublicInformationActions(
+  gaps: QuestionCoverageGap[] | undefined,
+): PublicInformationAction[] {
+  if (!gaps || gaps.length === 0) return [];
+
+  return gaps
+    .filter(
+      (gap) =>
+        gap.coverageStatus === "PARTIALLY_SUPPORTED" ||
+        gap.coverageStatus === "UNANSWERED",
+    )
+    .map((gap) => buildPublicInformationAction(gap))
+    .slice(0, QUICK_PUBLIC_INFO_OPPORTUNITY_LIMIT);
+}
+
+// ---------------------------------------------------------------------------
 // Public projections
 // ---------------------------------------------------------------------------
 
@@ -316,6 +388,14 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
   const topOpportunity = rankedOpportunities[0] ?? null;
 
   const composition = computeMeasurementComposition(report.scores);
+
+  // Round-7: 构建 PublicInformationOpportunity
+  const publicInformationOpportunities = selectPublicInformationOpportunities(
+    report.questionCoverageGaps,
+    index,
+  );
+  const topPublicInformationOpportunity = publicInformationOpportunities[0] ?? null;
+  const publicInformationActions = selectPublicInformationActions(report.questionCoverageGaps);
 
   return {
     diagnosisId: report.diagnosisId,
@@ -337,6 +417,10 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
     coreIssues: rankedIssues.slice(0, QUICK_CORE_ISSUE_LIMIT),
     demonstrationFix: report.demonstrationFix,
     geoOpportunities: rankedOpportunities.slice(0, QUICK_GEO_OPPORTUNITY_LIMIT),
+    // Round-7: PublicInformationOpportunity 字段
+    publicInformationOpportunities,
+    topPublicInformationOpportunity,
+    publicInformationActions,
   };
 }
 

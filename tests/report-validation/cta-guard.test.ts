@@ -33,6 +33,10 @@ function minimalQuick(overrides: Partial<QuickReportViewModel> = {}): QuickRepor
     coreIssues: [],
     demonstrationFix: null,
     geoOpportunities: [],
+    // Round-7: 新增字段
+    publicInformationOpportunities: [],
+    topPublicInformationOpportunity: null,
+    publicInformationActions: [],
     ...overrides,
   };
 }

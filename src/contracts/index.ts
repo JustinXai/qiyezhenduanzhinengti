@@ -211,6 +211,125 @@ export const DemonstrationFix = z.object({
 export type DemonstrationFix = z.infer<typeof DemonstrationFix>;
 
 // ---------------------------------------------------------------------------
+// Round-7: PublicInformationOpportunityV1
+// 来源于 QuestionCoverageGapV1 的确定性映射，用于提示企业可以补充的公开信息
+// 不是正式 GEO Opportunity，不进入 Opportunity 统计，不影响 Truth Guard 门槛
+// ---------------------------------------------------------------------------
+
+export const PublicInformationCoverageStatus = z.enum([
+  "PARTIALLY_SUPPORTED",
+  "UNANSWERED",
+]);
+export type PublicInformationCoverageStatus = z.infer<typeof PublicInformationCoverageStatus>;
+
+/** 措辞模式：必须限定检查范围 */
+export const PublicInformationWordingMode = z.literal("WITHIN_CHECKED_SCOPE");
+export type PublicInformationWordingMode = z.infer<typeof PublicInformationWordingMode>;
+
+export const PublicInformationOpportunity = z.object({
+  /** 关联的客户问题 ID */
+  relatedQuestionId: z.string(),
+  /** 客户正在问什么 */
+  customerQuestion: z.string(),
+  /** 当前覆盖状态：仅允许 PARTIALLY_SUPPORTED 或 UNANSWERED */
+  currentCoverageStatus: PublicInformationCoverageStatus,
+  /** 在本次已检查范围内观察到的内容范围 */
+  observedScope: z.string(),
+  /** 缺失的公开信息描述 */
+  missingPublicInformation: z.string(),
+  /** 建议的具体补充动作 */
+  suggestedContentAction: z.string(),
+  /** 潜在商业价值说明 */
+  potentialBusinessValue: z.string(),
+  /** 关联的 Evidence ID 列表 */
+  evidenceIds: z.array(z.string()),
+  /** 措辞模式：必须限定检查范围 */
+  wordingMode: PublicInformationWordingMode,
+});
+export type PublicInformationOpportunity = z.infer<typeof PublicInformationOpportunity>;
+
+/** 行动建议来源标记 */
+export const PublicInformationActionSourceType = z.literal("PUBLIC_INFORMATION_ACTION");
+export type PublicInformationActionSourceType = z.infer<typeof PublicInformationActionSourceType>;
+
+/**
+ * 阶段一 Quick 行动建议
+ * 来源于 QuestionCoverageGap 的确定性映射
+ * 标记为 PUBLIC_INFORMATION_ACTION，不是正式 GEO Opportunity
+ */
+export const PublicInformationAction = z.object({
+  /** 行动建议文本 */
+  actionText: z.string(),
+  /** 来源标记：固定为 PUBLIC_INFORMATION_ACTION */
+  sourceType: PublicInformationActionSourceType,
+  /** 关联的客户问题 */
+  relatedQuestion: z.string().optional(),
+});
+export type PublicInformationAction = z.infer<typeof PublicInformationAction>;
+
+// ---------------------------------------------------------------------------
+// Round-7.1A: QuestionCoverageAssessment - 客户问题评估记录
+// ---------------------------------------------------------------------------
+
+/** 评估原因代码 */
+export const QuestionAssessmentReasonCode = z.enum([
+  "MATCHED_SIGNAL",       // 成功匹配 coverage signal
+  "NO_MATCHING_COVERAGE_SIGNAL",  // 无法匹配 coverage signal
+  "EVIDENCE_INSUFFICIENT",       // 证据不足
+]);
+export type QuestionAssessmentReasonCode = z.infer<typeof QuestionAssessmentReasonCode>;
+
+/**
+ * Round-7.1A: QuestionCoverageAssessmentV1
+ * 每个原始客户问题的评估记录
+ * 在请求创建时生成，持久化于 Diagnosis Request
+ */
+export const QuestionCoverageAssessment = z.object({
+  /** 稳定的问题 ID */
+  questionId: z.string(),
+  /** 原始问题文本 */
+  questionText: z.string(),
+  /** 匹配的 coverage criterion key（如果有） */
+  matchedCriterionKey: z.string().nullable(),
+  /** 覆盖状态 */
+  status: z.enum(["FULLY_SUPPORTED", "PARTIALLY_SUPPORTED", "UNANSWERED"]),
+  /** 关联的 Evidence ID */
+  evidenceIds: z.array(z.string()),
+  /** 评估原因代码 */
+  reasonCode: QuestionAssessmentReasonCode,
+  /** 评估时间 */
+  assessedAt: z.string(),
+  /** 算法版本 */
+  algorithmVersion: z.literal("1.0.0"),
+});
+export type QuestionCoverageAssessment = z.infer<typeof QuestionCoverageAssessment>;
+
+/**
+ * Round-7: QuestionCoverageGapV1
+ * 用于记录客户问题的覆盖情况
+ * 是 PublicInformationOpportunity 的来源
+ */
+export const QuestionCoverageGap = z.object({
+  /** 问题 ID */
+  questionId: z.string(),
+  /** 问题文本（客户正在问什么） */
+  questionText: z.string(),
+  /** 覆盖状态 */
+  coverageStatus: z.enum(["FULLY_SUPPORTED", "PARTIALLY_SUPPORTED", "UNANSWERED"]),
+  /** 观察到的内容范围 */
+  observedScope: z.string(),
+  /** 缺失的公开信息描述 */
+  missingInformation: z.string(),
+  /** 建议的具体补充动作 */
+  suggestedAction: z.string(),
+  /** 潜在商业价值 */
+  businessValue: z.string(),
+  /** 关联的 Evidence ID */
+  evidenceIds: z.array(z.string()),
+});
+export type QuestionCoverageGap = z.infer<typeof QuestionCoverageGap>;
+
+// ---------------------------------------------------------------------------
 // Canonical DiagnosisReport - the single stored report shape.
 // ---------------------------------------------------------------------------
 
@@ -248,6 +367,18 @@ export const DiagnosisReport = z.object({
   geoOpportunities: z.array(GeoOpportunity),
   demonstrationFix: DemonstrationFix.nullable(),
   evidence: z.array(EvidenceItem),
+  /**
+   * Round-7.1A: 客户问题评估记录
+   * 每个原始客户问题恰好有一个评估
+   * 在请求创建时生成并持久化
+   */
+  questionCoverageAssessments: z.array(QuestionCoverageAssessment).optional(),
+  /**
+   * Round-7: 客户问题覆盖缺口
+   * 用于生成 PublicInformationOpportunity
+   * 来源于 customerQuestionCoverage 维度的分析
+   */
+  questionCoverageGaps: z.array(QuestionCoverageGap).optional(),
 });
 export type DiagnosisReport = z.infer<typeof DiagnosisReport>;
 
@@ -291,6 +422,23 @@ export const QuickReportViewModel = z.object({
   coreIssues: z.array(CoreIssue).max(3),
   demonstrationFix: DemonstrationFix.nullable(),
   geoOpportunities: z.array(GeoOpportunity).max(3),
+  /**
+   * Round-7: 公开信息完善机会
+   * 来源于 QuestionCoverageGapV1 的确定性映射
+   * 最多 3 个，不是正式 Opportunity，不影响 Truth Guard
+   */
+  publicInformationOpportunities: z.array(PublicInformationOpportunity).max(3),
+  /**
+   * Round-7: 最重要的公开信息完善机会（用于首屏展示）
+   * 从 publicInformationOpportunities 中选择最重要的 1 个
+   */
+  topPublicInformationOpportunity: PublicInformationOpportunity.nullable(),
+  /**
+   * Round-7: 行动建议
+   * 来源于 QuestionCoverageGap 的确定性映射
+   * 标记为 PUBLIC_INFORMATION_ACTION，不是正式 GEO Opportunity
+   */
+  publicInformationActions: z.array(PublicInformationAction).max(3),
 });
 export type QuickReportViewModel = z.infer<typeof QuickReportViewModel>;
 

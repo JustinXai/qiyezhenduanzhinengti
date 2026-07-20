@@ -118,11 +118,12 @@ describe("QuickReport rendering", () => {
   it("omits the fix module when hidden and keeps numbering contiguous", () => {
     const html = renderQuick(buildSampleReport({ demonstrationFix: null }));
     expect(html).not.toContain('data-testid="quick-module-fix"');
-    // Later modules still render, and no visible chip number is skipped: with
-    // the fix hidden the sample renders 7 modules numbered 1..7.
+    // Round-7: 现在有 9 个模块（summary, ai, competitor, issues, geo, public-info, actions, roadmap, cta）
+    // 编号 1-9 连续
     expect(html).toContain('data-testid="quick-module-geo"');
     expect(html).toContain('data-testid="quick-module-cta"');
-    expect(html).not.toContain(">8</span>");
+    // 检查编号连续：不存在跳号（如 >9</span> 意味着有 10 个模块但我们只有 9 个）
+    expect(html).not.toContain(">10</span>");
   });
 });
 

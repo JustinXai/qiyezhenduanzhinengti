@@ -64,6 +64,17 @@ const TECH_ERROR_MARKERS = [
   "stack trace", "Traceback", "undefined is not",
 ];
 
+// Round-7.1: coverage-related internal terms that must not appear in public copy
+const COVERAGE_LEAK_PATTERNS = [
+  "coverageStatus",
+  "scoreCoverage",
+  "COVERAGE_NOT_ESTABLISHED",
+  "MISSING_COVERAGE_PREFIX",
+  "COVERAGE_CONTEXT",
+  "Coverage Context",
+  "coverage context",
+];
+
 /**
  * A "full English sentence": ≥5 consecutive latin words followed by another
  * latin word or sentence punctuation — i.e. real prose, not a brand, model
@@ -114,6 +125,12 @@ function check(fields: ProseField[], opts: { ctaFields?: string[] } = {}): Chine
     for (const marker of TECH_ERROR_MARKERS) {
       if (text.includes(marker)) {
         violations.push({ rule: "ZH_TECH_ERROR_LEAK", field, detail: marker });
+      }
+    }
+    // Round-7.1: no coverage-related internal terms in public copy
+    for (const pattern of COVERAGE_LEAK_PATTERNS) {
+      if (text.includes(pattern)) {
+        violations.push({ rule: "ZH_INTERNAL_ENUM_LEAK", field, detail: pattern });
       }
     }
     // Unified punctuation: half-width !, ? and ; are not used in zh-CN prose.
@@ -167,6 +184,33 @@ export function chinesePublicReportGuard(views: {
         }))
       : [{ field: "quick.competitorGapSummary.reason", text: quick.competitorGapSummary.reason }]),
   ];
+
+  // Round-7: 检查 PublicInformationOpportunity 和 PublicInformationAction 字段
+  quick.publicInformationOpportunities.forEach((opp, i) => {
+    quickFields.push(
+      { field: `quick.publicInformationOpportunities[${i}].customerQuestion`, text: opp.customerQuestion },
+      { field: `quick.publicInformationOpportunities[${i}].observedScope`, text: opp.observedScope },
+      { field: `quick.publicInformationOpportunities[${i}].missingPublicInformation`, text: opp.missingPublicInformation },
+      { field: `quick.publicInformationOpportunities[${i}].suggestedContentAction`, text: opp.suggestedContentAction },
+      { field: `quick.publicInformationOpportunities[${i}].potentialBusinessValue`, text: opp.potentialBusinessValue },
+    );
+  });
+
+  // Round-7: 检查 topPublicInformationOpportunity
+  if (quick.topPublicInformationOpportunity) {
+    const t = quick.topPublicInformationOpportunity;
+    quickFields.push(
+      { field: "quick.topPublicInformationOpportunity.customerQuestion", text: t.customerQuestion },
+      { field: "quick.topPublicInformationOpportunity.suggestedContentAction", text: t.suggestedContentAction },
+    );
+  }
+
+  // Round-7: 检查 PublicInformationAction
+  quick.publicInformationActions.forEach((action, i) => {
+    quickFields.push(
+      { field: `quick.publicInformationActions[${i}].actionText`, text: action.actionText },
+    );
+  });
 
   const deepFields: ProseField[] = [
     ...deep.measurementNotes.map((n, i) => ({ field: `deep.measurementNotes[${i}]`, text: n })),

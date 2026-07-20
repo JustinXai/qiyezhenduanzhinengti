@@ -184,6 +184,10 @@ function projectQuick(report: DiagnosisReportType): QuickReportViewModelType {
     coreIssues: report.coreIssues.slice(0, 3),
     demonstrationFix: report.demonstrationFix,
     geoOpportunities: report.geoOpportunities.slice(0, 3),
+    // Round-7: 新增字段（smoke-mock 不测试新功能，保持空数组）
+    publicInformationOpportunities: [],
+    topPublicInformationOpportunity: null,
+    publicInformationActions: [],
   };
 }
 

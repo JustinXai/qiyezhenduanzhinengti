@@ -10,6 +10,8 @@ import { Roadmap } from "./roadmap";
 import { CtaSection } from "./cta-section";
 import { formatDate, formatPercent } from "./labels";
 import { PRIMARY_CTA_LABEL } from "../../src/product/customer-copy";
+import { QUICK_MODULE_TITLES } from "../../src/report/presentation/zh-labels";
+import { PublicInfoOpportunityCard, PublicInfoActionItem } from "./public-info-opportunity";
 
 interface QuickReportProps {
   vm: QuickReportViewModel;
@@ -68,6 +70,13 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
           <HighlightRow label="已有优势" text={vm.topStrength?.statement} />
           <HighlightRow label="最优先问题" text={vm.topIssue?.statement} />
           <HighlightRow label="最优先机会" text={vm.topOpportunity?.statement} />
+          {/* Round-7: 首屏最重要的公开信息完善机会 */}
+          {vm.topPublicInformationOpportunity && (
+            <HighlightRow
+              label="最优先补充"
+              text={vm.topPublicInformationOpportunity.suggestedContentAction}
+            />
+          )}
         </dl>
 
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -177,6 +186,39 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
         <div className="space-y-2">
           {vm.geoOpportunities.map((opp) => (
             <OpportunityItem key={opp.id} opportunity={opp} />
+          ))}
+        </div>
+      ),
+    });
+  }
+
+  // Round-7: 公开信息完善机会 — 最多3个
+  if (vm.publicInformationOpportunities.length > 0) {
+    modules.push({
+      key: "public-info",
+      title:
+        vm.publicInformationOpportunities.length === 1
+          ? QUICK_MODULE_TITLES.publicInfoOpportunities
+          : `${QUICK_MODULE_TITLES.publicInfoOpportunities}(${vm.publicInformationOpportunities.length}个)`,
+      body: (
+        <div className="space-y-2">
+          {vm.publicInformationOpportunities.map((opp, idx) => (
+            <PublicInfoOpportunityCard key={opp.relatedQuestionId} opportunity={opp} index={idx + 1} />
+          ))}
+        </div>
+      ),
+    });
+  }
+
+  // Round-7: 行动建议 — 来源于 QuestionCoverageGap 的确定性映射
+  if (vm.publicInformationActions.length > 0) {
+    modules.push({
+      key: "actions",
+      title: QUICK_MODULE_TITLES.actionSuggestions,
+      body: (
+        <div className="space-y-2">
+          {vm.publicInformationActions.map((action, idx) => (
+            <PublicInfoActionItem key={idx} action={action} index={idx + 1} />
           ))}
         </div>
       ),
