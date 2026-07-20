@@ -120,7 +120,7 @@ const lejinjiReport: DiagnosisReport = {
   geoOpportunities: [],
   demonstrationFix: {
     id: "demo_1",
-    fixType: "CHANNEL_PAGE",
+    fixType: "FAQ_EXAMPLE",
     currentIssue: "官网缺少购买渠道信息",
     suggestedAssetType: "购买渠道页面",
     before: "官网未展示任何购买渠道或电商入口",
@@ -129,7 +129,7 @@ const lejinjiReport: DiagnosisReport = {
     customerConfirmationNeeded: "确认各电商平台的官方旗舰店链接",
     geoTeamDeliverable: "电商平台入口链接清单",
     evidenceIds: ["ev_1"],
-    disclaimer: "本报告基于公开网络信息生成，仅供参考，不构成投资或合作建议。",
+    disclaimer: "示范内容仅用于展示优化方向，正式发布前需结合企业真实材料确认。",
   },
   questionCoverageGaps: [
     {
