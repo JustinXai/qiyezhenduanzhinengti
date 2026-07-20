@@ -68,6 +68,37 @@ describe("DeepSeek adapter — request construction", () => {
     expect(res).toEqual({ ok: true, json: payload });
   });
 
+  it("sends an explicitly configured temperature without changing the default path", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(chatEnvelope(JSON.stringify({ ok: 1 }))),
+    ) as unknown as typeof fetch;
+    const provider = createDeepSeekProvider(
+      { ...CONFIG, temperature: 0 },
+      { fetch: fetchMock },
+    );
+    await provider.completeJson({
+      stage: "claims-shadow",
+      systemPrompt: "sys",
+      userPrompt: "user",
+      maxTokens: 4096,
+    });
+    const [, init] = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(init.body as string).temperature).toBe(0);
+
+    const defaultFetch = vi.fn(async () =>
+      jsonResponse(chatEnvelope(JSON.stringify({ ok: 1 }))),
+    ) as unknown as typeof fetch;
+    await callWith(defaultFetch);
+    const [, defaultInit] = (defaultFetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(defaultInit.body as string)).not.toHaveProperty("temperature");
+  });
+
   it("strips a BOM and trims but never repairs malformed JSON", async () => {
     const fetchMock = (async () =>
       jsonResponse(chatEnvelope("﻿  {\"a\":1}  "))) as unknown as typeof fetch;
@@ -205,6 +236,23 @@ describe("DeepSeek adapter — transport + guard errors", () => {
     const fetchMock = vi.fn() as unknown as typeof fetch;
     const provider = createDeepSeekProvider(CONFIG, { fetch: fetchMock });
     const res = await provider.completeJson({ stage: "s", systemPrompt: "", userPrompt: "", maxTokens: 0 });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("PROVIDER_INVALID_REQUEST");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid explicit temperature before making a request", async () => {
+    const fetchMock = vi.fn() as unknown as typeof fetch;
+    const provider = createDeepSeekProvider(
+      { ...CONFIG, temperature: 3 },
+      { fetch: fetchMock },
+    );
+    const res = await provider.completeJson({
+      stage: "claims-shadow",
+      systemPrompt: "",
+      userPrompt: "",
+      maxTokens: 4096,
+    });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe("PROVIDER_INVALID_REQUEST");
     expect(fetchMock).not.toHaveBeenCalled();
