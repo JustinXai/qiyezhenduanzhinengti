@@ -41,7 +41,7 @@ export function ScoreHeadline({ overallScore, scoreCoverage, composition }: Scor
         )}
       </div>
       <p className="mt-2 text-xs text-neutral-400">
-        有效评分覆盖率 {formatPercent(scoreCoverage)}
+        评分完整度 {formatPercent(scoreCoverage)}
         {composition && (
           <span data-testid="measurement-composition">
             {" · 实测 "}

@@ -248,7 +248,7 @@ describe("Canary B — English brand, Chinese explanations", () => {
     expect(guard).toEqual({ ok: true });
     // Chinese prose everywhere the customer reads conclusions.
     expect(/[一-鿿]/.test(views.quick.headlineConclusion)).toBe(true);
-    for (const issue of views.quick.coreIssues) expect(/[一-鿿]/.test(issue.statement)).toBe(true);
+    // Round-8 FINAL: coreIssues removed from Quick — check via demonstrationFix or skip.
   });
 });
 

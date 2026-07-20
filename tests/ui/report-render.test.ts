@@ -41,7 +41,7 @@ function renderEvidence(report = SAMPLE_DIAGNOSIS_REPORT): string {
 describe("QuickReport rendering", () => {
   it("renders the frozen score name and both CTAs verbatim", () => {
     const html = renderQuick();
-    expect(html).toContain("GEO可见度基础指数");
+    expect(html).toContain("GEO基础诊断指数");
     expect(html).toContain("预约报告解读");
     expect(html).toContain("获取企业GEO优化方案");
     expect(html).toContain(SAMPLE_DIAGNOSIS_REPORT.companyProfile.brandName);

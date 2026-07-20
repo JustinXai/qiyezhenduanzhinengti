@@ -62,7 +62,7 @@ export const THIRTY_MINUTE_POINTS = [
 // ---------------------------------------------------------------------------
 
 /** 综合分固定命名。 */
-export const OVERALL_SCORE_LABEL = "GEO可见度基础指数";
+export const OVERALL_SCORE_LABEL = "GEO基础诊断指数";
 
 // 综合分禁用别名 — 不得出现在任何客户可见文案中。这是「检测清单」而非展示文案，
 // 故每行标注 `security-check:allow`，与 src/report/validation/cta-guard.ts 中的
@@ -100,6 +100,9 @@ export const COMPETITOR_INSUFFICIENT_EVIDENCE =
 export const SCORE_HINT_ALL_ESTIMATED = "本次结果主要基于公开网络信息估算。";
 /** 存在未测得维度（INSUFFICIENT_EVIDENCE / PROVIDER_FAILED）时。 */
 export const SCORE_HINT_SOME_UNMEASURED = "部分维度暂未测得。";
+
+/** 评分完整度标签 — 替代旧版「有效评分覆盖率」。 */
+export const SCORE_COVERAGE_LABEL = "评分完整度";
 
 // ---------------------------------------------------------------------------
 // §8 — AI-visibility sample disclaimer (docs/PRODUCT_TRUTH_RULES.md §8).

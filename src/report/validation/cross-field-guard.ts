@@ -122,11 +122,7 @@ export function viewModelEvidenceGuard(
     if (quick.topStrength) check(quick.topStrength.evidenceIds, "quick.topStrength");
     if (quick.topIssue) check(quick.topIssue.evidenceIds, "quick.topIssue");
     if (quick.topOpportunity) check(quick.topOpportunity.evidenceIds, "quick.topOpportunity");
-    quick.coreIssues.forEach((c, i) => check(c.evidenceIds, `quick.coreIssues[${i}]`));
-    quick.geoOpportunities.forEach((c, i) => check(c.evidenceIds, `quick.geoOpportunities[${i}]`));
-    quick.aiVisibilitySamples.forEach((t, i) =>
-      check(t.evidenceIds, `quick.aiVisibilitySamples[${i}]`),
-    );
+    // Round-8 FINAL: coreIssues, geoOpportunities, aiVisibilitySamples removed from Quick.
     if (quick.demonstrationFix) check(quick.demonstrationFix.evidenceIds, "quick.demonstrationFix");
     if (quick.competitorGapSummary.available) {
       quick.competitorGapSummary.gaps.forEach((g, i) =>

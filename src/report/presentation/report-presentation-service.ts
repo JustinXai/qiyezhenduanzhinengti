@@ -26,8 +26,10 @@ import type {
   EvidenceViewModel,
   Strength,
   PublicInformationOpportunity,
-  PublicInformationAction,
   QuestionCoverageGap,
+  PriorityDirection,
+  QuestionCoverageStats,
+  QuestionCoverageAssessment,
 } from "../../contracts";
 import { sanitizeEvidenceUrl } from "./evidence-url";
 import {
@@ -250,7 +252,7 @@ function buildHeadlineConclusion(
     return `『${brand}』本次可测指标覆盖 ${coveragePct}%,尚不足以给出综合指数,建议先补齐关键信息后复测。`;
   }
 
-  const clauses = [`『${brand}』当前 GEO可见度基础指数为 ${Math.round(overall)} 分(覆盖率 ${coveragePct}%)`];
+  const clauses = [`『${brand}』当前 GEO基础诊断指数为 ${Math.round(overall)} 分(覆盖率 ${coveragePct}%)`];
   if (topStrength) clauses.push(`已具备优势:${topStrength.statement}`);
   if (topIssue) clauses.push(`最需优先处理:${topIssue.statement}`);
   // Round-5.1 §四: unified full-width Chinese punctuation in composed prose.
@@ -304,72 +306,147 @@ function buildMeasurementNotes(
 }
 
 // ---------------------------------------------------------------------------
-// Round-7: QuestionCoverageGap → PublicInformationOpportunity 映射
-// 来源于 docs/product/ROUND7_QUICK_FIRST_SME_CONVERSION.md §三
-// 仅处理 PARTIALLY_SUPPORTED 或 UNANSWERED 状态
+// Round-8 FINAL: Question Coverage Stats — from questionCoverageAssessments only.
+// Do NOT use questionCoverageGaps.length as total.
 // ---------------------------------------------------------------------------
 
-const QUICK_PUBLIC_INFO_OPPORTUNITY_LIMIT = 3;
+function buildQuestionCoverageStats(
+  assessments: QuestionCoverageAssessment[] | undefined,
+): { stats: QuestionCoverageStats; restraintNote: string | null } {
+  if (!assessments || assessments.length === 0) {
+    return {
+      stats: { total: 0, supported: 0, partial: 0, unanswered: 0, providerFailed: 0 },
+      restraintNote: null,
+    };
+  }
+  const total = assessments.length;
+  const supported = assessments.filter((a) => a.status === "FULLY_SUPPORTED").length;
+  const partial = assessments.filter((a) => a.status === "PARTIALLY_SUPPORTED").length;
+  const unanswered = assessments.filter((a) => a.status === "UNANSWERED").length;
+  // Any assessment with MATCHED_SIGNAL but empty evidenceIds and PARTIALLY status is
+  // effectively a partial coverage; providerFailed is not used by the current pipeline.
+  const providerFailed = 0;
 
-function buildPublicInformationOpportunity(
-  gap: QuestionCoverageGap,
-  index: EvidenceIndex,
-): PublicInformationOpportunity {
+  // Restraint note: if assessment count doesn't match input question count (a gap in
+  // the pipeline), show a cautious note. We don't fabricate data.
+  const restraintNote: string | null =
+    total > 0
+      ? null
+      : "本次已检查客户决策问题，部分问题的公开信息覆盖情况仍需进一步确认。";
+
   return {
-    relatedQuestionId: gap.questionId,
-    customerQuestion: gap.questionText,
-    // 只处理 PARTIALLY_SUPPORTED 或 UNANSWERED，FULLY_SUPPORTED 在 filter 中已过滤
-    currentCoverageStatus: gap.coverageStatus === "PARTIALLY_SUPPORTED"
-      ? "PARTIALLY_SUPPORTED"
-      : "UNANSWERED",
-    observedScope: gap.observedScope,
-    missingPublicInformation: gap.missingInformation,
-    suggestedContentAction: gap.suggestedAction,
-    potentialBusinessValue: gap.businessValue,
-    evidenceIds: gap.evidenceIds.filter((id: string) => index.has(id)),
-    wordingMode: "WITHIN_CHECKED_SCOPE",
+    stats: { total, supported, partial, unanswered, providerFailed },
+    restraintNote,
   };
 }
 
-function buildPublicInformationAction(
-  gap: QuestionCoverageGap,
-): PublicInformationAction {
-  return {
-    actionText: gap.suggestedAction,
-    sourceType: "PUBLIC_INFORMATION_ACTION",
-    relatedQuestion: gap.questionText,
-  };
+// ---------------------------------------------------------------------------
+// Round-8 FINAL: Priority Direction Clustering
+// Categories: PRODUCT_SELECTION | QUALITY_AND_SAFETY | BUSINESS_COOPERATION |
+//            SERVICE_AND_DELIVERY | CASES_AND_TRUST | FAQ_OTHER
+// Each gap belongs to exactly one category; same category = merged into one direction.
+// Max 3 directions, each with title + linkedQuestions + linkedQuestionIds +
+// suggestedAsset + businessValue.
+// ---------------------------------------------------------------------------
+
+type GapCategory =
+  | "PRODUCT_SELECTION"
+  | "QUALITY_AND_SAFETY"
+  | "BUSINESS_COOPERATION"
+  | "SERVICE_AND_DELIVERY"
+  | "CASES_AND_TRUST"
+  | "FAQ_OTHER";
+
+interface CategoryMeta {
+  title: string;
+  suggestedAsset: string;
+  /** Keywords that, if present in the question text, route to this category. */
+  keywords: readonly string[];
 }
 
-function selectPublicInformationOpportunities(
-  gaps: QuestionCoverageGap[] | undefined,
-  index: EvidenceIndex,
-): PublicInformationOpportunity[] {
-  if (!gaps || gaps.length === 0) return [];
+const CATEGORY_META: Record<GapCategory, CategoryMeta> = {
+  PRODUCT_SELECTION: {
+    title: "产品选购与品质说明",
+    suggestedAsset: "建立产品选购FAQ，补充采购决策问题说明",
+    keywords: ["选购", "口味", "规格", "保质期", "过敏原", "产品", "适合", "人群", "消费场景", "早餐", "零食", "节日礼赠"],
+  },
+  QUALITY_AND_SAFETY: {
+    title: "原料、工艺与品质保障",
+    suggestedAsset: "建立产品选购FAQ，补充采购决策问题说明",
+    keywords: ["原料", "工艺", "保鲜", "食品安全", "认证", "生产", "品质"],
+  },
+  BUSINESS_COOPERATION: {
+    title: "企业合作与渠道说明",
+    suggestedAsset: "建立合作FAQ，补充企业合作渠道说明",
+    keywords: ["团购", "采购", "经销", "商超", "代工", "渠道", "合作", "批量", "联系"],
+  },
+  SERVICE_AND_DELIVERY: {
+    title: "交付与售后服务",
+    suggestedAsset: "建立服务说明页，补充交付和售后流程",
+    keywords: ["交付", "售后", "服务", "流程"],
+  },
+  CASES_AND_TRUST: {
+    title: "资质与案例说明",
+    suggestedAsset: "建立资质与案例页，补充企业认证和合作案例",
+    keywords: ["案例", "资质", "认证", "合作", "品牌"],
+  },
+  FAQ_OTHER: {
+    title: "其他常见问题",
+    suggestedAsset: "建立FAQ页面，覆盖其他常见客户问题",
+    keywords: [],
+  },
+};
 
-  return gaps
-    .filter(
-      (gap) =>
-        gap.coverageStatus === "PARTIALLY_SUPPORTED" ||
-        gap.coverageStatus === "UNANSWERED",
-    )
-    .map((gap) => buildPublicInformationOpportunity(gap, index))
-    .slice(0, QUICK_PUBLIC_INFO_OPPORTUNITY_LIMIT);
+function classifyGap(gap: QuestionCoverageGap): GapCategory {
+  const text = gap.questionText.toLowerCase();
+  let bestCategory: GapCategory = "FAQ_OTHER";
+  let bestScore = 0;
+  for (const [cat, meta] of Object.entries(CATEGORY_META) as [GapCategory, CategoryMeta][]) {
+    if (cat === "FAQ_OTHER") continue;
+    const score = meta.keywords.filter((kw) => text.includes(kw.toLowerCase())).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestCategory = cat;
+    }
+  }
+  return bestCategory;
 }
 
-function selectPublicInformationActions(
-  gaps: QuestionCoverageGap[] | undefined,
-): PublicInformationAction[] {
+function buildPriorityDirections(gaps: QuestionCoverageGap[] | undefined): PriorityDirection[] {
   if (!gaps || gaps.length === 0) return [];
 
-  return gaps
-    .filter(
-      (gap) =>
-        gap.coverageStatus === "PARTIALLY_SUPPORTED" ||
-        gap.coverageStatus === "UNANSWERED",
-    )
-    .map((gap) => buildPublicInformationAction(gap))
-    .slice(0, QUICK_PUBLIC_INFO_OPPORTUNITY_LIMIT);
+  // Classify each gap into a category
+  const grouped = new Map<GapCategory, QuestionCoverageGap[]>();
+  for (const gap of gaps) {
+    const cat = classifyGap(gap);
+    const existing = grouped.get(cat) ?? [];
+    existing.push(gap);
+    grouped.set(cat, existing);
+  }
+
+  // Build one PriorityDirection per category, sorted by gap count desc, take max 3
+  const MAX_DIRECTIONS = 3;
+  const directions: PriorityDirection[] = [];
+
+  const sortedCats = [...grouped.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, MAX_DIRECTIONS);
+
+  for (const [cat, catGaps] of sortedCats) {
+    const meta = CATEGORY_META[cat];
+    directions.push({
+      id: `dir_${cat.toLowerCase()}`,
+      title: meta.title,
+      linkedQuestions: catGaps.map((g) => g.questionText),
+      linkedQuestionIds: [...new Set(catGaps.map((g) => g.questionId))],
+      // The suggestedAsset comes from the category meta (generic for each cluster);
+      // the businessValue comes from the first gap's businessValue.
+      suggestedAsset: meta.suggestedAsset,
+      businessValue: catGaps[0]?.businessValue ?? "帮助客户快速了解产品特点，提升购买决策效率",
+    });
+  }
+
+  return directions;
 }
 
 // ---------------------------------------------------------------------------
@@ -389,13 +466,13 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
 
   const composition = computeMeasurementComposition(report.scores);
 
-  // Round-7: 构建 PublicInformationOpportunity
-  const publicInformationOpportunities = selectPublicInformationOpportunities(
-    report.questionCoverageGaps,
-    index,
+  // Round-8 FINAL: build question coverage stats from Assessments (NOT gaps).
+  const { stats, restraintNote } = buildQuestionCoverageStats(
+    report.questionCoverageAssessments,
   );
-  const topPublicInformationOpportunity = publicInformationOpportunities[0] ?? null;
-  const publicInformationActions = selectPublicInformationActions(report.questionCoverageGaps);
+
+  // Round-8 FINAL: cluster gaps into priority directions (max 3).
+  const priorityDirections = buildPriorityDirections(report.questionCoverageGaps);
 
   return {
     diagnosisId: report.diagnosisId,
@@ -412,15 +489,11 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
     topStrength,
     topIssue,
     topOpportunity,
-    aiVisibilitySamples: selectValidAiTests(report.aiVisibilityTests).slice(0, QUICK_AI_SAMPLE_LIMIT),
     competitorGapSummary: buildCompetitorGapSummary(report, index),
-    coreIssues: rankedIssues.slice(0, QUICK_CORE_ISSUE_LIMIT),
+    questionCoverageStats: stats,
+    questionCoverageRestraintNote: restraintNote,
+    priorityDirections,
     demonstrationFix: report.demonstrationFix,
-    geoOpportunities: rankedOpportunities.slice(0, QUICK_GEO_OPPORTUNITY_LIMIT),
-    // Round-7: PublicInformationOpportunity 字段
-    publicInformationOpportunities,
-    topPublicInformationOpportunity,
-    publicInformationActions,
   };
 }
 

@@ -226,6 +226,40 @@ export type PublicInformationCoverageStatus = z.infer<typeof PublicInformationCo
 export const PublicInformationWordingMode = z.literal("WITHIN_CHECKED_SCOPE");
 export type PublicInformationWordingMode = z.infer<typeof PublicInformationWordingMode>;
 
+/**
+ * Round-8 FINAL: 问题覆盖统计 — 来源于 questionCoverageAssessments。
+ * 不是 Gap 统计，不等于 questionCoverageGaps.length。
+ * 仅从 questionCoverageAssessments 聚合，不造数。
+ */
+export const QuestionCoverageStats = z.object({
+  total: z.number().int().nonnegative(),
+  supported: z.number().int().nonnegative(),
+  partial: z.number().int().nonnegative(),
+  unanswered: z.number().int().nonnegative(),
+  providerFailed: z.number().int().nonnegative(),
+});
+export type QuestionCoverageStats = z.infer<typeof QuestionCoverageStats>;
+
+/**
+ * Round-8 FINAL: 优先完善方向 — 从 QuestionCoverageGaps 聚类生成。
+ * 最多 3 个方向，每个方向关联多个 questionIds。
+ */
+export const PriorityDirection = z.object({
+  /** 方向唯一 ID */
+  id: z.string(),
+  /** 方向标题（如「产品选购与品质说明」） */
+  title: z.string(),
+  /** 涵盖的客户问题文本列表 */
+  linkedQuestions: z.array(z.string()).min(1),
+  /** 关联的 questionId 列表（去重） */
+  linkedQuestionIds: z.array(z.string()).min(1),
+  /** 建议建设的内容资产（具体，非泛化） */
+  suggestedAsset: z.string(),
+  /** 具体商业价值 */
+  businessValue: z.string(),
+});
+export type PriorityDirection = z.infer<typeof PriorityDirection>;
+
 export const PublicInformationOpportunity = z.object({
   /** 关联的客户问题 ID */
   relatedQuestionId: z.string(),
@@ -414,31 +448,28 @@ export const QuickReportViewModel = z.object({
   topStrength: Strength.nullable(),
   topIssue: CoreIssue.nullable(),
   topOpportunity: GeoOpportunity.nullable(),
-  aiVisibilitySamples: z.array(AIVisibilityTest).max(2),
   competitorGapSummary: z.union([
     z.object({ available: z.literal(true), gaps: z.array(CompetitorGap) }),
     z.object({ available: z.literal(false), reason: z.string() }),
   ]),
-  coreIssues: z.array(CoreIssue).max(3),
+  /**
+   * Round-8 FINAL: 客户决策问题覆盖统计。
+   * 仅从 questionCoverageAssessments 聚合，不等于 questionCoverageGaps.length。
+   */
+  questionCoverageStats: QuestionCoverageStats,
+  /**
+   * 克制说明：当 assessment 数量与原始问题数量不一致时显示。
+   * 不造数，不补数。
+   */
+  questionCoverageRestraintNote: z.string().nullable(),
+  /**
+   * Round-8 FINAL: 优先完善方向。
+   * 最多 3 个，从 QuestionCoverageGaps 聚类生成。
+   * 具体行动直接嵌入方向卡片中，不再单独成模块。
+   */
+  priorityDirections: z.array(PriorityDirection).max(3),
+  // DemonstrationFix — 仅当有可信证据时存在。
   demonstrationFix: DemonstrationFix.nullable(),
-  geoOpportunities: z.array(GeoOpportunity).max(3),
-  /**
-   * Round-7: 公开信息完善机会
-   * 来源于 QuestionCoverageGapV1 的确定性映射
-   * 最多 3 个，不是正式 Opportunity，不影响 Truth Guard
-   */
-  publicInformationOpportunities: z.array(PublicInformationOpportunity).max(3),
-  /**
-   * Round-7: 最重要的公开信息完善机会（用于首屏展示）
-   * 从 publicInformationOpportunities 中选择最重要的 1 个
-   */
-  topPublicInformationOpportunity: PublicInformationOpportunity.nullable(),
-  /**
-   * Round-7: 行动建议
-   * 来源于 QuestionCoverageGap 的确定性映射
-   * 标记为 PUBLIC_INFORMATION_ACTION，不是正式 GEO Opportunity
-   */
-  publicInformationActions: z.array(PublicInformationAction).max(3),
 });
 export type QuickReportViewModel = z.infer<typeof QuickReportViewModel>;
 

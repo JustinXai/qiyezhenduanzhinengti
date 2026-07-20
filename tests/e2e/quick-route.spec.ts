@@ -23,9 +23,9 @@ test.describe("Quick route (production preview)", () => {
     await expect(page.getByTestId("primary-cta")).toBeVisible();
   });
 
-  test("Quick view opens by default with the canonical GEO可见度基础指数 label", async ({ page }) => {
+  test("Quick view opens by default with the canonical GEO基础诊断指数 label", async ({ page }) => {
     await page.goto(REPORT_PATH);
-    await expect(page.getByTestId("geo-index")).toContainText("GEO可见度基础指数");
+    await expect(page.getByTestId("geo-index")).toContainText("GEO基础诊断指数");
     // quick-module-summary is module 1 (always present).
     await expect(page.getByTestId("quick-module-summary")).toBeVisible();
   });
