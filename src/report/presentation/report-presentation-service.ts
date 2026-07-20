@@ -4,11 +4,12 @@
 //
 // This is the ONLY place selection logic lives (docs/ARCHITECTURE.md "禁止"):
 //   - topStrength / topIssue / topOpportunity are RANKED here, never `array[0]`.
-//   - Quick shows at most 2 VALID AI tests, chosen by question-category priority.
 //   - Competitor gap availability is decided here (evidence-gated); insufficient
 //     evidence yields { available: false, reason } — never an empty table.
 //   - coreIssues / geoOpportunities are capped here.
 //   - measurementStatusSummary / headlineConclusion prose is composed here.
+//
+// Round-7.1A: AI visibility samples removed from Quick (only in Deep).
 //
 // It NEVER: recomputes scores, re-interprets AI tests, calls a provider, or
 // fabricates content. Every field is derived from data already present on the
@@ -25,9 +26,11 @@ import type {
   QuickReportViewModel,
   EvidenceViewModel,
   Strength,
-  PublicInformationOpportunity,
-  PublicInformationAction,
   QuestionCoverageGap,
+  QuestionCoverageAssessment,
+  QuestionCoverageStats,
+  KeyCustomerQuestion,
+  PriorityDirection,
 } from "../../contracts";
 import { sanitizeEvidenceUrl } from "./evidence-url";
 import {
@@ -58,9 +61,9 @@ export const COMPETITOR_NOT_PROVIDED_REASON = "本次未提供竞品,暂不做�
 
 const QUICK_CORE_ISSUE_LIMIT = 3;
 const QUICK_GEO_OPPORTUNITY_LIMIT = 3;
-const QUICK_AI_SAMPLE_LIMIT = 2;
 const DEEP_GEO_OPPORTUNITY_LIMIT = 5;
 const MIN_VALID_AI_TESTS = 3;
+const MAX_KEY_QUESTIONS = 3;
 
 // ---------------------------------------------------------------------------
 // Evidence indexing helpers
@@ -137,9 +140,9 @@ function rankClaims<T extends RankableClaim>(claims: readonly T[], index: Eviden
 }
 
 // ---------------------------------------------------------------------------
-// AI visibility sample selection (docs/PRODUCT_TRUTH_RULES.md §8)
+// AI visibility sample selection (for Deep only in Round-7.1A)
 //   Priority: PURCHASE_DECISION > COMPETITOR_COMPARISON > BRAND_DIRECT > OTHER.
-//   Only VALID tests may surface. Quick caps at 2.
+//   Only VALID tests may surface.
 // ---------------------------------------------------------------------------
 
 const AI_CATEGORY_PRIORITY: Record<AIVisibilityTest["questionCategory"], number> = {
@@ -185,12 +188,9 @@ function buildCompetitorGapSummary(
   if (competitorsProvided && validGaps.length > 0) {
     return { available: true, gaps: validGaps };
   }
-  return {
-    available: false,
-    reason: competitorsProvided
-      ? COMPETITOR_INSUFFICIENT_EVIDENCE_REASON
-      : COMPETITOR_NOT_PROVIDED_REASON,
-  };
+  // In Quick, hide competitor module entirely when not available
+  // Reason note only shown in Deep's measurement boundaries
+  return { available: false, reason: "" };
 }
 
 // ---------------------------------------------------------------------------
@@ -237,12 +237,159 @@ function toPercent(coverage: number): number {
   return Math.round(coverage * 100);
 }
 
+// ---------------------------------------------------------------------------
+// Round-7.1A: Deterministic clustering for Priority Directions
+// ---------------------------------------------------------------------------
+
+type GapCategory =
+  | "PRODUCT_SELECTION"
+  | "QUALITY_AND_SAFETY"
+  | "BUSINESS_COOPERATION"
+  | "SERVICE_AND_DELIVERY"
+  | "CASES_AND_TRUST"
+  | "FAQ_OTHER";
+
+const CATEGORY_KEYWORDS: Record<GapCategory, readonly string[]> = {
+  PRODUCT_SELECTION: ["口味", "规格", "保质期", "过敏原", "选购", "选型", "对比", "价格", "报价"],
+  QUALITY_AND_SAFETY: ["原料", "工艺", "食品安全", "生产", "认证", "资质", "检测", "标准"],
+  BUSINESS_COOPERATION: ["团购", "采购", "经销", "商超", "代工", "合作", "渠道", "代理", "招商"],
+  SERVICE_AND_DELIVERY: ["交付", "售后", "服务", "保修", "流程", "周期", "发货", "配送"],
+  CASES_AND_TRUST: ["案例", "客户", "合作品牌", "口碑", "评价", "推荐"],
+  FAQ_OTHER: [],
+};
+
+const CONTENT_ASSET_MAP: Record<GapCategory, string> = {
+  PRODUCT_SELECTION: "产品选购与规格FAQ",
+  QUALITY_AND_SAFETY: "原料、工艺与食品安全说明页",
+  BUSINESS_COOPERATION: "企业团购、渠道与合作流程页",
+  SERVICE_AND_DELIVERY: "服务流程与售后FAQ",
+  CASES_AND_TRUST: "案例、资质与信任证据页",
+  FAQ_OTHER: "围绕该客户问题建立独立FAQ",
+};
+
+function classifyQuestion(questionText: string): GapCategory {
+  const lowerText = questionText.toLowerCase();
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some((kw) => lowerText.includes(kw))) {
+      return category as GapCategory;
+    }
+  }
+  return "FAQ_OTHER";
+}
+
+interface ClusteredGap {
+  category: GapCategory;
+  gaps: QuestionCoverageGap[];
+}
+
+function clusterGapsByCategory(gaps: QuestionCoverageGap[]): ClusteredGap[] {
+  const clusters = new Map<GapCategory, QuestionCoverageGap[]>();
+
+  for (const gap of gaps) {
+    const category = classifyQuestion(gap.questionText);
+    const existing = clusters.get(category) ?? [];
+    clusters.set(category, [...existing, gap]);
+  }
+
+  return Array.from(clusters.entries())
+    .map(([category, categoryGaps]) => ({ category, gaps: categoryGaps }))
+    .sort((a, b) => {
+      // Priority order: gaps with UNANSWERED first, then PARTIALLY_SUPPORTED
+      const aScore = a.gaps.some((g) => g.coverageStatus === "UNANSWERED") ? 0 : 1;
+      const bScore = b.gaps.some((g) => g.coverageStatus === "UNANSWERED") ? 0 : 1;
+      return aScore - bScore;
+    });
+}
+
+function buildPriorityDirections(clusters: ClusteredGap[]): PriorityDirection[] {
+  // Priority direction categories in order
+  const PRIORITY_ORDER: GapCategory[] = [
+    "BUSINESS_COOPERATION",
+    "PRODUCT_SELECTION",
+    "SERVICE_AND_DELIVERY",
+    "QUALITY_AND_SAFETY",
+    "CASES_AND_TRUST",
+    "FAQ_OTHER",
+  ];
+
+  const sortedClusters = clusters.sort(
+    (a, b) => PRIORITY_ORDER.indexOf(a.category) - PRIORITY_ORDER.indexOf(b.category),
+  );
+
+  return sortedClusters.map((cluster) => ({
+    directionTitle: CONTENT_ASSET_MAP[cluster.category],
+    directionCategory: cluster.category,
+    coveredQuestions: cluster.gaps.map((g) => g.questionText),
+    suggestedContentAsset: CONTENT_ASSET_MAP[cluster.category],
+    businessValue: cluster.gaps.map((g) => g.businessValue).join("；"),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Round-7.1A: Question Coverage Stats & Key Questions
+// ---------------------------------------------------------------------------
+
+function buildQuestionCoverageStats(
+  assessments: QuestionCoverageAssessment[] | undefined,
+  gaps: QuestionCoverageGap[] | undefined,
+): QuestionCoverageStats {
+  // Use assessments if available, otherwise derive from gaps
+  if (assessments && assessments.length > 0) {
+    return {
+      totalQuestions: assessments.length,
+      fullySupportedCount: assessments.filter((a) => a.status === "FULLY_SUPPORTED").length,
+      partiallySupportedCount: assessments.filter((a) => a.status === "PARTIALLY_SUPPORTED").length,
+      unansweredCount: assessments.filter((a) => a.status === "UNANSWERED").length,
+    };
+  }
+
+  // Derive from gaps (include FULLY_SUPPORTED if available in gaps)
+  const total = gaps?.length ?? 0;
+  const unanswered = gaps?.filter((g) => g.coverageStatus === "UNANSWERED").length ?? 0;
+  const partial = gaps?.filter((g) => g.coverageStatus === "PARTIALLY_SUPPORTED").length ?? 0;
+
+  return {
+    totalQuestions: total,
+    fullySupportedCount: total - unanswered - partial,
+    partiallySupportedCount: partial,
+    unansweredCount: unanswered,
+  };
+}
+
+function buildKeyCustomerQuestions(
+  gaps: QuestionCoverageGap[] | undefined,
+  index: EvidenceIndex,
+): KeyCustomerQuestion[] {
+  if (!gaps || gaps.length === 0) return [];
+
+  // Select questions to display: prioritize UNANSWERED, then PARTIALLY_SUPPORTED
+  const sorted = [...gaps].sort((a, b) => {
+    const order = { UNANSWERED: 0, PARTIALLY_SUPPORTED: 1, FULLY_SUPPORTED: 2 };
+    return order[a.coverageStatus] - order[b.coverageStatus];
+  });
+
+  return sorted.slice(0, MAX_KEY_QUESTIONS).map((gap) => ({
+    questionId: gap.questionId,
+    questionText: gap.questionText,
+    coverageStatus: gap.coverageStatus,
+    publicInfoSituation: gap.observedScope,
+    suggestedContentType: gap.missingInformation,
+    evidenceIds: gap.evidenceIds.filter((id: string) => index.has(id)),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Round-7.1A: Headline Conclusion Composition
+// ---------------------------------------------------------------------------
+
 function buildHeadlineConclusion(
   report: DiagnosisReport,
   topStrength: Strength | null,
   topIssue: CoreIssue | null,
+  stats: QuestionCoverageStats,
 ): string {
   const brand = report.companyProfile.brandName;
+  const productService = report.companyProfile.productOrService;
   const coveragePct = toPercent(report.scores.scoreCoverage);
   const overall = report.scores.overallScore;
 
@@ -250,11 +397,28 @@ function buildHeadlineConclusion(
     return `『${brand}』本次可测指标覆盖 ${coveragePct}%,尚不足以给出综合指数,建议先补齐关键信息后复测。`;
   }
 
-  const clauses = [`『${brand}』当前 GEO可见度基础指数为 ${Math.round(overall)} 分(覆盖率 ${coveragePct}%)`];
-  if (topStrength) clauses.push(`已具备优势:${topStrength.statement}`);
-  if (topIssue) clauses.push(`最需优先处理:${topIssue.statement}`);
-  // Round-5.1 §四: unified full-width Chinese punctuation in composed prose.
-  return `${clauses.join("；")}。`;
+  // Identify the most important info gap
+  const infoGap = topIssue
+    ? topIssue.statement
+    : stats.unansweredCount > 0
+      ? `有 ${stats.unansweredCount} 个客户关键问题尚未得到充分回答`
+      : stats.partiallySupportedCount > 0
+        ? `有 ${stats.partiallySupportedCount} 个客户关键问题部分覆盖`
+        : "公开信息基本覆盖核心客户问题";
+
+  // Identify enterprise basis
+  const enterpriseBasis = topStrength
+    ? topStrength.statement
+    : "公开网络已能识别企业基础信息";
+
+  // Impact on customer decision
+  const decisionImpact = stats.unansweredCount > 0
+    ? "客户在选购或合作决策时难以一次获得完整答案"
+    : stats.partiallySupportedCount > 0
+      ? "客户在关键决策阶段可能需要额外咨询才能获得完整信息"
+      : "客户能够较为完整地了解企业核心信息";
+
+  return `『${brand}』${enterpriseBasis}，但${infoGap}，${decisionImpact}。`;
 }
 
 // ---------------------------------------------------------------------------
@@ -286,6 +450,13 @@ function buildMeasurementNotes(
     notes.push(`另有 ${excludedAiTests} 项 AI 问答因证据不足或采集失败,未纳入有效样本。`);
   }
 
+  // Competitor note when gaps unavailable
+  const competitorsProvided = report.companyProfile.competitors.length > 0;
+  const validGaps = selectValidCompetitorGaps(report, indexEvidence(report));
+  if (competitorsProvided && validGaps.length === 0) {
+    notes.push(COMPETITOR_INSUFFICIENT_EVIDENCE_REASON);
+  }
+
   // Per-dimension measurement caveats for anything not directly MEASURED.
   for (const dim of SCORE_DIMENSION_ORDER) {
     const d = report.scores[dim];
@@ -301,75 +472,6 @@ function buildMeasurementNotes(
   }
 
   return notes;
-}
-
-// ---------------------------------------------------------------------------
-// Round-7: QuestionCoverageGap → PublicInformationOpportunity 映射
-// 来源于 docs/product/ROUND7_QUICK_FIRST_SME_CONVERSION.md §三
-// 仅处理 PARTIALLY_SUPPORTED 或 UNANSWERED 状态
-// ---------------------------------------------------------------------------
-
-const QUICK_PUBLIC_INFO_OPPORTUNITY_LIMIT = 3;
-
-function buildPublicInformationOpportunity(
-  gap: QuestionCoverageGap,
-  index: EvidenceIndex,
-): PublicInformationOpportunity {
-  return {
-    relatedQuestionId: gap.questionId,
-    customerQuestion: gap.questionText,
-    // 只处理 PARTIALLY_SUPPORTED 或 UNANSWERED，FULLY_SUPPORTED 在 filter 中已过滤
-    currentCoverageStatus: gap.coverageStatus === "PARTIALLY_SUPPORTED"
-      ? "PARTIALLY_SUPPORTED"
-      : "UNANSWERED",
-    observedScope: gap.observedScope,
-    missingPublicInformation: gap.missingInformation,
-    suggestedContentAction: gap.suggestedAction,
-    potentialBusinessValue: gap.businessValue,
-    evidenceIds: gap.evidenceIds.filter((id: string) => index.has(id)),
-    wordingMode: "WITHIN_CHECKED_SCOPE",
-  };
-}
-
-function buildPublicInformationAction(
-  gap: QuestionCoverageGap,
-): PublicInformationAction {
-  return {
-    actionText: gap.suggestedAction,
-    sourceType: "PUBLIC_INFORMATION_ACTION",
-    relatedQuestion: gap.questionText,
-  };
-}
-
-function selectPublicInformationOpportunities(
-  gaps: QuestionCoverageGap[] | undefined,
-  index: EvidenceIndex,
-): PublicInformationOpportunity[] {
-  if (!gaps || gaps.length === 0) return [];
-
-  return gaps
-    .filter(
-      (gap) =>
-        gap.coverageStatus === "PARTIALLY_SUPPORTED" ||
-        gap.coverageStatus === "UNANSWERED",
-    )
-    .map((gap) => buildPublicInformationOpportunity(gap, index))
-    .slice(0, QUICK_PUBLIC_INFO_OPPORTUNITY_LIMIT);
-}
-
-function selectPublicInformationActions(
-  gaps: QuestionCoverageGap[] | undefined,
-): PublicInformationAction[] {
-  if (!gaps || gaps.length === 0) return [];
-
-  return gaps
-    .filter(
-      (gap) =>
-        gap.coverageStatus === "PARTIALLY_SUPPORTED" ||
-        gap.coverageStatus === "UNANSWERED",
-    )
-    .map((gap) => buildPublicInformationAction(gap))
-    .slice(0, QUICK_PUBLIC_INFO_OPPORTUNITY_LIMIT);
 }
 
 // ---------------------------------------------------------------------------
@@ -389,13 +491,19 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
 
   const composition = computeMeasurementComposition(report.scores);
 
-  // Round-7: 构建 PublicInformationOpportunity
-  const publicInformationOpportunities = selectPublicInformationOpportunities(
+  // Round-7.1A: Build question coverage data
+  const stats = buildQuestionCoverageStats(
+    report.questionCoverageAssessments,
     report.questionCoverageGaps,
-    index,
   );
-  const topPublicInformationOpportunity = publicInformationOpportunities[0] ?? null;
-  const publicInformationActions = selectPublicInformationActions(report.questionCoverageGaps);
+  const keyQuestions = buildKeyCustomerQuestions(report.questionCoverageGaps, index);
+
+  // Round-7.1A: Cluster gaps into priority directions
+  const gapsToCluster = (report.questionCoverageGaps ?? []).filter(
+    (g) => g.coverageStatus === "PARTIALLY_SUPPORTED" || g.coverageStatus === "UNANSWERED",
+  );
+  const clusters = clusterGapsByCategory(gapsToCluster);
+  const priorityDirections = buildPriorityDirections(clusters);
 
   return {
     diagnosisId: report.diagnosisId,
@@ -403,7 +511,7 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
     reportLanguage: report.reportLanguage,
     brandName: report.companyProfile.brandName,
     reportDate: report.generatedAt,
-    headlineConclusion: buildHeadlineConclusion(report, topStrength, topIssue),
+    headlineConclusion: buildHeadlineConclusion(report, topStrength, topIssue, stats),
     overallScore: report.scores.overallScore,
     scoreCoverage: report.scores.scoreCoverage,
     measurementStatusSummary: buildMeasurementStatusSummary(report),
@@ -412,15 +520,15 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
     topStrength,
     topIssue,
     topOpportunity,
-    aiVisibilitySamples: selectValidAiTests(report.aiVisibilityTests).slice(0, QUICK_AI_SAMPLE_LIMIT),
+    // Round-7.1A: Competitor gaps - only show when available
     competitorGapSummary: buildCompetitorGapSummary(report, index),
     coreIssues: rankedIssues.slice(0, QUICK_CORE_ISSUE_LIMIT),
     demonstrationFix: report.demonstrationFix,
     geoOpportunities: rankedOpportunities.slice(0, QUICK_GEO_OPPORTUNITY_LIMIT),
-    // Round-7: PublicInformationOpportunity 字段
-    publicInformationOpportunities,
-    topPublicInformationOpportunity,
-    publicInformationActions,
+    // Round-7.1A: New question coverage fields
+    questionCoverageStats: stats,
+    keyCustomerQuestions: keyQuestions,
+    priorityDirections,
   };
 }
 
@@ -436,6 +544,7 @@ export function toDeepReportViewModel(report: DiagnosisReport): DeepReportViewMo
     // §八: Deep shows the SAME composition Quick shows — projected once here,
     // never recomputed by the front-end.
     measurementComposition: computeMeasurementComposition(report.scores),
+    // AI visibility test samples - shown with title "当前模型问答样本（仅供参考）"
     aiVisibilityTests: validAiTests,
     strengths: rankClaims(report.strengths, index),
     coreIssues: rankClaims(report.coreIssues, index),

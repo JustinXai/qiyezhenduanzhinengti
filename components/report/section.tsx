@@ -15,7 +15,7 @@ export function Section({ index, title, subtitle, testId, children }: SectionPro
   return (
     <section
       data-testid={testId}
-      className="border-t border-neutral-100 py-6 first:border-t-0 first:pt-0"
+      className="border-t border-neutral-100 py-5 first:border-t-0 first:pt-0"
     >
       <header className="mb-4 flex items-baseline gap-3">
         {index !== undefined && (

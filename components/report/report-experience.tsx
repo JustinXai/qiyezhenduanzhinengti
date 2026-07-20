@@ -33,7 +33,7 @@ export function ReportExperience({ quick, deep, evidence }: ReportExperienceProp
   const [view, setView] = useState<ViewKey>("quick");
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col bg-white">
+    <div className="mx-auto flex min-h-screen w-full max-w-[860px] flex-col bg-white">
       <nav className="sticky top-0 z-10 flex gap-1 border-b border-neutral-200 bg-white/95 px-4 py-2 backdrop-blur">
         {TABS.map((tab) => {
           const active = view === tab.key;
@@ -55,7 +55,7 @@ export function ReportExperience({ quick, deep, evidence }: ReportExperienceProp
         })}
       </nav>
 
-      <main className="flex-1 px-4 py-4">
+      <main className="flex-1 px-3 py-4 sm:px-4">
         {view === "quick" && <QuickReport vm={quick} onOpenDeep={() => setView("deep")} />}
         {view === "deep" && <DeepReport vm={deep} />}
         {view === "evidence" && <EvidenceView vm={evidence} />}

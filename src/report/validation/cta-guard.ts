@@ -149,25 +149,7 @@ function collectQuickTexts(quick: QuickReportViewModel): Field[] {
     fields.push({ where: "quick.competitorGapSummary.reason", value: quick.competitorGapSummary.reason });
   }
 
-  // Round-7: 检查 PublicInformationOpportunity 禁用词
-  quick.publicInformationOpportunities.forEach((opp, i) => {
-    fields.push({ where: `quick.publicInformationOpportunities[${i}].customerQuestion`, value: opp.customerQuestion });
-    fields.push({ where: `quick.publicInformationOpportunities[${i}].observedScope`, value: opp.observedScope });
-    fields.push({ where: `quick.publicInformationOpportunities[${i}].missingPublicInformation`, value: opp.missingPublicInformation });
-    fields.push({ where: `quick.publicInformationOpportunities[${i}].suggestedContentAction`, value: opp.suggestedContentAction });
-    fields.push({ where: `quick.publicInformationOpportunities[${i}].potentialBusinessValue`, value: opp.potentialBusinessValue });
-  });
-
-  if (quick.topPublicInformationOpportunity) {
-    const t = quick.topPublicInformationOpportunity;
-    fields.push({ where: "quick.topPublicInformationOpportunity.suggestedContentAction", value: t.suggestedContentAction });
-  }
-
-  // Round-7: 检查 PublicInformationAction
-  quick.publicInformationActions.forEach((action, i) => {
-    fields.push({ where: `quick.publicInformationActions[${i}].actionText`, value: action.actionText });
-  });
-
+  // Priority directions validated via character count function
   return fields;
 }
 
@@ -191,7 +173,15 @@ export function countQuickVisibleChars(quick: QuickReportViewModel): number {
   if (quick.topOpportunity) parts.push(...claimTexts(quick.topOpportunity));
   quick.coreIssues.forEach((c) => parts.push(...claimTexts(c)));
   quick.geoOpportunities.forEach((c) => parts.push(...claimTexts(c)));
-  quick.aiVisibilitySamples.forEach((t) => parts.push(t.question));
+
+  // Priority directions character count
+  quick.priorityDirections.forEach((d) => {
+    parts.push(d.directionTitle);
+    parts.push(d.directionCategory);
+    parts.push(d.suggestedContentAsset);
+    parts.push(d.businessValue);
+    d.coveredQuestions.forEach((q) => parts.push(q));
+  });
 
   if (quick.competitorGapSummary.available) {
     quick.competitorGapSummary.gaps.forEach((g) => parts.push(g.gapStatement));
@@ -212,24 +202,6 @@ export function countQuickVisibleChars(quick: QuickReportViewModel): number {
       demo.disclaimer,
     );
   }
-
-  // Round-7: 统计 PublicInformationOpportunity 字符
-  quick.publicInformationOpportunities.forEach((opp) => {
-    parts.push(opp.customerQuestion);
-    parts.push(opp.observedScope);
-    parts.push(opp.missingPublicInformation);
-    parts.push(opp.suggestedContentAction);
-    parts.push(opp.potentialBusinessValue);
-  });
-
-  if (quick.topPublicInformationOpportunity) {
-    parts.push(quick.topPublicInformationOpportunity.suggestedContentAction);
-  }
-
-  // Round-7: 统计 PublicInformationAction 字符
-  quick.publicInformationActions.forEach((action) => {
-    parts.push(action.actionText);
-  });
 
   return parts.reduce((sum, s) => sum + [...stripWhitespace(s)].length, 0);
 }

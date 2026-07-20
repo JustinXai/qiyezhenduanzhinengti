@@ -25,18 +25,18 @@ function minimalQuick(overrides: Partial<QuickReportViewModel> = {}): QuickRepor
     topStrength: report.strengths[0] ?? null,
     topIssue: report.coreIssues[0] ?? null,
     topOpportunity: report.geoOpportunities[0] ?? null,
-    aiVisibilitySamples: [],
+    // aiVisibilitySamples removed from Quick
     competitorGapSummary: {
       available: false,
-      reason: "已收到竞品输入,但本次公开证据不足,暂不做确定性比较。",
+      reason: "",
     },
     coreIssues: [],
     demonstrationFix: null,
     geoOpportunities: [],
-    // Round-7: 新增字段
-    publicInformationOpportunities: [],
-    topPublicInformationOpportunity: null,
-    publicInformationActions: [],
+    // New fields
+    questionCoverageStats: { totalQuestions: 0, fullySupportedCount: 0, partiallySupportedCount: 0, unansweredCount: 0 },
+    keyCustomerQuestions: [],
+    priorityDirections: [],
     ...overrides,
   };
 }

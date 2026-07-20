@@ -15,25 +15,25 @@ const FIX_TYPE_LABELS: Record<DemonstrationFix["fixType"], string> = {
  */
 export function DemonstrationFixCard({ fix }: { fix: DemonstrationFix }) {
   return (
-    <div className="rounded-xl border border-neutral-200 p-3.5">
-      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+    <div className="rounded-xl border border-neutral-200 p-3">
+      <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
         <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-700">
           {FIX_TYPE_LABELS[fix.fixType]}
         </span>
         <EvidenceTag count={fix.evidenceIds.length} />
       </div>
 
-      <dl className="space-y-2.5 text-xs leading-relaxed">
+      <dl className="space-y-2 text-xs leading-relaxed">
         <div>
           <dt className="font-semibold text-neutral-500">当前问题</dt>
           <dd className="text-neutral-700">{fix.currentIssue}</dd>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
-          <div className="rounded-lg bg-neutral-50 p-2.5">
+          <div className="rounded-lg bg-neutral-50 p-2">
             <dt className="mb-1 font-semibold text-neutral-500">修复前</dt>
             <dd className="text-neutral-700">{fix.before}</dd>
           </div>
-          <div className="rounded-lg bg-emerald-50 p-2.5">
+          <div className="rounded-lg bg-emerald-50 p-2">
             <dt className="mb-1 font-semibold text-emerald-700">修复后结构</dt>
             <dd className="text-neutral-700">{fix.after}</dd>
           </div>
@@ -56,7 +56,7 @@ export function DemonstrationFixCard({ fix }: { fix: DemonstrationFix }) {
         </div>
       </dl>
 
-      <p className="mt-3 rounded-lg bg-amber-50 p-2.5 text-[11px] leading-relaxed text-amber-800">
+      <p className="mt-2.5 rounded-lg bg-amber-50 p-2 text-[11px] leading-relaxed text-amber-800">
         {fix.disclaimer}
       </p>
     </div>

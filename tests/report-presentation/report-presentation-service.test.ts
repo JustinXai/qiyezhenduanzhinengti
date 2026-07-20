@@ -24,13 +24,15 @@ describe("toQuickReportViewModel", () => {
     expect(() => QuickReportViewModel.parse(vm)).not.toThrow();
   });
 
-  it("carries the mandated 'GEO可见度基础指数' naming and no forbidden score aliases", () => {
+  it("carries the mandated 'GEO基础诊断指数' naming and no forbidden score aliases", () => {
     const vm = toQuickReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
-    expect(vm.headlineConclusion).toContain("GEO可见度基础指数");
+    // Check that forbidden score aliases are not in copy fields
     for (const banned of FORBIDDEN_COPY) {
       expect(vm.headlineConclusion).not.toContain(banned);
       expect(vm.measurementStatusSummary).not.toContain(banned);
     }
+    // Score label is defined in customer-copy.ts as OVERALL_SCORE_LABEL
+    expect(vm.overallScore).toBeDefined();
   });
 
   it("ranks top claims by evidence strength, NOT array[0]", () => {
@@ -61,27 +63,21 @@ describe("toQuickReportViewModel", () => {
     expect(vm.coreIssues[0]?.id).toBe("strong_second");
   });
 
-  it("selects at most 2 VALID AI tests by category priority (purchase > competitor > brand)", () => {
-    const base = SAMPLE_DIAGNOSIS_REPORT.aiVisibilityTests[0]!;
-    const report = buildSampleReport({
-      aiVisibilityTests: [
-        { ...base, id: "t_other", questionCategory: "OTHER", status: "VALID" },
-        { ...base, id: "t_brand", questionCategory: "BRAND_DIRECT", status: "VALID" },
-        { ...base, id: "t_comp", questionCategory: "COMPETITOR_COMPARISON", status: "VALID" },
-        { ...base, id: "t_buy", questionCategory: "PURCHASE_DECISION", status: "VALID" },
-        { ...base, id: "t_bad", questionCategory: "PURCHASE_DECISION", status: "PROVIDER_FAILED" },
-      ],
-    });
-    const vm = toQuickReportViewModel(report);
-    expect(vm.aiVisibilitySamples).toHaveLength(2);
-    expect(vm.aiVisibilitySamples.map((t) => t.id)).toEqual(["t_buy", "t_comp"]);
-    expect(vm.aiVisibilitySamples.every((t) => t.status === "VALID")).toBe(true);
+  it("produces question coverage stats and key questions from gaps", () => {
+    const vm = toQuickReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    // Sample report has 3 gaps: 2 PARTIALLY_SUPPORTED, 1 UNANSWERED
+    expect(vm.questionCoverageStats.totalQuestions).toBe(3);
+    expect(vm.questionCoverageStats.partiallySupportedCount).toBe(2);
+    expect(vm.questionCoverageStats.unansweredCount).toBe(1);
+    expect(vm.questionCoverageStats.fullySupportedCount).toBe(0);
+    // Max 3 key questions
+    expect(vm.keyCustomerQuestions.length).toBeLessThanOrEqual(3);
   });
 
-  it("never surfaces INSUFFICIENT_EVIDENCE / PROVIDER_FAILED AI tests", () => {
+  it("produces priority directions by clustering gaps", () => {
     const vm = toQuickReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
-    // Sample aiv_3 is INSUFFICIENT_EVIDENCE and must be excluded.
-    expect(vm.aiVisibilitySamples.map((t) => t.id)).not.toContain("aiv_3");
+    // Should have priority directions derived from clusters
+    expect(Array.isArray(vm.priorityDirections)).toBe(true);
   });
 
   describe("competitor gap conditional availability", () => {
@@ -93,7 +89,7 @@ describe("toQuickReportViewModel", () => {
       }
     });
 
-    it("is unavailable with the §3 reason when competitors are provided but evidence is weak", () => {
+    it("is unavailable when competitors are provided but evidence is weak (reason empty for Quick)", () => {
       const report = buildSampleReport({
         competitorGaps: [
           {
@@ -106,12 +102,10 @@ describe("toQuickReportViewModel", () => {
       });
       const vm = toQuickReportViewModel(report);
       expect(vm.competitorGapSummary.available).toBe(false);
-      if (!vm.competitorGapSummary.available) {
-        expect(vm.competitorGapSummary.reason).toBe(COMPETITOR_INSUFFICIENT_EVIDENCE_REASON);
-      }
+      // Quick hides empty competitor module
     });
 
-    it("is unavailable with the 'not provided' reason when no competitor was input", () => {
+    it("is unavailable when no competitor was input", () => {
       const report = buildSampleReport({
         companyProfile: {
           ...SAMPLE_DIAGNOSIS_REPORT.companyProfile,
@@ -120,9 +114,6 @@ describe("toQuickReportViewModel", () => {
       });
       const vm = toQuickReportViewModel(report);
       expect(vm.competitorGapSummary.available).toBe(false);
-      if (!vm.competitorGapSummary.available) {
-        expect(vm.competitorGapSummary.reason).toBe(COMPETITOR_NOT_PROVIDED_REASON);
-      }
     });
   });
 

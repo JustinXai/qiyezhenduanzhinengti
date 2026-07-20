@@ -90,7 +90,7 @@ export const QUICK_FIRST_SCREEN_MODULE = {
   /** 一句话诊断结论 */
   headline: "一句话诊断结论",
   /** 综合分 */
-  score: "GEO可见度基础指数",
+  score: "GEO基础诊断指数",
   /** 测量构成 */
   composition: "实测/公开网页估算构成",
   /** 最重要的公开信息完善机会 */
@@ -100,22 +100,31 @@ export const QUICK_FIRST_SCREEN_MODULE = {
 } as const;
 
 /**
- * Round-7 Quick 模块标题（用于后续模块）
+ * Round-7.1A Quick 模块标题（用于后续模块）
  * 动态显示，空模块隐藏
  */
 export const QUICK_MODULE_TITLES = {
-  /** AI 当前理解 */
-  aiUnderstanding: "AI 当前如何谈论企业",
-  /** 公开信息完善机会 */
-  publicInfoOpportunities: "公开信息完善机会",
+  /** 客户决策问题覆盖 */
+  questionCoverage: "客户决策问题覆盖",
+  /** 条件性竞品观察 */
+  competitorObservation: "条件性竞品观察",
   /** 核心问题 */
   coreIssues: "核心问题",
   /** GEO 机会 */
   geoOpportunities: "GEO 机会",
-  /** 行动建议 */
-  actionSuggestions: "建议先做的 3 件事",
-  /** 三阶段路线图 */
-  roadmap: "三阶段路线图",
+  /** 优先完善方向 */
+  priorityDirections: "优先完善方向",
+  /** 建议推进路径 */
+  roadmap: "建议推进路径",
   /** 下一步 */
   nextSteps: "下一步",
 } as const;
+
+/**
+ * Round-7.1A: 客户问题覆盖状态中文标签
+ */
+export const COVERAGE_STATUS_LABEL: Record<string, string> = {
+  FULLY_SUPPORTED: "充分覆盖",
+  PARTIALLY_SUPPORTED: "部分覆盖",
+  UNANSWERED: "待补充",
+};

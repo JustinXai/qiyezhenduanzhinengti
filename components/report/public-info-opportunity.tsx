@@ -26,27 +26,27 @@ export function PublicInfoOpportunityCard({ opportunity, index }: PublicInfoOppo
   return (
     <div className="overflow-hidden rounded-xl border border-sky-200 bg-white shadow-sm">
       {/* 序号头部 */}
-      <div className="flex items-center gap-3 bg-sky-50 px-4 py-2.5">
+      <div className="flex items-center gap-3 bg-sky-50 px-3 py-2">
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-600 text-xs font-semibold text-white">
           {index}
         </span>
-        <p className="flex-1 text-sm font-medium text-sky-900">{opportunity.customerQuestion}</p>
+        <p className="flex-1 text-sm font-medium text-sky-900 break-words">{opportunity.customerQuestion}</p>
       </div>
 
       {/* 内容主体 */}
-      <div className="px-4 py-3.5">
+      <div className="px-3 py-3">
         <p className="mb-2 text-xs text-neutral-500">
           {PUBLIC_INFO_REQUIRED_QUALIFIER}
           {opportunity.missingPublicInformation}
         </p>
 
-        <div className="rounded-lg bg-amber-50 px-3 py-2.5">
+        <div className="rounded-lg bg-amber-50 px-3 py-2">
           <p className="text-xs font-semibold text-amber-700">建议补充</p>
           <p className="mt-0.5 text-sm leading-relaxed text-amber-900">{opportunity.suggestedContentAction}</p>
         </div>
 
         {opportunity.potentialBusinessValue && (
-          <p className="mt-2.5 text-xs text-neutral-400">
+          <p className="mt-2 text-xs text-neutral-400">
             <span className="font-medium text-neutral-500">潜在价值：</span>
             {opportunity.potentialBusinessValue}
           </p>

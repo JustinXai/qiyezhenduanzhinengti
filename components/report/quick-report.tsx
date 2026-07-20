@@ -3,15 +3,14 @@ import type { QuickReportViewModel } from "../../src/contracts";
 import { Section } from "./section";
 import { ScoreHeadline } from "./score-card";
 import { EvidenceTag } from "./badges";
-import { AiSampleDisclaimer, AiTestCard } from "./ai-test-card";
 import { IssueItem, OpportunityItem } from "./claim-card";
 import { DemonstrationFixCard } from "./demonstration-fix";
 import { Roadmap } from "./roadmap";
 import { CtaSection } from "./cta-section";
 import { formatDate, formatPercent } from "./labels";
 import { PRIMARY_CTA_LABEL } from "../../src/product/customer-copy";
-import { QUICK_MODULE_TITLES } from "../../src/report/presentation/zh-labels";
-import { PublicInfoOpportunityCard, PublicInfoActionItem } from "./public-info-opportunity";
+import { QUICK_MODULE_TITLES, COVERAGE_STATUS_LABEL } from "../../src/report/presentation/zh-labels";
+import { PriorityDirectionCard } from "./priority-direction";
 
 interface QuickReportProps {
   vm: QuickReportViewModel;
@@ -27,10 +26,10 @@ interface QuickModule {
 }
 
 /**
- * Quick view (Round-5.1 中文成交版). Modules are built dynamically:
+ * Quick view (Round-7.1A 精简版). Modules are built dynamically:
  *   - a module with nothing meaningful to say is OMITTED (no empty shell);
  *   - visible numbering is always contiguous (1..n);
- *   - titles reflect the REAL item count (never a fixed "三个核心问题").
+ *   - titles reflect the REAL item count.
  * All selection/limits are already applied by the presentation service.
  */
 export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
@@ -82,7 +81,7 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
         </div>
 
         {/* 关键洞察列表 */}
-        {(vm.topStrength || vm.topIssue || vm.topOpportunity || vm.topPublicInformationOpportunity) && (
+        {(vm.topStrength || vm.topIssue || vm.topOpportunity) && (
           <div className="space-y-2 rounded-xl border border-neutral-200 bg-white p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
               关键洞察
@@ -95,13 +94,6 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
             )}
             {vm.topOpportunity && (
               <HighlightRow label="最优先机会" text={vm.topOpportunity.statement} highlight="info" />
-            )}
-            {vm.topPublicInformationOpportunity && (
-              <HighlightRow
-                label="最优先补充"
-                text={vm.topPublicInformationOpportunity.suggestedContentAction}
-                highlight="muted"
-              />
             )}
           </div>
         )}
@@ -127,29 +119,37 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
     ),
   });
 
-  // AI 现在怎么谈论企业 — only when有效样本存在.
-  if (vm.aiVisibilitySamples.length > 0) {
+  // 客户决策问题覆盖 — only when there are questions
+  if (vm.keyCustomerQuestions.length > 0 || vm.questionCoverageStats.totalQuestions > 0) {
     modules.push({
-      key: "ai",
-      title: "AI 现在怎么谈论企业",
+      key: "question-coverage",
+      title: QUICK_MODULE_TITLES.questionCoverage,
       body: (
-        <>
-          <AiSampleDisclaimer />
-          <div className="mt-2 space-y-2">
-            {vm.aiVisibilitySamples.map((test) => (
-              <AiTestCard key={test.id} test={test} />
+        <div className="space-y-4">
+          {/* 统计摘要 */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard label="本次检查" value={vm.questionCoverageStats.totalQuestions} />
+            <StatCard label="充分覆盖" value={vm.questionCoverageStats.fullySupportedCount} tone="positive" />
+            <StatCard label="部分覆盖" value={vm.questionCoverageStats.partiallySupportedCount} tone="warning" />
+            <StatCard label="待补充" value={vm.questionCoverageStats.unansweredCount} tone="danger" />
+          </div>
+
+          {/* 关键问题列表 */}
+          <div className="space-y-2">
+            {vm.keyCustomerQuestions.map((q) => (
+              <QuestionCard key={q.questionId} question={q} />
             ))}
           </div>
-        </>
+        </div>
       ),
     });
   }
 
-  // 竞品差距 — gaps, or the restrained boundary note when竞品 was provided.
+  // 条件性竞品观察 — only when formal gaps pass Truth Policy
   if (vm.competitorGapSummary.available) {
     modules.push({
       key: "competitor",
-      title: vm.competitorGapSummary.gaps.length > 1 ? "竞品差距" : "最明确的竞品差距",
+      title: QUICK_MODULE_TITLES.competitorObservation,
       body: (
         <ul className="space-y-2">
           {vm.competitorGapSummary.gaps.map((gap) => (
@@ -162,17 +162,6 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
             </li>
           ))}
         </ul>
-      ),
-    });
-  } else if (vm.competitorGapSummary.reason.includes("已收到竞品输入")) {
-    // Competitors were provided → the boundary explanation is meaningful content.
-    modules.push({
-      key: "competitor",
-      title: "竞品差距",
-      body: (
-        <p className="rounded-xl bg-neutral-50 p-3 text-sm text-neutral-600">
-          {vm.competitorGapSummary.reason}
-        </p>
       ),
     });
   }
@@ -220,41 +209,26 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
     });
   }
 
-  // Round-7: 公开信息完善机会 — 最多3个
-  if (vm.publicInformationOpportunities.length > 0) {
+  // Round-7.1A: 优先完善方向 — merged from QuestionCoverageGap clustering
+  if (vm.priorityDirections.length > 0) {
     modules.push({
-      key: "public-info",
-      title:
-        vm.publicInformationOpportunities.length === 1
-          ? QUICK_MODULE_TITLES.publicInfoOpportunities
-          : `${QUICK_MODULE_TITLES.publicInfoOpportunities}(${vm.publicInformationOpportunities.length}个)`,
+      key: "priority",
+      title: QUICK_MODULE_TITLES.priorityDirections,
       body: (
         <div className="space-y-2">
-          {vm.publicInformationOpportunities.map((opp, idx) => (
-            <PublicInfoOpportunityCard key={opp.relatedQuestionId} opportunity={opp} index={idx + 1} />
+          {vm.priorityDirections.map((dir, idx) => (
+            <PriorityDirectionCard key={idx} direction={dir} index={idx + 1} />
           ))}
         </div>
       ),
     });
   }
 
-  // Round-7: 行动建议 — 来源于 QuestionCoverageGap 的确定性映射
-  if (vm.publicInformationActions.length > 0) {
-    modules.push({
-      key: "actions",
-      title: QUICK_MODULE_TITLES.actionSuggestions,
-      body: (
-        <div className="space-y-2">
-          {vm.publicInformationActions.map((action, idx) => (
-            <PublicInfoActionItem key={idx} action={action} index={idx + 1} />
-          ))}
-        </div>
-      ),
-    });
-  }
+  // 建议推进路径 — compressed single module
+  modules.push({ key: "roadmap", title: QUICK_MODULE_TITLES.roadmap, body: <Roadmap /> });
 
-  modules.push({ key: "roadmap", title: "三阶段路线图", body: <Roadmap /> });
-  modules.push({ key: "cta", title: "下一步", body: <CtaSection /> });
+  // 下一步
+  modules.push({ key: "cta", title: QUICK_MODULE_TITLES.nextSteps, body: <CtaSection /> });
 
   return (
     <div className="space-y-1">
@@ -297,6 +271,67 @@ function HighlightRow({
       <div className="flex-1">
         <span className="text-xs font-semibold text-neutral-500">{label}</span>
         <p className="mt-0.5 text-sm text-neutral-800">{text ?? "本次暂未识别"}</p>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  tone?: "neutral" | "positive" | "warning" | "danger";
+}) {
+  const bgColors = {
+    neutral: "bg-neutral-100",
+    positive: "bg-emerald-50",
+    warning: "bg-amber-50",
+    danger: "bg-red-50",
+  };
+  const textColors = {
+    neutral: "text-neutral-900",
+    positive: "text-emerald-700",
+    warning: "text-amber-700",
+    danger: "text-red-700",
+  };
+
+  return (
+    <div className={`rounded-lg ${bgColors[tone]} p-3 text-center`}>
+      <p className={`text-2xl font-bold ${textColors[tone]}`}>{value}</p>
+      <p className="mt-0.5 text-xs text-neutral-500">{label}</p>
+    </div>
+  );
+}
+
+function QuestionCard({ question }: { question: QuickReportViewModel["keyCustomerQuestions"][number] }) {
+  const statusColors = {
+    FULLY_SUPPORTED: "bg-emerald-100 text-emerald-700",
+    PARTIALLY_SUPPORTED: "bg-amber-100 text-amber-700",
+    UNANSWERED: "bg-red-100 text-red-700",
+  };
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+      <div className="flex items-center gap-2 border-b border-neutral-100 bg-neutral-50 px-4 py-2.5">
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[question.coverageStatus]}`}>
+          {COVERAGE_STATUS_LABEL[question.coverageStatus]}
+        </span>
+        <p className="flex-1 text-sm font-medium text-neutral-900">{question.questionText}</p>
+      </div>
+      <div className="px-4 py-3">
+        <div className="space-y-2">
+          <div className="text-xs">
+            <span className="font-medium text-neutral-500">当前公开信息情况：</span>
+            <span className="text-neutral-700">{question.publicInfoSituation}</span>
+          </div>
+          <div className="text-xs">
+            <span className="font-medium text-neutral-500">建议补充：</span>
+            <span className="text-neutral-700">{question.suggestedContentType}</span>
+          </div>
+        </div>
       </div>
     </div>
   );
