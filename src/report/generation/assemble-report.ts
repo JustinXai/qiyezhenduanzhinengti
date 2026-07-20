@@ -14,6 +14,7 @@ import {
   type DiagnosisReport as DiagnosisReportType,
   type EvidenceItem,
   type ScoreBlock,
+  type QuestionCoverageGap,
 } from "../../contracts";
 import type { EvidenceCoverage } from "../../contracts/claim-evidence";
 import type { AiVisibilityResult } from "../../diagnosis/analysis/ai-visibility";
@@ -26,7 +27,7 @@ import type { NonAiScoreBlock } from "../../diagnosis/analysis/dimension-scoring
 import {
   extractCompanyProfile,
 } from "../../diagnosis/analysis/company-profile";
-import { scoreNonAiDimensions } from "../../diagnosis/analysis/dimension-scoring";
+import { scoreNonAiDimensions, buildQuestionCoverageGaps } from "../../diagnosis/analysis/dimension-scoring";
 import { buildAiVisibility, type AiVisibilityInput } from "../../diagnosis/analysis/ai-visibility";
 import { buildClaims } from "../../diagnosis/analysis/claims";
 import type { ProviderFailure } from "../../providers/types";
@@ -48,6 +49,8 @@ export interface AssembleReportInput {
   aiVisibility: AiVisibilityResult;
   claims: ClaimsResult;
   evidence: readonly EvidenceItem[];
+  /** Round-7: QuestionCoverageGaps from dimension signals (optional, for backwards compatibility) */
+  questionCoverageGaps?: QuestionCoverageGap[];
 }
 
 export type AssembleReportResult =
@@ -93,6 +96,8 @@ export function assembleReport(input: AssembleReportInput): AssembleReportResult
     geoOpportunities: input.claims.geoOpportunities,
     demonstrationFix: input.claims.demonstrationFix,
     evidence: [...input.evidence],
+    // Round-7: QuestionCoverageGaps
+    ...(input.questionCoverageGaps ? { questionCoverageGaps: input.questionCoverageGaps } : {}),
   };
 
   const parsed = DiagnosisReport.safeParse(draft);
@@ -152,6 +157,15 @@ export function buildReportFromStageOutputs(input: BuildReportInput): BuildRepor
   const claims = buildClaims(evidence, stageOutputs.claims, input.coverage);
   if (!claims.ok) return { ok: false, stage: "claims", error: claims.error };
 
+  // Round-7: 确定性生成 QuestionCoverageGaps（不增加 Provider 调用）
+  // 从 geoOpportunities 提取用户原始问题文本以建立 Question Identity 链路
+  const qcgResult = buildQuestionCoverageGaps(
+    evidence,
+    stageOutputs.dimensionSignals,
+    claims.value.geoOpportunities,
+  );
+  if (!qcgResult.ok) return { ok: false, stage: "question_coverage_gaps", error: qcgResult.error };
+
   const assembled = assembleReport({
     identity: input.identity,
     companyProfile: profile.value,
@@ -159,6 +173,7 @@ export function buildReportFromStageOutputs(input: BuildReportInput): BuildRepor
     aiVisibility: aiVisibility.value,
     claims: claims.value,
     evidence,
+    questionCoverageGaps: qcgResult.value,
   });
   if (!assembled.ok) return { ok: false, stage: "assemble", issues: assembled.issues };
   return {

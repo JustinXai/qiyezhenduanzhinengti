@@ -138,7 +138,7 @@ describe("Round-3 canaries (data plane, full boundary, MOCK)", () => {
       "independentSupportSourceCount",
       "guardRule",
       "requestId",
-      "coverage",
+      // "coverage" is intentionally kept out — Round-7 questionCoverageGaps uses it legitimately
     ]) {
       expect(json).not.toContain(forbidden);
     }

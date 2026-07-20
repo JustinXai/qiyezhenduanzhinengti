@@ -1,11 +1,60 @@
+// ============================================================================
 // Diagnosis request input contract.
 //
 // The frozen canonical contracts (src/contracts/index.ts) describe the OUTPUT
 // report shape only; the request payload that starts a diagnosis is a runtime
 // concern owned by Agent E. Keep it minimal: a website is the one hard
 // requirement, everything else is optional context the engine may use.
+// ============================================================================
 
 import { z } from "zod";
+
+// ---------------------------------------------------------------------------
+// Customer Questions for Question Coverage Assessment (Round-7.1A)
+// Each question must receive a stable questionId at request creation time.
+// ---------------------------------------------------------------------------
+
+export const CustomerQuestionInputSchema = z
+  .object({
+    /**
+     * Optional user-provided question text.
+     * If not provided, the questionId will be generated without text.
+     */
+    question: z.string().min(1).max(500).optional(),
+  })
+  .strict();
+
+export type CustomerQuestionInput = z.infer<typeof CustomerQuestionInputSchema>;
+
+/**
+ * Generate a stable questionId from diagnosisId, normalized question text, and index.
+ * This ensures the same question always gets the same ID within a diagnosis.
+ */
+export function generateQuestionId(
+  diagnosisId: string,
+  question: string,
+  index: number,
+): string {
+  // Remove all whitespace and normalize case for stable ID generation
+  const normalized = question.trim().toLowerCase().replace(/\s+/g, "");
+  const hash = simpleHash(`${diagnosisId}:${normalized}:${index}`);
+  return `q_${hash}`;
+}
+
+/**
+ * Simple deterministic hash function for generating stable IDs.
+ */
+function simpleHash(input: string): string {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    const char = input.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash | 0; // Convert to 32bit integer
+  }
+  // Use unsigned right shift to get positive index, then convert to base36
+  const positiveHash = hash >>> 0;
+  return positiveHash.toString(36);
+}
 
 // ---------------------------------------------------------------------------
 // Competitor input (Agent I) — accepts either a bare NAME string or an object
@@ -47,6 +96,12 @@ export const DiagnosisInputSchema = z
     // Backward compatible: a string[] still validates because each element
     // matches the string branch of CompetitorInputSchema.
     competitors: z.array(CompetitorInputSchema).max(20).optional(),
+    /**
+     * Round-7.1A: Customer questions for Question Coverage Assessment.
+     * Each question will receive a stable questionId generated from
+     * diagnosisId + normalized question text + index.
+     */
+    customerQuestions: z.array(CustomerQuestionInputSchema).max(20).optional(),
     notes: z.string().max(2000).optional(),
   })
   .strict();

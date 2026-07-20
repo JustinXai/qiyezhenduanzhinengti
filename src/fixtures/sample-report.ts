@@ -172,7 +172,7 @@ const SAMPLE: DiagnosisReportType = {
       statement: "围绕“柔性装配线选型”建立权威问答内容",
       businessImpact: "承接高意向搜索与 AI 问答流量",
       evidenceIds: ["ev_first_product"],
-      customerQuestion: "中小制造企业该如何选择柔性装配线?",
+      customerQuestion: "中小制造企业该如何选择柔性装配线",
       contentGap: "官网无系统性的选型指南或对比框架",
     },
     {
@@ -198,6 +198,43 @@ const SAMPLE: DiagnosisReportType = {
     evidenceIds: ["ev_first_product"],
     disclaimer: FROZEN_DEMO_DISCLAIMER,
   },
+  /**
+   * Round-7: 客户问题覆盖缺口
+   * 用于生成 PublicInformationOpportunity
+   * 这些示例展示如何从 QuestionCoverageGap 生成公开信息完善机会
+   */
+  questionCoverageGaps: [
+    {
+      questionId: "q_cover_1",
+      questionText: "中小制造企业该如何选择柔性装配线？",
+      coverageStatus: "PARTIALLY_SUPPORTED",
+      observedScope: "官网产品页有设备参数,但无系统性选型指南",
+      missingInformation: "选型决策框架、不同规模适配建议、典型客户场景",
+      suggestedAction: "建立产品选型指南页面,按行业/规模/预算提供对比框架",
+      businessValue: "帮助采购方快速判断产品是否适合,提升咨询转化",
+      evidenceIds: ["ev_first_product"],
+    },
+    {
+      questionId: "q_cover_2",
+      questionText: "这家供应商有没有类似规模的成功案例？",
+      coverageStatus: "UNANSWERED",
+      observedScope: "本次搜索结果中未找到客户案例或应用场景展示",
+      missingInformation: "可公开的成功案例、行业分布、服务规模说明",
+      suggestedAction: "整理并展示 3-5 个典型客户案例,包括行业和服务规模",
+      businessValue: "增强采购信心,为 AI 提供可引用的实体事实",
+      evidenceIds: [],
+    },
+    {
+      questionId: "q_cover_3",
+      questionText: "设备的交付周期和验收标准是什么",
+      coverageStatus: "PARTIALLY_SUPPORTED",
+      observedScope: "官网未明确说明交付周期,但有联系表单",
+      missingInformation: "标准交付周期区间、验收流程说明",
+      suggestedAction: "在产品页或 FAQ 中明确标准交付周期和验收流程",
+      businessValue: "减少售前咨询成本,帮助客户合理规划采购时间",
+      evidenceIds: ["ev_first_product"],
+    },
+  ],
   evidence: [
     {
       id: "ev_first_home",

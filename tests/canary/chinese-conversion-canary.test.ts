@@ -135,9 +135,9 @@ function chineseStages(
     },
     ai_visibility: {
       tests: [
-        { id: "aiv_q1", questionCategory: "PURCHASE_DECISION", question: "运动相机怎么选?", answerText: `建议关注防抖与画质,${brand}等品牌均有产品线。`, accuracy: "PARTIAL", recommendationStrength: "WEAK", evidenceIds: [] },
-        { id: "aiv_q2", questionCategory: "BRAND_DIRECT", question: `${brand}主要提供什么?`, answerText: `${brand}主要提供运动相机与配件。`, accuracy: "ACCURATE", recommendationStrength: "MODERATE", evidenceIds: [] },
-        { id: "aiv_q3", questionCategory: "BRAND_DIRECT", question: `${brand}的特点?`, answerText: "该品牌以防抖与全景能力见长。", evidenceIds: [] },
+        { id: "aiv_q1", questionCategory: "PURCHASE_DECISION", question: "运动相机怎么选", answerText: `建议关注防抖与画质,${brand}等品牌均有产品线。`, accuracy: "PARTIAL", recommendationStrength: "WEAK", evidenceIds: [] },
+        { id: "aiv_q2", questionCategory: "BRAND_DIRECT", question: `${brand}主要提供什么`, answerText: `${brand}主要提供运动相机与配件。`, accuracy: "ACCURATE", recommendationStrength: "MODERATE", evidenceIds: [] },
+        { id: "aiv_q3", questionCategory: "BRAND_DIRECT", question: `${brand}的特点`, answerText: "该品牌以防抖与全景能力见长。", evidenceIds: [] },
       ],
     },
     claims: {
@@ -148,7 +148,7 @@ function chineseStages(
         { statement: "本次检查的公开页面中,未发现面向购买决策的结构化问答内容", businessImpact: "高意向客户获取关键信息成本高", claimType: "DIAGNOSTIC_INFERENCE", fixDirection: "补充选型与售后FAQ", evidenceIds: pick(fp) },
       ],
       geoOpportunities: [
-        { statement: "围绕选型问题建立权威问答内容", businessImpact: "承接高意向搜索与问答流量", claimType: "DIAGNOSTIC_INFERENCE", customerQuestion: "运动相机怎么选?", contentGap: "官网缺少选型指南", sourceIssueId: o.opportunitySourceIssueId ?? "iss_1", evidenceIds: pick(fp) },
+        { statement: "围绕选型问题建立权威问答内容", businessImpact: "承接高意向搜索与问答流量", claimType: "DIAGNOSTIC_INFERENCE", customerQuestion: "运动相机怎么选", contentGap: "官网缺少选型指南", sourceIssueId: o.opportunitySourceIssueId ?? "iss_1", evidenceIds: pick(fp) },
       ],
       competitorGaps: [],
       demonstrationFix: null,
