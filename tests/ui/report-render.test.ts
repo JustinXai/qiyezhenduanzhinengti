@@ -85,8 +85,9 @@ describe("QuickReport rendering", () => {
 
   it("renders the three-phase roadmap goals only (no SOW / pricing)", () => {
     const html = renderQuick();
-    // Round-7.1A: roadmap text may have changed
-    expect(html).toContain("建议推进路径");
+    expect(html).toContain("统一品牌与业务表达");
+    expect(html).toContain("覆盖高意向客户问题");
+    expect(html).toContain("持续测试和更新");
     expect(html).not.toContain("报价");
     expect(html).not.toContain("SOW");
   });
@@ -99,9 +100,8 @@ describe("QuickReport rendering", () => {
   });
 
   it("exposes the e2e data-testid hooks (Agent G contract)", () => {
-    const html = renderQuick(); // sample has demonstrationFix and gaps -> modules present
-    // Round-7.1A: question-coverage module shows restrained message when no assessments
-    for (const key of ["summary", "question-coverage", "competitor", "issues", "fix", "geo", "priority", "roadmap", "cta"]) {
+    const html = renderQuick(); // sample has a demonstrationFix -> fix module present
+    for (const key of ["summary", "ai", "competitor", "issues", "fix", "geo", "roadmap", "cta"]) {
       expect(html).toContain(`data-testid="quick-module-${key}"`);
     }
     expect(html).toContain('data-testid="primary-cta"');

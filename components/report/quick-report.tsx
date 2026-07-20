@@ -3,14 +3,15 @@ import type { QuickReportViewModel } from "../../src/contracts";
 import { Section } from "./section";
 import { ScoreHeadline } from "./score-card";
 import { EvidenceTag } from "./badges";
+import { AiSampleDisclaimer, AiTestCard } from "./ai-test-card";
 import { IssueItem, OpportunityItem } from "./claim-card";
 import { DemonstrationFixCard } from "./demonstration-fix";
 import { Roadmap } from "./roadmap";
 import { CtaSection } from "./cta-section";
 import { formatDate, formatPercent } from "./labels";
 import { PRIMARY_CTA_LABEL } from "../../src/product/customer-copy";
-import { QUICK_MODULE_TITLES, COVERAGE_STATUS_LABEL } from "../../src/report/presentation/zh-labels";
-import { PriorityDirectionCard } from "./priority-direction";
+import { QUICK_MODULE_TITLES } from "../../src/report/presentation/zh-labels";
+import { PublicInfoOpportunityCard, PublicInfoActionItem } from "./public-info-opportunity";
 
 interface QuickReportProps {
   vm: QuickReportViewModel;
@@ -26,10 +27,10 @@ interface QuickModule {
 }
 
 /**
- * Quick view (Round-7.1A 精简版). Modules are built dynamically:
+ * Quick view (Round-5.1 中文成交版). Modules are built dynamically:
  *   - a module with nothing meaningful to say is OMITTED (no empty shell);
  *   - visible numbering is always contiguous (1..n);
- *   - titles reflect the REAL item count.
+ *   - titles reflect the REAL item count (never a fixed "三个核心问题").
  * All selection/limits are already applied by the presentation service.
  */
 export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
@@ -40,27 +41,14 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
     key: "summary",
     title: "决策摘要",
     body: (
-      <div className="space-y-4">
-        {/* 报告品牌头部 */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-neutral-900">{vm.brandName}</h1>
-            <p className="mt-0.5 text-xs text-neutral-400">企业诊断报告 · {formatDate(vm.reportDate)}</p>
-          </div>
-          <div className="hidden sm:block">
-            <div className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-500">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              Quick 快速版
-            </div>
-          </div>
+      <div className="space-y-3">
+        <div>
+          <h1 className="text-xl font-bold text-neutral-900">{vm.brandName}</h1>
+          <p className="text-xs text-neutral-500">报告日期 {formatDate(vm.reportDate)}</p>
         </div>
 
         {/* §十 固定决策顺序: 1.一句话结论 → 2.评分与测量构成 → 问题/机会 → CTA */}
-        <div className="rounded-xl border-l-4 border-neutral-900 bg-neutral-50 px-4 py-3">
-          <p className="text-sm font-medium leading-relaxed text-neutral-900">
-            {vm.headlineConclusion}
-          </p>
-        </div>
+        <p className="text-sm font-medium leading-relaxed text-neutral-900">{vm.headlineConclusion}</p>
 
         <ScoreHeadline
           overallScore={vm.overallScore}
@@ -68,49 +56,41 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
           composition={vm.measurementComposition}
         />
 
-        <div className="space-y-1.5">
-          {vm.estimationNotice && (
-            <p
-              data-testid="estimation-notice"
-              className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700"
-            >
-              {vm.estimationNotice}
-            </p>
-          )}
-          <p className="text-xs text-neutral-400">{vm.measurementStatusSummary}</p>
-        </div>
-
-        {/* 关键洞察列表 */}
-        {(vm.topStrength || vm.topIssue || vm.topOpportunity) && (
-          <div className="space-y-2 rounded-xl border border-neutral-200 bg-white p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
-              关键洞察
-            </p>
-            {vm.topStrength && (
-              <HighlightRow label="已有优势" text={vm.topStrength.statement} highlight="positive" />
-            )}
-            {vm.topIssue && (
-              <HighlightRow label="最优先问题" text={vm.topIssue.statement} highlight="warning" />
-            )}
-            {vm.topOpportunity && (
-              <HighlightRow label="最优先机会" text={vm.topOpportunity.statement} highlight="info" />
-            )}
-          </div>
+        <p className="text-xs text-neutral-500">{vm.measurementStatusSummary}</p>
+        {vm.estimationNotice && (
+          <p
+            data-testid="estimation-notice"
+            className="rounded-lg bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-800"
+          >
+            {vm.estimationNotice}
+          </p>
         )}
 
-        {/* 首屏主 CTA */}
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:gap-3">
+        <dl className="space-y-1.5 rounded-xl bg-neutral-50 p-3 text-xs">
+          <HighlightRow label="已有优势" text={vm.topStrength?.statement} />
+          <HighlightRow label="最优先问题" text={vm.topIssue?.statement} />
+          <HighlightRow label="最优先机会" text={vm.topOpportunity?.statement} />
+          {/* Round-7: 首屏最重要的公开信息完善机会 */}
+          {vm.topPublicInformationOpportunity && (
+            <HighlightRow
+              label="最优先补充"
+              text={vm.topPublicInformationOpportunity.suggestedContentAction}
+            />
+          )}
+        </dl>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
             data-testid="primary-cta"
-            className="flex-1 rounded-xl bg-neutral-900 px-5 py-3.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-neutral-800 hover:shadow"
+            className="flex-1 rounded-lg bg-neutral-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
           >
             {PRIMARY_CTA_LABEL}
           </button>
           <button
             type="button"
             onClick={onOpenDeep}
-            className="flex-1 rounded-xl border border-neutral-300 bg-white px-5 py-3.5 text-sm font-medium text-neutral-700 shadow-sm transition-all hover:border-neutral-400 hover:bg-neutral-50"
+            className="flex-1 rounded-lg border border-neutral-300 px-4 py-3 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
           >
             查看完整诊断
           </button>
@@ -119,45 +99,29 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
     ),
   });
 
-  // 客户决策问题覆盖 — only when there are questions or restrained message
-  if (vm.keyCustomerQuestions.length > 0 || vm.questionCoverageStats.totalQuestions > 0 || vm.questionCoverageRestrainedMessage) {
+  // AI 现在怎么谈论企业 — only when有效样本存在.
+  if (vm.aiVisibilitySamples.length > 0) {
     modules.push({
-      key: "question-coverage",
-      title: QUICK_MODULE_TITLES.questionCoverage,
+      key: "ai",
+      title: "AI 现在怎么谈论企业",
       body: (
-        <div className="space-y-4">
-          {vm.questionCoverageRestrainedMessage ? (
-            <p className="rounded-lg bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
-              {vm.questionCoverageRestrainedMessage}
-            </p>
-          ) : (
-            <>
-              {/* 统计摘要 */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <StatCard label="本次检查" value={vm.questionCoverageStats.totalQuestions} />
-                <StatCard label="充分覆盖" value={vm.questionCoverageStats.fullySupportedCount} tone="positive" />
-                <StatCard label="部分覆盖" value={vm.questionCoverageStats.partiallySupportedCount} tone="warning" />
-                <StatCard label="待补充" value={vm.questionCoverageStats.unansweredCount} tone="danger" />
-              </div>
-
-              {/* 关键问题列表 */}
-              <div className="space-y-2">
-                {vm.keyCustomerQuestions.map((q) => (
-                  <QuestionCard key={q.questionId} question={q} />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        <>
+          <AiSampleDisclaimer />
+          <div className="mt-2 space-y-2">
+            {vm.aiVisibilitySamples.map((test) => (
+              <AiTestCard key={test.id} test={test} />
+            ))}
+          </div>
+        </>
       ),
     });
   }
 
-  // 条件性竞品观察 — only when formal gaps pass Truth Policy
+  // 竞品差距 — gaps, or the restrained boundary note when竞品 was provided.
   if (vm.competitorGapSummary.available) {
     modules.push({
       key: "competitor",
-      title: QUICK_MODULE_TITLES.competitorObservation,
+      title: vm.competitorGapSummary.gaps.length > 1 ? "竞品差距" : "最明确的竞品差距",
       body: (
         <ul className="space-y-2">
           {vm.competitorGapSummary.gaps.map((gap) => (
@@ -170,6 +134,17 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
             </li>
           ))}
         </ul>
+      ),
+    });
+  } else if (vm.competitorGapSummary.reason.includes("已收到竞品输入")) {
+    // Competitors were provided → the boundary explanation is meaningful content.
+    modules.push({
+      key: "competitor",
+      title: "竞品差距",
+      body: (
+        <p className="rounded-xl bg-neutral-50 p-3 text-sm text-neutral-600">
+          {vm.competitorGapSummary.reason}
+        </p>
       ),
     });
   }
@@ -217,26 +192,41 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
     });
   }
 
-  // Round-7.1A: 优先完善方向 — merged from QuestionCoverageGap clustering
-  if (vm.priorityDirections.length > 0) {
+  // Round-7: 公开信息完善机会 — 最多3个
+  if (vm.publicInformationOpportunities.length > 0) {
     modules.push({
-      key: "priority",
-      title: QUICK_MODULE_TITLES.priorityDirections,
+      key: "public-info",
+      title:
+        vm.publicInformationOpportunities.length === 1
+          ? QUICK_MODULE_TITLES.publicInfoOpportunities
+          : `${QUICK_MODULE_TITLES.publicInfoOpportunities}(${vm.publicInformationOpportunities.length}个)`,
       body: (
         <div className="space-y-2">
-          {vm.priorityDirections.map((dir, idx) => (
-            <PriorityDirectionCard key={idx} direction={dir} index={idx + 1} />
+          {vm.publicInformationOpportunities.map((opp, idx) => (
+            <PublicInfoOpportunityCard key={opp.relatedQuestionId} opportunity={opp} index={idx + 1} />
           ))}
         </div>
       ),
     });
   }
 
-  // 建议推进路径 — compressed single module
-  modules.push({ key: "roadmap", title: QUICK_MODULE_TITLES.roadmap, body: <Roadmap /> });
+  // Round-7: 行动建议 — 来源于 QuestionCoverageGap 的确定性映射
+  if (vm.publicInformationActions.length > 0) {
+    modules.push({
+      key: "actions",
+      title: QUICK_MODULE_TITLES.actionSuggestions,
+      body: (
+        <div className="space-y-2">
+          {vm.publicInformationActions.map((action, idx) => (
+            <PublicInfoActionItem key={idx} action={action} index={idx + 1} />
+          ))}
+        </div>
+      ),
+    });
+  }
 
-  // 下一步
-  modules.push({ key: "cta", title: QUICK_MODULE_TITLES.nextSteps, body: <CtaSection /> });
+  modules.push({ key: "roadmap", title: "三阶段路线图", body: <Roadmap /> });
+  modules.push({ key: "cta", title: "下一步", body: <CtaSection /> });
 
   return (
     <div className="space-y-1">
@@ -255,92 +245,11 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
   );
 }
 
-function HighlightRow({
-  label,
-  text,
-  highlight,
-}: {
-  label: string;
-  text?: string;
-  highlight?: "positive" | "warning" | "info" | "muted";
-}) {
-  const dotColors = {
-    positive: "bg-emerald-400",
-    warning: "bg-amber-400",
-    info: "bg-sky-400",
-    muted: "bg-neutral-400",
-  };
-
+function HighlightRow({ label, text }: { label: string; text?: string }) {
   return (
-    <div className="flex items-start gap-2.5">
-      <div className="mt-1.5 shrink-0">
-        <span className={`inline-block h-1.5 w-1.5 rounded-full ${highlight ? dotColors[highlight] : "bg-neutral-300"}`} />
-      </div>
-      <div className="flex-1">
-        <span className="text-xs font-semibold text-neutral-500">{label}</span>
-        <p className="mt-0.5 text-sm text-neutral-800">{text ?? "本次暂未识别"}</p>
-      </div>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: number;
-  tone?: "neutral" | "positive" | "warning" | "danger";
-}) {
-  const bgColors = {
-    neutral: "bg-neutral-100",
-    positive: "bg-emerald-50",
-    warning: "bg-amber-50",
-    danger: "bg-red-50",
-  };
-  const textColors = {
-    neutral: "text-neutral-900",
-    positive: "text-emerald-700",
-    warning: "text-amber-700",
-    danger: "text-red-700",
-  };
-
-  return (
-    <div className={`rounded-lg ${bgColors[tone]} p-3 text-center`}>
-      <p className={`text-2xl font-bold ${textColors[tone]}`}>{value}</p>
-      <p className="mt-0.5 text-xs text-neutral-500">{label}</p>
-    </div>
-  );
-}
-
-function QuestionCard({ question }: { question: QuickReportViewModel["keyCustomerQuestions"][number] }) {
-  const statusColors = {
-    FULLY_SUPPORTED: "bg-emerald-100 text-emerald-700",
-    PARTIALLY_SUPPORTED: "bg-amber-100 text-amber-700",
-    UNANSWERED: "bg-red-100 text-red-700",
-  };
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
-      <div className="flex items-center gap-2 border-b border-neutral-100 bg-neutral-50 px-4 py-2.5">
-        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[question.coverageStatus]}`}>
-          {COVERAGE_STATUS_LABEL[question.coverageStatus]}
-        </span>
-        <p className="flex-1 text-sm font-medium text-neutral-900">{question.questionText}</p>
-      </div>
-      <div className="px-4 py-3">
-        <div className="space-y-2">
-          <div className="text-xs">
-            <span className="font-medium text-neutral-500">当前公开信息情况：</span>
-            <span className="text-neutral-700">{question.publicInfoSituation}</span>
-          </div>
-          <div className="text-xs">
-            <span className="font-medium text-neutral-500">建议补充：</span>
-            <span className="text-neutral-700">{question.suggestedContentType}</span>
-          </div>
-        </div>
-      </div>
+    <div className="flex gap-2">
+      <dt className="w-16 shrink-0 font-semibold text-neutral-500">{label}</dt>
+      <dd className="text-neutral-800">{text ?? "本次暂未识别"}</dd>
     </div>
   );
 }

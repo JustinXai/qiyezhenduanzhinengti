@@ -17,15 +17,15 @@ const CATEGORY_LABELS: Record<AIVisibilityTest["questionCategory"], string> = {
  */
 export function AiTestCard({ test }: { test: AIVisibilityTest }) {
   return (
-    <article className="rounded-xl border border-neutral-200 p-3">
-      <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+    <article className="rounded-xl border border-neutral-200 p-3.5">
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <Badge tone="neutral">{CATEGORY_LABELS[test.questionCategory]}</Badge>
         <Badge tone={test.brandMentioned ? "positive" : "warning"}>
           {test.brandMentioned ? "已提及品牌" : "未提及品牌"}
         </Badge>
       </div>
-      <p className="text-sm font-medium text-neutral-900 break-words">{test.question}</p>
-      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-600">
+      <p className="text-sm font-medium text-neutral-900">{test.question}</p>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-600">
         {test.accuracy && <span>回答准确度:{ACCURACY_LABELS[test.accuracy]}</span>}
         {test.recommendationStrength && (
           <span>推荐强度:{RECOMMENDATION_LABELS[test.recommendationStrength]}</span>

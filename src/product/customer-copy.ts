@@ -52,9 +52,9 @@ export const CTA_DESCRIPTION =
 export const THIRTY_MINUTE_HEADING = "30 分钟解读会将帮助您：";
 
 export const THIRTY_MINUTE_POINTS = [
-  "核验本报告中的企业信息和客户问题；",
-  "确定优先完善的内容方向；",
-  "明确企业需提供的资料、交付内容和验收方式。",
+  "核验报告中的关键结论是否符合企业实际；",
+  "确定最值得优先处理的 3 件事；",
+  "明确企业需提供什么、凡间AI可以交付什么，以及如何验收。",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ export const THIRTY_MINUTE_POINTS = [
 // ---------------------------------------------------------------------------
 
 /** 综合分固定命名。 */
-export const OVERALL_SCORE_LABEL = "GEO基础诊断指数";
+export const OVERALL_SCORE_LABEL = "GEO可见度基础指数";
 
 // 综合分禁用别名 — 不得出现在任何客户可见文案中。这是「检测清单」而非展示文案，
 // 故每行标注 `security-check:allow`，与 src/report/validation/cta-guard.ts 中的
@@ -132,12 +132,6 @@ export const BANNED_MARKETING_PHRASES = [
   "保证收入", // security-check:allow
   "不优化就会失去市场", // security-check:allow
   "竞品正在抢走你的客户", // security-check:allow
-  // Round-7.1A: 禁用绝对化/否定性表述
-  "品牌知名度较高", // security-check:allow
-  "曝光不足", // security-check:allow
-  "排名靠后", // security-check:allow
-  "AI不会推荐", // security-check:allow
-  "市场机会巨大", // security-check:allow
 ] as const;
 
 // ---------------------------------------------------------------------------

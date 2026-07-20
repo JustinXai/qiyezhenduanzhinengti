@@ -55,7 +55,7 @@ export function DeepReport({ vm }: { vm: DeepReportViewModel }) {
         <ScoreBreakdown scores={vm.scores} />
       </Section>
 
-      <Section title="当前模型问答样本（仅供参考）">
+      <Section title="AI 可见度诊断样本">
         {vm.aiVisibilityTests.length > 0 ? (
           <>
             <AiSampleDisclaimer />

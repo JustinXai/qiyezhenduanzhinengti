@@ -305,60 +305,6 @@ export const QuestionCoverageAssessment = z.object({
 export type QuestionCoverageAssessment = z.infer<typeof QuestionCoverageAssessment>;
 
 /**
- * Round-7.1A: 客户决策问题覆盖统计
- * 用于Quick报告的统计摘要
- */
-export const QuestionCoverageStats = z.object({
-  /** 本次检查的问题总数 */
-  totalQuestions: z.number(),
-  /** 充分覆盖数 */
-  fullySupportedCount: z.number(),
-  /** 部分覆盖数 */
-  partiallySupportedCount: z.number(),
-  /** 待补充数 */
-  unansweredCount: z.number(),
-});
-export type QuestionCoverageStats = z.infer<typeof QuestionCoverageStats>;
-
-/**
- * Round-7.1A: 关键客户问题展示
- * 用于Quick报告的单个问题卡片
- */
-export const KeyCustomerQuestion = z.object({
-  /** 问题 ID */
-  questionId: z.string(),
-  /** 客户问题文本 */
-  questionText: z.string(),
-  /** 当前覆盖状态 */
-  coverageStatus: z.enum(["FULLY_SUPPORTED", "PARTIALLY_SUPPORTED", "UNANSWERED"]),
-  /** 当前公开信息情况描述 */
-  publicInfoSituation: z.string(),
-  /** 建议补充的内容类型 */
-  suggestedContentType: z.string(),
-  /** 关联的 Evidence ID */
-  evidenceIds: z.array(z.string()),
-});
-export type KeyCustomerQuestion = z.infer<typeof KeyCustomerQuestion>;
-
-/**
- * Round-7.1A: 优先完善方向（聚类后的结果）
- * 用于Quick报告的优先完善方向模块
- */
-export const PriorityDirection = z.object({
-  /** 方向标题 */
-  directionTitle: z.string(),
-  /** 方向类别 */
-  directionCategory: z.string(),
-  /** 涵盖的客户问题 */
-  coveredQuestions: z.array(z.string()),
-  /** 建议建设的内容资产 */
-  suggestedContentAsset: z.string(),
-  /** 具体商业价值 */
-  businessValue: z.string(),
-});
-export type PriorityDirection = z.infer<typeof PriorityDirection>;
-
-/**
  * Round-7: QuestionCoverageGapV1
  * 用于记录客户问题的覆盖情况
  * 是 PublicInformationOpportunity 的来源
@@ -468,7 +414,7 @@ export const QuickReportViewModel = z.object({
   topStrength: Strength.nullable(),
   topIssue: CoreIssue.nullable(),
   topOpportunity: GeoOpportunity.nullable(),
-  /** Competitor gaps - only shown when formal gaps pass Truth Policy */
+  aiVisibilitySamples: z.array(AIVisibilityTest).max(2),
   competitorGapSummary: z.union([
     z.object({ available: z.literal(true), gaps: z.array(CompetitorGap) }),
     z.object({ available: z.literal(false), reason: z.string() }),
@@ -477,25 +423,22 @@ export const QuickReportViewModel = z.object({
   demonstrationFix: DemonstrationFix.nullable(),
   geoOpportunities: z.array(GeoOpportunity).max(3),
   /**
-   * Round-7.1A: 客户决策问题覆盖统计
-   * 用于Quick报告首屏展示
+   * Round-7: 公开信息完善机会
+   * 来源于 QuestionCoverageGapV1 的确定性映射
+   * 最多 3 个，不是正式 Opportunity，不影响 Truth Guard
    */
-  questionCoverageStats: QuestionCoverageStats,
+  publicInformationOpportunities: z.array(PublicInformationOpportunity).max(3),
   /**
-   * Round-7.1A: 克制说明
-   * 当 questionCoverageAssessments 缺失时显示，说明数据来源限制
+   * Round-7: 最重要的公开信息完善机会（用于首屏展示）
+   * 从 publicInformationOpportunities 中选择最重要的 1 个
    */
-  questionCoverageRestrainedMessage: z.string().nullable(),
+  topPublicInformationOpportunity: PublicInformationOpportunity.nullable(),
   /**
-   * Round-7.1A: 关键客户问题（最多显示3个）
-   * 从 questionCoverageAssessments 或 questionCoverageGaps 提取
+   * Round-7: 行动建议
+   * 来源于 QuestionCoverageGap 的确定性映射
+   * 标记为 PUBLIC_INFORMATION_ACTION，不是正式 GEO Opportunity
    */
-  keyCustomerQuestions: z.array(KeyCustomerQuestion).max(3),
-  /**
-   * Round-7.1A: 优先完善方向（聚类结果，1-3个）
-   * 来源于 QuestionCoverageGap 的确定性聚类
-   */
-  priorityDirections: z.array(PriorityDirection),
+  publicInformationActions: z.array(PublicInformationAction).max(3),
 });
 export type QuickReportViewModel = z.infer<typeof QuickReportViewModel>;
 
@@ -506,7 +449,6 @@ export const DeepReportViewModel = z.object({
   scores: ScoreBlock,
   /** §八: same composition as Quick (projected once, displayed consistently). */
   measurementComposition: MeasurementComposition.optional(),
-  /** AI visibility test samples - shown collapsed by default with title "当前模型问答样本（仅供参考）" */
   aiVisibilityTests: z.array(AIVisibilityTest),
   strengths: z.array(Strength),
   coreIssues: z.array(CoreIssue),

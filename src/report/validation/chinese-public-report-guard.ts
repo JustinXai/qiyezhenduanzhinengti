@@ -185,7 +185,32 @@ export function chinesePublicReportGuard(views: {
       : [{ field: "quick.competitorGapSummary.reason", text: quick.competitorGapSummary.reason }]),
   ];
 
-  // Priority directions are validated via their individual field content
+  // Round-7: 检查 PublicInformationOpportunity 和 PublicInformationAction 字段
+  quick.publicInformationOpportunities.forEach((opp, i) => {
+    quickFields.push(
+      { field: `quick.publicInformationOpportunities[${i}].customerQuestion`, text: opp.customerQuestion },
+      { field: `quick.publicInformationOpportunities[${i}].observedScope`, text: opp.observedScope },
+      { field: `quick.publicInformationOpportunities[${i}].missingPublicInformation`, text: opp.missingPublicInformation },
+      { field: `quick.publicInformationOpportunities[${i}].suggestedContentAction`, text: opp.suggestedContentAction },
+      { field: `quick.publicInformationOpportunities[${i}].potentialBusinessValue`, text: opp.potentialBusinessValue },
+    );
+  });
+
+  // Round-7: 检查 topPublicInformationOpportunity
+  if (quick.topPublicInformationOpportunity) {
+    const t = quick.topPublicInformationOpportunity;
+    quickFields.push(
+      { field: "quick.topPublicInformationOpportunity.customerQuestion", text: t.customerQuestion },
+      { field: "quick.topPublicInformationOpportunity.suggestedContentAction", text: t.suggestedContentAction },
+    );
+  }
+
+  // Round-7: 检查 PublicInformationAction
+  quick.publicInformationActions.forEach((action, i) => {
+    quickFields.push(
+      { field: `quick.publicInformationActions[${i}].actionText`, text: action.actionText },
+    );
+  });
 
   const deepFields: ProseField[] = [
     ...deep.measurementNotes.map((n, i) => ({ field: `deep.measurementNotes[${i}]`, text: n })),

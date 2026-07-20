@@ -32,12 +32,6 @@ export const reports = sqliteTable("reports", {
   scoreContractVersion: text("score_contract_version").notNull(),
   canonicalJson: text("canonical_json").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  // Round-7.4: Report provenance tracking for audit trail
-  // Values: REAL_PROVIDER_CANONICAL | MOCK_SEED | MANUAL_REVISION | ENRICHMENT_REVISION
-  reportProvenance: text("report_provenance")
-    .notNull()
-    .default("REAL_PROVIDER_CANONICAL"),
-  demoOnly: integer("demo_only", { mode: "boolean" }).notNull().default(false),
 });
 
 export const providerUsage = sqliteTable("provider_usage", {
@@ -161,52 +155,6 @@ export const pruneDecisions = sqliteTable("prune_decisions", {
   coverageStatus: text("coverage_status").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   algorithmVersion: text("algorithm_version").notNull(),
-});
-
-// Round-8: append-only report revisions for manual review edits.
-// Original canonical reports are never overwritten; edits create new revision rows.
-export const reportRevisions = sqliteTable("report_revisions", {
-  id: text("id").primaryKey(),
-  reportId: text("report_id").notNull(),
-  parentReportId: text("parent_report_id").notNull(),
-  revisionNumber: integer("revision_number").notNull(),
-  // JSON snapshot of the revised report content (includes manual edits)
-  revisedJson: text("revised_json").notNull(),
-  // Hash of the original canonical report for audit trail
-  originalReportHash: text("original_report_hash").notNull(),
-  // Hash of this revision for integrity verification
-  revisionHash: text("revision_hash").notNull(),
-  // Human-readable description of what was changed
-  revisionReason: text("revision_reason").notNull(),
-  // Comma-separated list of edited field paths
-  editedFields: text("edited_fields").notNull(),
-  // Reviewer identifier (name, email, or role)
-  reviewerName: text("reviewer_name"),
-  reviewedAt: integer("reviewed_at", { mode: "timestamp" }).notNull(),
-  // Guarantee that score and evidence remain unchanged
-  scoreUnchanged: integer("score_unchanged", { mode: "boolean" }).notNull().default(true),
-  evidenceUnchanged: integer("evidence_unchanged", { mode: "boolean" }).notNull().default(true),
-});
-
-// Round-8: outbox for events to be sent to external systems (e.g., Feishu).
-// Events are created but not sent; a separate process consumes this queue.
-export const reportPublishedEvents = sqliteTable("report_published_events", {
-  id: text("id").primaryKey(),
-  eventId: text("event_id").notNull().unique(),
-  reportId: text("report_id").notNull(),
-  diagnosisId: text("diagnosis_id").notNull(),
-  companyName: text("company_name").notNull(),
-  reportUrl: text("report_url").notNull(),
-  reportStatus: text("report_status").notNull(),
-  reviewerName: text("reviewer_name"),
-  contactSummary: text("contact_summary"),
-  publishedAt: integer("published_at", { mode: "timestamp" }).notNull(),
-  source: text("source").notNull().default("ENTERPRISE_DIAGNOSIS"),
-  // Event status: PENDING, SENT, FAILED
-  eventStatus: text("event_status").notNull().default("PENDING"),
-  // Retry count for failed events
-  retryCount: integer("retry_count").notNull().default(0),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
 // Round-6A: one immutable final disposition for EVERY source candidate. This

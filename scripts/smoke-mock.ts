@@ -176,7 +176,7 @@ function projectQuick(report: DiagnosisReportType): QuickReportViewModelType {
     topStrength: report.strengths[0] ?? null,
     topIssue,
     topOpportunity: report.geoOpportunities[0] ?? null,
-    // aiVisibilitySamples removed from Quick
+    aiVisibilitySamples: validSamples,
     competitorGapSummary:
       report.competitorGaps.length > 0
         ? { available: true, gaps: report.competitorGaps }
@@ -184,11 +184,10 @@ function projectQuick(report: DiagnosisReportType): QuickReportViewModelType {
     coreIssues: report.coreIssues.slice(0, 3),
     demonstrationFix: report.demonstrationFix,
     geoOpportunities: report.geoOpportunities.slice(0, 3),
-    // New fields
-    questionCoverageStats: { totalQuestions: 0, fullySupportedCount: 0, partiallySupportedCount: 0, unansweredCount: 0 },
-    questionCoverageRestrainedMessage: null,
-    keyCustomerQuestions: [],
-    priorityDirections: [],
+    // Round-7: 新增字段（smoke-mock 不测试新功能，保持空数组）
+    publicInformationOpportunities: [],
+    topPublicInformationOpportunity: null,
+    publicInformationActions: [],
   };
 }
 
@@ -300,8 +299,9 @@ async function main(): Promise<void> {
   const quick = QuickReportViewModel.parse(projectQuick(report));
   const deep = DeepReportViewModel.parse(projectDeep(report));
   const evidence = EvidenceViewModel.parse(projectEvidence(report));
+  if (quick.aiVisibilitySamples.length > 2) fail("Quick showed more than 2 AI samples");
   ok(
-    `presentation: Quick(${quick.coreIssues.length} issues, ${quick.priorityDirections.length} directions) ` +
+    `presentation: Quick(${quick.coreIssues.length} issues, ${quick.aiVisibilitySamples.length} AI samples) ` +
       `/ Deep(${deep.aiVisibilityTests.length} tests) / Evidence(${evidence.items.length} items) projected + validated`,
   );
   seam("real ReportPresentationService lives in src/report/presentation (Agent F); smoke projects minimally.");

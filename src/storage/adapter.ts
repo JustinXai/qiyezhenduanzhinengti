@@ -53,9 +53,6 @@ export interface SaveReportInput {
   reportContractVersion: string;
   scoreContractVersion: string;
   canonicalJson: string;
-  // Round-7.4: Provenance tracking
-  reportProvenance?: string;
-  demoOnly?: boolean;
 }
 
 export interface StoredReport extends SaveReportInput {
