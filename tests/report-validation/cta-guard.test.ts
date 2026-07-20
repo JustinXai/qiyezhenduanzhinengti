@@ -35,6 +35,7 @@ function minimalQuick(overrides: Partial<QuickReportViewModel> = {}): QuickRepor
     geoOpportunities: [],
     // New fields
     questionCoverageStats: { totalQuestions: 0, fullySupportedCount: 0, partiallySupportedCount: 0, unansweredCount: 0 },
+    questionCoverageRestrainedMessage: null,
     keyCustomerQuestions: [],
     priorityDirections: [],
     ...overrides,

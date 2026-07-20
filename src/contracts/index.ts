@@ -482,6 +482,11 @@ export const QuickReportViewModel = z.object({
    */
   questionCoverageStats: QuestionCoverageStats,
   /**
+   * Round-7.1A: 克制说明
+   * 当 questionCoverageAssessments 缺失时显示，说明数据来源限制
+   */
+  questionCoverageRestrainedMessage: z.string().nullable(),
+  /**
    * Round-7.1A: 关键客户问题（最多显示3个）
    * 从 questionCoverageAssessments 或 questionCoverageGaps 提取
    */

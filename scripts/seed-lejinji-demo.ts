@@ -203,6 +203,39 @@ const lejinjiReport: DiagnosisReport = {
       evidenceIds: ["ev_1"],
     },
   ],
+  // Round-7.1A: questionCoverageAssessments - 每个原始问题恰好有一个评估
+  questionCoverageAssessments: [
+    {
+      questionId: "q_pub_1",
+      questionText: "这个品牌的产品在哪里可以买到？",
+      matchedCriterionKey: "purchaseDecisionQuestions",
+      status: "UNANSWERED",
+      evidenceIds: [],
+      reasonCode: "NO_MATCHING_COVERAGE_SIGNAL",
+      assessedAt: "2026-07-19T00:00:00.000Z",
+      algorithmVersion: "1.0.0",
+    },
+    {
+      questionId: "q_pub_2",
+      questionText: "品牌有没有加盟合作的机会？",
+      matchedCriterionKey: "deliveryAndAfterSales",
+      status: "UNANSWERED",
+      evidenceIds: [],
+      reasonCode: "NO_MATCHING_COVERAGE_SIGNAL",
+      assessedAt: "2026-07-19T00:00:00.000Z",
+      algorithmVersion: "1.0.0",
+    },
+    {
+      questionId: "q_pub_3",
+      questionText: "品牌的产品口感如何？有哪些口味可以选择？",
+      matchedCriterionKey: "purchaseDecisionQuestions",
+      status: "PARTIALLY_SUPPORTED",
+      evidenceIds: ["ev_1"],
+      reasonCode: "MATCHED_SIGNAL",
+      assessedAt: "2026-07-19T00:00:00.000Z",
+      algorithmVersion: "1.0.0",
+    },
+  ],
   evidence: [
     {
       id: "ev_1",

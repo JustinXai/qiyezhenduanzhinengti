@@ -186,6 +186,7 @@ function projectQuick(report: DiagnosisReportType): QuickReportViewModelType {
     geoOpportunities: report.geoOpportunities.slice(0, 3),
     // New fields
     questionCoverageStats: { totalQuestions: 0, fullySupportedCount: 0, partiallySupportedCount: 0, unansweredCount: 0 },
+    questionCoverageRestrainedMessage: null,
     keyCustomerQuestions: [],
     priorityDirections: [],
   };

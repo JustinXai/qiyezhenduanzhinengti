@@ -119,27 +119,35 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
     ),
   });
 
-  // 客户决策问题覆盖 — only when there are questions
-  if (vm.keyCustomerQuestions.length > 0 || vm.questionCoverageStats.totalQuestions > 0) {
+  // 客户决策问题覆盖 — only when there are questions or restrained message
+  if (vm.keyCustomerQuestions.length > 0 || vm.questionCoverageStats.totalQuestions > 0 || vm.questionCoverageRestrainedMessage) {
     modules.push({
       key: "question-coverage",
       title: QUICK_MODULE_TITLES.questionCoverage,
       body: (
         <div className="space-y-4">
-          {/* 统计摘要 */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="本次检查" value={vm.questionCoverageStats.totalQuestions} />
-            <StatCard label="充分覆盖" value={vm.questionCoverageStats.fullySupportedCount} tone="positive" />
-            <StatCard label="部分覆盖" value={vm.questionCoverageStats.partiallySupportedCount} tone="warning" />
-            <StatCard label="待补充" value={vm.questionCoverageStats.unansweredCount} tone="danger" />
-          </div>
+          {vm.questionCoverageRestrainedMessage ? (
+            <p className="rounded-lg bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
+              {vm.questionCoverageRestrainedMessage}
+            </p>
+          ) : (
+            <>
+              {/* 统计摘要 */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatCard label="本次检查" value={vm.questionCoverageStats.totalQuestions} />
+                <StatCard label="充分覆盖" value={vm.questionCoverageStats.fullySupportedCount} tone="positive" />
+                <StatCard label="部分覆盖" value={vm.questionCoverageStats.partiallySupportedCount} tone="warning" />
+                <StatCard label="待补充" value={vm.questionCoverageStats.unansweredCount} tone="danger" />
+              </div>
 
-          {/* 关键问题列表 */}
-          <div className="space-y-2">
-            {vm.keyCustomerQuestions.map((q) => (
-              <QuestionCard key={q.questionId} question={q} />
-            ))}
-          </div>
+              {/* 关键问题列表 */}
+              <div className="space-y-2">
+                {vm.keyCustomerQuestions.map((q) => (
+                  <QuestionCard key={q.questionId} question={q} />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       ),
     });

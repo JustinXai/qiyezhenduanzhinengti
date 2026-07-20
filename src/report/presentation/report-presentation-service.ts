@@ -333,7 +333,7 @@ function buildQuestionCoverageStats(
   assessments: QuestionCoverageAssessment[] | undefined,
   gaps: QuestionCoverageGap[] | undefined,
 ): QuestionCoverageStats {
-  // Use assessments if available, otherwise derive from gaps
+  // Use assessments if available
   if (assessments && assessments.length > 0) {
     return {
       totalQuestions: assessments.length,
@@ -343,17 +343,34 @@ function buildQuestionCoverageStats(
     };
   }
 
-  // Derive from gaps (include FULLY_SUPPORTED if available in gaps)
-  const total = gaps?.length ?? 0;
+  // When assessments are not available, derive from gaps
+  // but set fullySupportedCount to 0 (cannot determine without assessments)
+  const gapTotal = gaps?.length ?? 0;
   const unanswered = gaps?.filter((g) => g.coverageStatus === "UNANSWERED").length ?? 0;
   const partial = gaps?.filter((g) => g.coverageStatus === "PARTIALLY_SUPPORTED").length ?? 0;
 
   return {
-    totalQuestions: total,
-    fullySupportedCount: total - unanswered - partial,
+    totalQuestions: gapTotal,
+    fullySupportedCount: 0, // Cannot determine without assessments
     partiallySupportedCount: partial,
     unansweredCount: unanswered,
   };
+}
+
+/**
+ * Build a restrained message when assessments are not available.
+ * This is shown instead of the stat grid when questionCoverageAssessments is missing.
+ */
+export function buildQuestionCoverageRestrainedMessage(
+  assessments: QuestionCoverageAssessment[] | undefined,
+  gaps: QuestionCoverageGap[] | undefined,
+): string | null {
+  // Only show restrained message when assessments are missing and we have gaps
+  if (assessments && assessments.length > 0) return null;
+  if (!gaps || gaps.length === 0) return null;
+
+  const gapTotal = gaps.length;
+  return `本次已检查${gapTotal}个客户决策问题，部分问题的公开信息覆盖情况仍需进一步确认。`;
 }
 
 function buildKeyCustomerQuestions(
@@ -496,6 +513,10 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
     report.questionCoverageAssessments,
     report.questionCoverageGaps,
   );
+  const restrainedMessage = buildQuestionCoverageRestrainedMessage(
+    report.questionCoverageAssessments,
+    report.questionCoverageGaps,
+  );
   const keyQuestions = buildKeyCustomerQuestions(report.questionCoverageGaps, index);
 
   // Round-7.1A: Cluster gaps into priority directions
@@ -527,6 +548,7 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
     geoOpportunities: rankedOpportunities.slice(0, QUICK_GEO_OPPORTUNITY_LIMIT),
     // Round-7.1A: New question coverage fields
     questionCoverageStats: stats,
+    questionCoverageRestrainedMessage: restrainedMessage,
     keyCustomerQuestions: keyQuestions,
     priorityDirections,
   };
