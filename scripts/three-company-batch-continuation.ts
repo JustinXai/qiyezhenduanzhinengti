@@ -370,6 +370,7 @@ export async function runThreeCompanyBatchContinuation(
 }
 
 export type AggregateGateStatus = "PASS" | "FAIL" | "NOT_EVALUABLE";
+export type AggregateClassification = "PASS" | "NOT_EVALUABLE" | "DATA_SPARSE" | "GATE_FAILURE";
 
 export interface ThreeCompanyAggregateInput {
   company: "qiaqia" | "iflytek" | "heli";
@@ -387,15 +388,32 @@ export interface ThreeCompanyAggregateGate {
 
 export interface ThreeCompanyAggregateEvaluation {
   sampleStatus: AggregateGateStatus;
+  classification: AggregateClassification;
   completeCompanyCount: number;
   missingCompanies: Array<"qiaqia" | "iflytek" | "heli">;
   gates: ThreeCompanyAggregateGate[];
 }
 
 const FINAL_COMPANY_ORDER = ["qiaqia", "iflytek", "heli"] as const;
+const PRODUCT_YIELD_GATE_IDS = new Set<Round53SampleGateId>([
+  "AT_LEAST_TWO_COMPANIES_HAVE_CREDIBLE_OPPORTUNITY",
+  "AT_LEAST_ONE_COMPANY_HAS_CREDIBLE_DEMONSTRATION_FIX",
+]);
 
 function incompleteStatus(hardViolation: boolean): AggregateGateStatus {
   return hardViolation ? "FAIL" : "NOT_EVALUABLE";
+}
+
+export function classifyThreeCompanyAggregateGates(
+  gates: readonly Pick<ThreeCompanyAggregateGate, "id" | "status">[],
+): AggregateClassification {
+  const failed = gates.filter((gate) => gate.status === "FAIL");
+  if (failed.length > 0) {
+    return failed.every((gate) => PRODUCT_YIELD_GATE_IDS.has(gate.id))
+      ? "DATA_SPARSE"
+      : "GATE_FAILURE";
+  }
+  return gates.every((gate) => gate.status === "PASS") ? "PASS" : "NOT_EVALUABLE";
 }
 
 export function evaluateThreeCompanyAggregateGates(
@@ -457,9 +475,10 @@ export function evaluateThreeCompanyAggregateGates(
     NO_GENERIC_TEMPLATE_OPPORTUNITY_CANDIDATES: complete
       ? genericOpportunityCandidates === 0 ? "PASS" : "FAIL"
       : incompleteStatus(genericOpportunityCandidates > 0),
-    OPPORTUNITY_NOT_REQUIRED_FOR_EVERY_COMPANY: complete
-      ? credibleOpportunityCompanies >= 2 ? "PASS" : "FAIL"
-      : "NOT_EVALUABLE",
+    // This is a policy-semantics gate, not a second yield threshold. Gate 6
+    // owns the 2/3 requirement; no path requires all 3 companies to publish an
+    // Opportunity, so an individual sparse-but-truthful company is allowed.
+    OPPORTUNITY_NOT_REQUIRED_FOR_EVERY_COMPANY: "PASS",
     SPARSE_REPORT_IS_NOT_SYSTEM_FAILURE: complete
       ? sparseTruthfulCompanies === 0 || truthPassCount === 3 ? "PASS" : "FAIL"
       : "NOT_EVALUABLE",
@@ -467,7 +486,9 @@ export function evaluateThreeCompanyAggregateGates(
   const gates = ROUND53_SAMPLE_GATE_IDS.map((id) => ({
     id,
     status: statuses[id],
-    reason: complete
+    reason: id === "OPPORTUNITY_NOT_REQUIRED_FOR_EVERY_COMPANY"
+      ? "policy requires at least 2/3 via Gate 6 and never requires 3/3"
+      : complete
       ? `evaluated from qiaqia latest revision plus ${inputs.length - 1} continuation Canonical reports`
       : statuses[id] === "FAIL"
         ? `hard violation observed in ${inputs.length}/3 completed companies`
@@ -478,7 +499,13 @@ export function evaluateThreeCompanyAggregateGates(
     : gates.every((gate) => gate.status === "PASS")
       ? "PASS"
       : "NOT_EVALUABLE";
-  return { sampleStatus, completeCompanyCount: inputs.length, missingCompanies, gates };
+  return {
+    sampleStatus,
+    classification: classifyThreeCompanyAggregateGates(gates),
+    completeCompanyCount: inputs.length,
+    missingCompanies,
+    gates,
+  };
 }
 
 export const PUBLIC_API_FORBIDDEN_INTERNAL_KEYS = Object.freeze([

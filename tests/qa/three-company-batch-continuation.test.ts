@@ -8,6 +8,7 @@ import {
   assessThreeCompanyContinuationAuthorization,
   buildThreeCompanyContinuationPlan,
   continuationBatchBudgetStopReasons,
+  classifyThreeCompanyAggregateGates,
   evaluateThreeCompanyAggregateGates,
   evaluateThreeCompanyContinuationPreflight,
   publicApiInternalAuditLeakKeys,
@@ -335,7 +336,15 @@ describe("Round-6A tri-state aggregate gates", () => {
     expect(result.sampleStatus).toBe("NOT_EVALUABLE");
     expect(result.completeCompanyCount).toBe(1);
     expect(result.missingCompanies).toEqual(["iflytek", "heli"]);
-    expect(result.gates.every((gate) => gate.status === "NOT_EVALUABLE")).toBe(true);
+    expect(
+      result.gates.find((gate) => gate.id === "OPPORTUNITY_NOT_REQUIRED_FOR_EVERY_COMPANY")?.status,
+    ).toBe("PASS");
+    expect(
+      result.gates
+        .filter((gate) => gate.id !== "OPPORTUNITY_NOT_REQUIRED_FOR_EVERY_COMPANY")
+        .every((gate) => gate.status === "NOT_EVALUABLE"),
+    ).toBe(true);
+    expect(result.classification).toBe("NOT_EVALUABLE");
     expect(JSON.stringify(result)).not.toContain("0/3 companies");
   });
 
@@ -356,12 +365,42 @@ describe("Round-6A tri-state aggregate gates", () => {
     expect(result.gates.every((gate) => gate.status === "PASS")).toBe(true);
     expect(result.gates.some((gate) => gate.status === "NOT_EVALUABLE")).toBe(false);
     expect(result.sampleStatus).toBe("PASS");
+    expect(result.classification).toBe("PASS");
 
     const invalid = aggregateInputs();
     invalid[0]!.reportSource = "CANONICAL";
     expect(() => evaluateThreeCompanyAggregateGates(invalid)).toThrow(
       "QIAQIA_AGGREGATE_MUST_USE_LATEST_REVISION",
     );
+  });
+
+  it("keeps Gate 9 independent from current yield and classifies only Gate 6/7 failures as DATA_SPARSE", () => {
+    const inputs = aggregateInputs();
+    for (const input of inputs) {
+      input.metrics.hasCredibleOpportunity = false;
+      input.metrics.credibleDemonstrationFix = false;
+      input.metrics.sparseButTruthful = true;
+      input.metrics.opportunityCandidateCount = 0;
+      input.metrics.opportunityPublishedCount = 0;
+      input.metrics.opportunityYieldRate = null;
+    }
+    const result = evaluateThreeCompanyAggregateGates(inputs);
+    expect(result.gates.find((gate) => gate.id === "ALL_PUBLISHED_OPPORTUNITY_LINEAGE_VALID")?.status)
+      .toBe("PASS");
+    expect(result.gates.find((gate) => gate.id === "AT_LEAST_TWO_COMPANIES_HAVE_CREDIBLE_OPPORTUNITY")?.status)
+      .toBe("FAIL");
+    expect(result.gates.find((gate) => gate.id === "AT_LEAST_ONE_COMPANY_HAS_CREDIBLE_DEMONSTRATION_FIX")?.status)
+      .toBe("FAIL");
+    expect(result.gates.find((gate) => gate.id === "OPPORTUNITY_NOT_REQUIRED_FOR_EVERY_COMPANY")?.status)
+      .toBe("PASS");
+    expect(result.classification).toBe("DATA_SPARSE");
+
+    expect(
+      classifyThreeCompanyAggregateGates([
+        ...result.gates,
+        { id: "ALL_QUICK_WITHIN_1800", status: "FAIL" as const },
+      ]),
+    ).toBe("GATE_FAILURE");
   });
 });
 

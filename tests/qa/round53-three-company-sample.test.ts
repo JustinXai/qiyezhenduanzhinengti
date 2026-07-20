@@ -164,6 +164,7 @@ describe("Round-5.3 three-company sample harness", () => {
     tooSparse[1]!.opportunities = [];
     const sparseResult = evaluateThreeCompanySample(tooSparse);
     expect(gate(sparseResult, "AT_LEAST_TWO_COMPANIES_HAVE_CREDIBLE_OPPORTUNITY").passed).toBe(false);
+    expect(gate(sparseResult, "OPPORTUNITY_NOT_REQUIRED_FOR_EVERY_COMPANY").passed).toBe(true);
     expect(sparseResult.ready).toBe(false);
 
     const noFix = buildRound53ThreeCompanyMockFixture();
@@ -171,6 +172,21 @@ describe("Round-5.3 three-company sample harness", () => {
     const noFixResult = evaluateThreeCompanySample(noFix);
     expect(gate(noFixResult, "AT_LEAST_ONE_COMPANY_HAS_CREDIBLE_DEMONSTRATION_FIX").passed).toBe(false);
     expect(noFixResult.ready).toBe(false);
+  });
+
+  it("treats zero published Opportunities as valid lineage and still audits pruned generic candidates", () => {
+    const fixtures = buildRound53ThreeCompanyMockFixture();
+    for (const fixture of fixtures) fixture.opportunities = [];
+    const noOpportunityResult = evaluateThreeCompanySample(fixtures);
+    expect(gate(noOpportunityResult, "ALL_PUBLISHED_OPPORTUNITY_LINEAGE_VALID").passed).toBe(true);
+    expect(noOpportunityResult.companyMetrics.every((metrics) => metrics.opportunityYieldRate === null)).toBe(true);
+
+    const genericFixtures = buildRound53ThreeCompanyMockFixture();
+    genericFixtures[0]!.opportunities[0]!.publicationStatus = "PRUNED";
+    genericFixtures[0]!.opportunities[0]!.pruneReason = "GENERIC_OR_UNACTIONABLE";
+    genericFixtures[0]!.opportunities[0]!.genericTemplate = true;
+    const genericResult = evaluateThreeCompanySample(genericFixtures);
+    expect(gate(genericResult, "NO_GENERIC_TEMPLATE_OPPORTUNITY_CANDIDATES").passed).toBe(false);
   });
 
   it("rejects malformed sample cardinality and inconsistent measurement composition", () => {
