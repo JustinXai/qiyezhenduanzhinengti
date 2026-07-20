@@ -1,7 +1,47 @@
 // Seed script to populate the demo database with the Lejinji report
+// Round-7.4: Enhanced with provenance tracking and safety guards
 import Database from "better-sqlite3";
 import { openMigratedDatabase } from "../src/storage/migrate";
 import type { DiagnosisReport } from "../src/contracts";
+
+// ============================================================================
+// Safety Guards (Round-7.4)
+// Seed can ONLY execute when ALL of the following are true:
+// 1. DEMO_SEED_ENABLED=true
+// 2. APP_MODE=DEMO
+// 3. Target database filename contains "demo"
+// ============================================================================
+
+function enforceSeedSafety(): void {
+  const demoEnabled = (process.env.DEMO_SEED_ENABLED ?? "").trim().toLowerCase() === "true";
+  const appMode = (process.env.APP_MODE ?? "").trim().toUpperCase();
+  const dbPath = process.env.DATABASE_URL ?? DB_PATH;
+  const isDemoDb = dbPath.toLowerCase().includes("demo");
+
+  if (!demoEnabled) {
+    throw new Error(
+      "[seed] BLOCKED: DEMO_SEED_ENABLED must be 'true' to run seed. " +
+      "Refusing to seed production databases."
+    );
+  }
+
+  if (appMode !== "DEMO") {
+    throw new Error(
+      "[seed] BLOCKED: APP_MODE must be 'DEMO' to run seed. " +
+      "Current APP_MODE='" + appMode + "'. Refusing to seed non-demo environments."
+    );
+  }
+
+  if (!isDemoDb) {
+    throw new Error(
+      "[seed] BLOCKED: Target database '" + dbPath + "' does not contain 'demo' in filename. " +
+      "Seed script only writes to explicit demo databases. " +
+      "Refusing to seed: " + dbPath
+    );
+  }
+
+  console.log("[seed] Safety guards passed: DEMO_SEED_ENABLED=true, APP_MODE=DEMO, demo database.");
+}
 
 // Configuration
 const DB_PATH = "./data/lejinji-canary.db";
@@ -190,6 +230,9 @@ const lejinjiReport: DiagnosisReport = {
 };
 
 function seedDatabase(): void {
+  // Enforce safety guards before any database operation
+  enforceSeedSafety();
+
   console.log(`[seed] Creating database at ${DB_PATH}...`);
 
   const db = openMigratedDatabase(DB_PATH);
@@ -208,17 +251,19 @@ function seedDatabase(): void {
     now
   );
 
-  // Insert report
+  // Insert report with MOCK_SEED provenance (Round-7.4)
   db.prepare(`
-    INSERT OR REPLACE INTO reports (id, diagnosis_id, report_contract_version, score_contract_version, canonical_json, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO reports (id, diagnosis_id, report_contract_version, score_contract_version, canonical_json, created_at, report_provenance, demo_only)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     REPORT_ID,
     DIAGNOSIS_ID,
     lejinjiReport.reportContractVersion,
     lejinjiReport.scoreContractVersion,
     JSON.stringify(lejinjiReport),
-    now
+    now,
+    "MOCK_SEED",
+    1
   );
 
   // Insert evidence

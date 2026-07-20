@@ -118,6 +118,8 @@ interface ReportRow {
   score_contract_version: string;
   canonical_json: string;
   created_at: number;
+  report_provenance: string;
+  demo_only: number;
 }
 
 interface ProviderUsageRow {
@@ -427,20 +429,26 @@ export class SqliteStorageAdapter implements StorageAdapter {
   // -- reports ----------------------------------------------------------------
 
   async saveReport(input: SaveReportInput): Promise<void> {
+    // Round-7.4: Set provenance defaults for new reports
+    const provenance = input.reportProvenance ?? "REAL_PROVIDER_CANONICAL";
+    const demoOnly = input.demoOnly ? 1 : 0;
+
     this.db
       .prepare(
         `INSERT INTO reports
            (id, diagnosis_id, report_contract_version, score_contract_version,
-            canonical_json, created_at)
+            canonical_json, created_at, report_provenance, demo_only)
          VALUES
            (@id, @diagnosis_id, @report_contract_version, @score_contract_version,
-            @canonical_json, @created_at)
+            @canonical_json, @created_at, @report_provenance, @demo_only)
          ON CONFLICT(id) DO UPDATE SET
            diagnosis_id = excluded.diagnosis_id,
            report_contract_version = excluded.report_contract_version,
            score_contract_version = excluded.score_contract_version,
            canonical_json = excluded.canonical_json,
-           created_at = excluded.created_at`,
+           created_at = excluded.created_at,
+           report_provenance = excluded.report_provenance,
+           demo_only = excluded.demo_only`,
       )
       .run({
         id: input.id,
@@ -449,6 +457,8 @@ export class SqliteStorageAdapter implements StorageAdapter {
         score_contract_version: input.scoreContractVersion,
         canonical_json: input.canonicalJson,
         created_at: toDbTime(this.now()),
+        report_provenance: provenance,
+        demo_only: demoOnly,
       });
   }
 
@@ -469,6 +479,8 @@ export class SqliteStorageAdapter implements StorageAdapter {
       scoreContractVersion: row.score_contract_version,
       canonicalJson: row.canonical_json,
       createdAt: fromDbTime(row.created_at),
+      reportProvenance: row.report_provenance,
+      demoOnly: row.demo_only === 1,
     };
   }
 

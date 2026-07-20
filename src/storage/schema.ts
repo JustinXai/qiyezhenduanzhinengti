@@ -32,6 +32,12 @@ export const reports = sqliteTable("reports", {
   scoreContractVersion: text("score_contract_version").notNull(),
   canonicalJson: text("canonical_json").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  // Round-7.4: Report provenance tracking for audit trail
+  // Values: REAL_PROVIDER_CANONICAL | MOCK_SEED | MANUAL_REVISION | ENRICHMENT_REVISION
+  reportProvenance: text("report_provenance")
+    .notNull()
+    .default("REAL_PROVIDER_CANONICAL"),
+  demoOnly: integer("demo_only", { mode: "boolean" }).notNull().default(false),
 });
 
 export const providerUsage = sqliteTable("provider_usage", {
