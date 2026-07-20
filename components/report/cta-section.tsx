@@ -16,37 +16,33 @@ import {
 
 export function CtaSection() {
   return (
-    <div className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-      <div>
-        <p className="text-sm leading-relaxed text-neutral-700">{CTA_DESCRIPTION}</p>
-      </div>
+    <div className="rounded-xl bg-neutral-900 p-4 text-white">
+      <p className="text-sm leading-relaxed text-neutral-200">{CTA_DESCRIPTION}</p>
 
-      <div className="space-y-2.5 rounded-xl border border-neutral-100 bg-neutral-50/80 p-4">
-        <p className="text-xs font-semibold text-neutral-600">{THIRTY_MINUTE_HEADING}</p>
-        <ol className="space-y-2">
+      <div className="mt-3 rounded-lg bg-neutral-800 p-3">
+        <p className="text-xs font-semibold text-neutral-300">{THIRTY_MINUTE_HEADING}</p>
+        <ol className="mt-1.5 space-y-1 text-xs text-neutral-300">
           {THIRTY_MINUTE_POINTS.map((point, i) => (
-            <li key={i} className="flex items-start gap-2.5 text-sm text-neutral-700">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-xs font-medium text-neutral-500">
-                {i + 1}
-              </span>
+            <li key={i} className="flex gap-1.5">
+              <span className="text-neutral-500">{i + 1})</span>
               <span>{point}</span>
             </li>
           ))}
         </ol>
       </div>
 
-      <div className="flex flex-col gap-2.5 pt-1 sm:flex-row sm:gap-3">
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
           data-testid="primary-cta-footer"
-          className="flex-1 rounded-xl bg-neutral-900 px-5 py-3.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-neutral-800 hover:shadow"
+          className="flex-1 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-neutral-900 transition hover:bg-neutral-100"
         >
           {PRIMARY_CTA_LABEL}
         </button>
         <button
           type="button"
           data-testid="secondary-cta"
-          className="flex-1 rounded-xl border border-neutral-300 bg-white px-5 py-3.5 text-sm font-medium text-neutral-700 shadow-sm transition-all hover:border-neutral-400 hover:bg-neutral-50"
+          className="flex-1 rounded-lg border border-neutral-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-neutral-800"
         >
           {SECONDARY_CTA_LABEL}
         </button>

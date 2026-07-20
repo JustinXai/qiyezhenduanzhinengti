@@ -24,34 +24,32 @@ interface PublicInfoOpportunityCardProps {
  */
 export function PublicInfoOpportunityCard({ opportunity, index }: PublicInfoOpportunityCardProps) {
   return (
-    <div className="overflow-hidden rounded-xl border border-sky-200 bg-white shadow-sm">
-      {/* 序号头部 */}
-      <div className="flex items-center gap-3 bg-sky-50 px-4 py-2.5">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-600 text-xs font-semibold text-white">
+    <div className="rounded-xl border border-neutral-200 p-4">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-medium text-blue-700">
           {index}
         </span>
-        <p className="flex-1 text-sm font-medium text-sky-900">{opportunity.customerQuestion}</p>
-      </div>
-
-      {/* 内容主体 */}
-      <div className="px-4 py-3.5">
-        <p className="mb-2 text-xs text-neutral-500">
-          {PUBLIC_INFO_REQUIRED_QUALIFIER}
-          {opportunity.missingPublicInformation}
-        </p>
-
-        <div className="rounded-lg bg-amber-50 px-3 py-2.5">
-          <p className="text-xs font-semibold text-amber-700">建议补充</p>
-          <p className="mt-0.5 text-sm leading-relaxed text-amber-900">{opportunity.suggestedContentAction}</p>
-        </div>
-
-        {opportunity.potentialBusinessValue && (
-          <p className="mt-2.5 text-xs text-neutral-400">
-            <span className="font-medium text-neutral-500">潜在价值：</span>
-            {opportunity.potentialBusinessValue}
+        <div className="flex-1">
+          <p className="mb-1 text-sm font-medium text-neutral-900">
+            {opportunity.customerQuestion}
           </p>
-        )}
+          <p className="text-xs text-neutral-500">
+            {PUBLIC_INFO_REQUIRED_QUALIFIER}
+            {opportunity.missingPublicInformation}
+          </p>
+        </div>
       </div>
+
+      <div className="mt-3 rounded-lg bg-blue-50 p-3">
+        <p className="text-xs font-medium text-blue-800">建议补充：</p>
+        <p className="mt-1 text-sm text-blue-900">{opportunity.suggestedContentAction}</p>
+      </div>
+
+      {opportunity.potentialBusinessValue && (
+        <p className="mt-2 text-xs text-neutral-500">
+          潜在价值：{opportunity.potentialBusinessValue}
+        </p>
+      )}
     </div>
   );
 }

@@ -41,27 +41,14 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
     key: "summary",
     title: "决策摘要",
     body: (
-      <div className="space-y-4">
-        {/* 报告品牌头部 */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-neutral-900">{vm.brandName}</h1>
-            <p className="mt-0.5 text-xs text-neutral-400">企业诊断报告 · {formatDate(vm.reportDate)}</p>
-          </div>
-          <div className="hidden sm:block">
-            <div className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-500">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              Quick 快速版
-            </div>
-          </div>
+      <div className="space-y-3">
+        <div>
+          <h1 className="text-xl font-bold text-neutral-900">{vm.brandName}</h1>
+          <p className="text-xs text-neutral-500">报告日期 {formatDate(vm.reportDate)}</p>
         </div>
 
         {/* §十 固定决策顺序: 1.一句话结论 → 2.评分与测量构成 → 问题/机会 → CTA */}
-        <div className="rounded-xl border-l-4 border-neutral-900 bg-neutral-50 px-4 py-3">
-          <p className="text-sm font-medium leading-relaxed text-neutral-900">
-            {vm.headlineConclusion}
-          </p>
-        </div>
+        <p className="text-sm font-medium leading-relaxed text-neutral-900">{vm.headlineConclusion}</p>
 
         <ScoreHeadline
           overallScore={vm.overallScore}
@@ -69,56 +56,41 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
           composition={vm.measurementComposition}
         />
 
-        <div className="space-y-1.5">
-          {vm.estimationNotice && (
-            <p
-              data-testid="estimation-notice"
-              className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700"
-            >
-              {vm.estimationNotice}
-            </p>
-          )}
-          <p className="text-xs text-neutral-400">{vm.measurementStatusSummary}</p>
-        </div>
-
-        {/* 关键洞察列表 */}
-        {(vm.topStrength || vm.topIssue || vm.topOpportunity || vm.topPublicInformationOpportunity) && (
-          <div className="space-y-2 rounded-xl border border-neutral-200 bg-white p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
-              关键洞察
-            </p>
-            {vm.topStrength && (
-              <HighlightRow label="已有优势" text={vm.topStrength.statement} highlight="positive" />
-            )}
-            {vm.topIssue && (
-              <HighlightRow label="最优先问题" text={vm.topIssue.statement} highlight="warning" />
-            )}
-            {vm.topOpportunity && (
-              <HighlightRow label="最优先机会" text={vm.topOpportunity.statement} highlight="info" />
-            )}
-            {vm.topPublicInformationOpportunity && (
-              <HighlightRow
-                label="最优先补充"
-                text={vm.topPublicInformationOpportunity.suggestedContentAction}
-                highlight="muted"
-              />
-            )}
-          </div>
+        <p className="text-xs text-neutral-500">{vm.measurementStatusSummary}</p>
+        {vm.estimationNotice && (
+          <p
+            data-testid="estimation-notice"
+            className="rounded-lg bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-800"
+          >
+            {vm.estimationNotice}
+          </p>
         )}
 
-        {/* 首屏主 CTA */}
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:gap-3">
+        <dl className="space-y-1.5 rounded-xl bg-neutral-50 p-3 text-xs">
+          <HighlightRow label="已有优势" text={vm.topStrength?.statement} />
+          <HighlightRow label="最优先问题" text={vm.topIssue?.statement} />
+          <HighlightRow label="最优先机会" text={vm.topOpportunity?.statement} />
+          {/* Round-7: 首屏最重要的公开信息完善机会 */}
+          {vm.topPublicInformationOpportunity && (
+            <HighlightRow
+              label="最优先补充"
+              text={vm.topPublicInformationOpportunity.suggestedContentAction}
+            />
+          )}
+        </dl>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
             data-testid="primary-cta"
-            className="flex-1 rounded-xl bg-neutral-900 px-5 py-3.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-neutral-800 hover:shadow"
+            className="flex-1 rounded-lg bg-neutral-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
           >
             {PRIMARY_CTA_LABEL}
           </button>
           <button
             type="button"
             onClick={onOpenDeep}
-            className="flex-1 rounded-xl border border-neutral-300 bg-white px-5 py-3.5 text-sm font-medium text-neutral-700 shadow-sm transition-all hover:border-neutral-400 hover:bg-neutral-50"
+            className="flex-1 rounded-lg border border-neutral-300 px-4 py-3 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50"
           >
             查看完整诊断
           </button>
@@ -273,31 +245,11 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
   );
 }
 
-function HighlightRow({
-  label,
-  text,
-  highlight,
-}: {
-  label: string;
-  text?: string;
-  highlight?: "positive" | "warning" | "info" | "muted";
-}) {
-  const dotColors = {
-    positive: "bg-emerald-400",
-    warning: "bg-amber-400",
-    info: "bg-sky-400",
-    muted: "bg-neutral-400",
-  };
-
+function HighlightRow({ label, text }: { label: string; text?: string }) {
   return (
-    <div className="flex items-start gap-2.5">
-      <div className="mt-1.5 shrink-0">
-        <span className={`inline-block h-1.5 w-1.5 rounded-full ${highlight ? dotColors[highlight] : "bg-neutral-300"}`} />
-      </div>
-      <div className="flex-1">
-        <span className="text-xs font-semibold text-neutral-500">{label}</span>
-        <p className="mt-0.5 text-sm text-neutral-800">{text ?? "本次暂未识别"}</p>
-      </div>
+    <div className="flex gap-2">
+      <dt className="w-16 shrink-0 font-semibold text-neutral-500">{label}</dt>
+      <dd className="text-neutral-800">{text ?? "本次暂未识别"}</dd>
     </div>
   );
 }
