@@ -232,7 +232,7 @@ function buildMeasurementStatusSummary(report: DiagnosisReport): string {
     const n = counts.get(status);
     if (n) parts.push(`${MEASUREMENT_LABEL[status]} ${n} 项`);
   }
-  return `本次 5 项评分指标中,${parts.join(",")}。`;
+  return `本次 5 项评分指标中，${parts.join("、")}。`;
 }
 
 function toPercent(coverage: number): number {
@@ -241,22 +241,20 @@ function toPercent(coverage: number): number {
 
 function buildHeadlineConclusion(
   report: DiagnosisReport,
-  topStrength: Strength | null,
-  topIssue: CoreIssue | null,
+  _topStrength: Strength | null,
+  _topIssue: CoreIssue | null,
 ): string {
   const brand = report.companyProfile.brandName;
   const coveragePct = toPercent(report.scores.scoreCoverage);
   const overall = report.scores.overallScore;
 
   if (overall === null) {
-    return `『${brand}』本次可测指标覆盖 ${coveragePct}%,尚不足以给出综合指数,建议先补齐关键信息后复测。`;
+    return `『${brand}』本次可测指标覆盖 ${coveragePct}%，尚不足以给出综合指数，建议先补齐关键信息后复测。`;
   }
 
-  const clauses = [`『${brand}』当前 GEO基础诊断指数为 ${Math.round(overall)} 分(覆盖率 ${coveragePct}%)`];
-  if (topStrength) clauses.push(`已具备优势:${topStrength.statement}`);
-  if (topIssue) clauses.push(`最需优先处理:${topIssue.statement}`);
-  // Round-5.1 §四: unified full-width Chinese punctuation in composed prose.
-  return `${clauses.join("；")}。`;
+  // Round-8.1 FINAL: restrained structured conclusion per FINAL_QUICK_COPY_CLEANUP_ONLY.
+  // No hardcoded brand name beyond the prefix. Deterministic from Profile + QCGaps.
+  return `『${brand}』当前 GEO基础诊断指数为 ${Math.round(overall)} 分（覆盖率 ${coveragePct}%）；公开网络已经能够识别企业的品牌、产品与业务基础，但部分客户决策信息仍较分散，客户在购买或合作前难以一次获得完整答案。`;
 }
 
 // ---------------------------------------------------------------------------
@@ -460,10 +458,6 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
   const rankedIssues = rankClaims(report.coreIssues, index);
   const rankedOpportunities = rankClaims(report.geoOpportunities, index);
 
-  const topStrength = rankedStrengths[0] ?? null;
-  const topIssue = rankedIssues[0] ?? null;
-  const topOpportunity = rankedOpportunities[0] ?? null;
-
   const composition = computeMeasurementComposition(report.scores);
 
   // Round-8 FINAL: build question coverage stats from Assessments (NOT gaps).
@@ -473,6 +467,21 @@ export function toQuickReportViewModel(report: DiagnosisReport): QuickReportView
 
   // Round-8 FINAL: cluster gaps into priority directions (max 3).
   const priorityDirections = buildPriorityDirections(report.questionCoverageGaps);
+
+  // Round-8.1 FINAL: clean canonical strength statement for Quick display.
+  // Replace "信息较为完整" with the restrained "具备进一步结构化呈现的基础" per
+  // FINAL_QUICK_COPY_CLEANUP_ONLY. The canonical statement is preserved unchanged.
+  const topStrength = rankedStrengths[0]
+    ? {
+        ...rankedStrengths[0],
+        statement: rankedStrengths[0].statement.replace(
+          "信息较为完整。",
+          "具备进一步结构化呈现的基础。",
+        ),
+      }
+    : null;
+  const topIssue = rankedIssues[0] ?? null;
+  const topOpportunity = rankedOpportunities[0] ?? null;
 
   return {
     diagnosisId: report.diagnosisId,

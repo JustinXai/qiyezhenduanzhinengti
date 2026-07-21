@@ -82,9 +82,11 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
         )}
 
         <dl className="space-y-1.5 rounded-xl bg-neutral-50 p-3 text-xs">
-          <HighlightRow label="已有优势" text={vm.topStrength?.statement} />
-          <HighlightRow label="最优先问题" text={vm.topIssue?.statement} />
-          <HighlightRow label="最优先机会" text={vm.topOpportunity?.statement} />
+          {vm.topStrength && <HighlightRow label="已有优势" text={vm.topStrength.statement} />}
+          {vm.topIssue && <HighlightRow label="最优先问题" text={vm.topIssue.statement} />}
+          {vm.priorityDirections.length > 0 && (
+            <HighlightRow label="优先完善方向" text={vm.priorityDirections[0]!.title} />
+          )}
         </dl>
 
         <div className="flex flex-col gap-2 sm:flex-row">
