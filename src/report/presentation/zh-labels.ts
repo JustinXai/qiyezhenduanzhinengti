@@ -34,9 +34,9 @@ export const ZH_SUPPORT_LABEL: Record<Exclude<EvidenceSupportLevel, "UNSUPPORTED
 };
 
 export const ZH_SOURCE_TYPE_LABEL: Record<EvidenceItem["sourceType"], string> = {
-  FIRST_PARTY_EVIDENCE: "企业官方来源",
-  OBSERVED_WEB_EVIDENCE: "公开网络来源",
-  COMPETITOR_WEB_EVIDENCE: "竞品官方来源",
+  FIRST_PARTY_EVIDENCE: "企业官方证据",
+  OBSERVED_WEB_EVIDENCE: "公开网络证据",
+  COMPETITOR_WEB_EVIDENCE: "竞品公开证据",
 };
 
 /** Evidence content language → customer-facing origin note. */

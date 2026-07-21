@@ -9,18 +9,16 @@ import { EvidenceView } from "./evidence-view";
 import { useState } from "react";
 
 // ============================================================================
-// Round-9.2 FINAL: Enterprise GEO Consulting Report
+// Round-9.3: Enterprise GEO Consulting Report
 // Single unified report — no Quick/Deep tabs.
-// Modules conditionally hidden when no valid content.
 //
-// 7-module structure:
-//   01 决策摘要
-//   02 企业现状分析
-//   03 客户需求与信息机会
-//   04 竞争环境与同行观察 (conditional)
-//   05 重点内容资产方案
-//   06 推进路线与星媄数据协作
-//   07 证据附件
+// Key fixes (Round-9.3):
+//   - Deduplicate enterprise status: single card
+//   - Fix question count: show 5 input, 3 directions
+//   - Fix information direction copy mapping
+//   - Fix measurement composition labels
+//   - Fix evidence Chinese labels
+//   - Fix mobile density
 // ============================================================================
 
 interface EnterpriseReportProps {
@@ -33,7 +31,7 @@ export function EnterpriseReport({ vm }: EnterpriseReportProps) {
       {/* Report container: max-width 1000px, centered */}
       <div className="mx-auto max-w-[1000px] px-4 py-6 sm:px-6 lg:px-8">
         {/* Header */}
-        <header className="mb-5 flex items-center justify-between border-b border-neutral-200 pb-4">
+        <header className="mb-4 flex items-center justify-between border-b border-neutral-200 pb-4">
           <div>
             <p className="text-xs text-neutral-400">{SERVICE_BRAND_NAME}</p>
             <h1 className="mt-0.5 text-base font-semibold text-neutral-900">企业GEO诊断报告</h1>
@@ -55,7 +53,7 @@ export function EnterpriseReport({ vm }: EnterpriseReportProps) {
                 <p className="mt-0.5 text-xs text-neutral-500">报告日期 {formatDate(vm.reportDate)}</p>
               </div>
 
-              <p className="text-sm leading-relaxed text-neutral-700">{vm.enterpriseStatusSummary}</p>
+              <p className="text-sm leading-[1.65] text-neutral-700">{vm.enterpriseStatusSummary}</p>
 
               {/* Key highlights: compact list */}
               <div className="rounded-lg bg-neutral-50 p-3 space-y-1.5 text-sm">
@@ -104,27 +102,24 @@ export function EnterpriseReport({ vm }: EnterpriseReportProps) {
 
         {/* Module 02: 企业现状分析 */}
         <Section index={2} title="企业现状分析" className="mb-4">
-          {/* Two-column compact layout */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-neutral-200 bg-white p-3">
-              <h3 className="mb-1.5 text-xs font-semibold text-neutral-500">公开网络已识别</h3>
-              <p className="text-sm text-neutral-700 leading-relaxed">{vm.enterpriseStatusDescription}</p>
-            </div>
-            <div className="rounded-lg border border-neutral-200 bg-white p-3">
-              <h3 className="mb-1.5 text-xs font-semibold text-neutral-500">已有基础</h3>
-              <p className="text-sm text-neutral-700 leading-relaxed">
-                {vm.topStrength?.statement ?? "企业已在公开渠道具备基础信息展示。"}
-              </p>
-            </div>
+          {/* Single merged card */}
+          <div className="rounded-lg border border-neutral-200 bg-white p-4">
+            <h3 className="mb-1.5 text-xs font-semibold text-neutral-500">已识别的公开基础</h3>
+            <p className="text-sm leading-[1.65] text-neutral-700">
+              {vm.enterpriseStatusDescription ?? vm.topStrength?.statement ?? "企业已在公开渠道具备基础信息展示。"}
+            </p>
           </div>
         </Section>
 
         {/* Module 03: 客户需求与信息机会 */}
         {vm.informationOpportunities.length > 0 && (
           <Section index={3} title="客户需求与信息机会" className="mb-4">
-            {/* Overall judgment */}
-            <p className="mb-3 text-sm text-neutral-600 leading-relaxed">
-              本次分析的{vm.informationOpportunities.length}个客户决策问题中，各方向已具备部分公开信息基础，但客户在产品选择、品质保障和企业合作等场景仍缺少集中、清晰的回答入口。
+            {/* Overall judgment with correct counts */}
+            <p className="mb-3 text-sm leading-[1.65] text-neutral-600">
+              本次分析了{vm.inputQuestionCount}个客户关注问题，并归纳为{vm.informationDirectionCount}个重点信息方向。现有公开信息能够提供部分答案，但产品选择、品质保障和企业合作等内容仍缺少集中、清晰的回答入口。
+            </p>
+            <p className="mb-3 text-xs text-neutral-400">
+              以下判断仅限本次已检查的公开页面和搜索结果。
             </p>
             {/* Two-column cards on desktop, single on mobile */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -138,7 +133,7 @@ export function EnterpriseReport({ vm }: EnterpriseReportProps) {
         {/* Module 04: 竞争环境与同行观察 (conditional) */}
         {vm.competitorObservations && vm.competitorObservations.length > 0 && (
           <Section index={4} title="竞争环境与同行观察" className="mb-4">
-            <p className="mb-3 text-xs text-neutral-500">
+            <p className="mb-3 text-xs text-neutral-400">
               在本次公开检索范围内，对同行品牌的信息展示进行观察。
             </p>
             <div className="space-y-2">
@@ -241,11 +236,11 @@ function OpportunityCard({ opportunity, index }: { opportunity: EnterpriseReport
       <dl className="space-y-1 text-xs">
         <div className="flex gap-1.5">
           <dt className="shrink-0 text-neutral-500">客户关注</dt>
-          <dd className="flex-1 text-neutral-700 break-words">{opportunity.customerQuestion}</dd>
+          <dd className="flex-1 text-neutral-700 break-words overflow-wrap-anywhere">{opportunity.customerQuestion}</dd>
         </div>
         <div className="flex gap-1.5">
           <dt className="shrink-0 text-neutral-500">当前情况</dt>
-          <dd className="flex-1 text-neutral-600">{opportunity.currentStatus}</dd>
+          <dd className="flex-1 text-neutral-600 leading-[1.65]">{opportunity.currentStatus}</dd>
         </div>
         <div className="flex gap-1.5">
           <dt className="shrink-0 text-neutral-500">建议资产</dt>
@@ -253,7 +248,7 @@ function OpportunityCard({ opportunity, index }: { opportunity: EnterpriseReport
         </div>
         <div className="flex gap-1.5">
           <dt className="shrink-0 text-neutral-500">商业价值</dt>
-          <dd className="flex-1 text-neutral-600">{opportunity.businessValue}</dd>
+          <dd className="flex-1 text-neutral-600 leading-[1.65]">{opportunity.businessValue}</dd>
         </div>
       </dl>
     </div>
@@ -266,7 +261,7 @@ function CompetitorObservationCard({ observation }: { observation: NonNullable<E
       <span className="mt-0.5 shrink-0 text-neutral-400">·</span>
       <div className="flex-1">
         <p className="text-xs font-medium text-neutral-700">{observation.dimension}</p>
-        <p className="mt-0.5 text-xs text-neutral-600 leading-relaxed">{observation.observation}</p>
+        <p className="mt-0.5 text-xs text-neutral-600 leading-[1.65]">{observation.observation}</p>
       </div>
     </div>
   );
@@ -289,7 +284,7 @@ function AssetPlanCard({ plan, index }: { plan: EnterpriseReportViewModel["conte
           </li>
         ))}
       </ul>
-      <p className="mt-2 border-t border-neutral-100 pt-1.5 text-xs text-neutral-500">{plan.businessValue}</p>
+      <p className="mt-2 border-t border-neutral-100 pt-1.5 text-xs text-neutral-500 leading-[1.65]">{plan.businessValue}</p>
     </div>
   );
 }
@@ -322,10 +317,15 @@ function RoadmapInline() {
 function EvidenceSection({ evidence }: { evidence: EnterpriseReportViewModel["evidence"] }) {
   const [expanded, setExpanded] = useState(false);
 
-  // Count by source type
+  // Count by source type with Chinese labels
   const sourceCounts = evidence.items.reduce<Record<string, number>>((acc, item) => {
-    const source = item.sourceType.replace(/_/g, "");
-    acc[source] = (acc[source] || 0) + 1;
+    const labels: Record<string, string> = {
+      FIRST_PARTY_EVIDENCE: "企业官方证据",
+      OBSERVED_WEB_EVIDENCE: "公开网络证据",
+      COMPETITOR_WEB_EVIDENCE: "竞品公开证据",
+    };
+    const label = labels[item.sourceType] ?? item.sourceType;
+    acc[label] = (acc[label] || 0) + 1;
     return acc;
   }, {});
 

@@ -163,7 +163,7 @@ describe("EvidenceView rendering", () => {
 
   it("shows source-type and support-level tags for evidence", () => {
     const html = renderEvidence();
-    expect(html).toContain("企业官方来源"); // unified zh-labels single source
+    expect(html).toContain("企业官方证据"); // unified zh-labels single source
     expect(html).toContain("直接支持");
   });
 });

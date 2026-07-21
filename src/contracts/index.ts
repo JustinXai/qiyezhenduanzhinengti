@@ -518,27 +518,16 @@ export const EvidenceViewModel = z.object({
 export type EvidenceViewModel = z.infer<typeof EvidenceViewModel>;
 
 // ============================================================================
-// Round-9.2 FINAL: EnterpriseGEOReportViewModel — single unified enterprise report.
-// Projected from Canonical DiagnosisReport. No Quick/Deep dual version.
-// No new scoring. No new Canonical fields. Pure presentation projection.
+// Round-9.3: Enterprise GEO Consulting Report
+// Single unified report — no Quick/Deep tabs.
 //
-// 7-module structure (per REQUEST Round-9.2):
-//   01 决策摘要
-//   02 企业现状分析
-//   03 客户需求与信息机会
-//   04 竞争环境与同行观察 (conditional)
-//   05 重点内容资产方案
-//   06 推进路线与星媄数据协作
-//   07 证据附件
-//
-// REMOVED:
-//   - 客户决策问题分析 (独立模块)
-//   - AI检索场景观察 (空洞)
-//   - 建议先做的3件事 (固定模块)
-//
-// SEMANTIC CORRECTION:
-//   - informationOpportunities 来自 priorityDirections，是公开信息完善方向
-//   - 不得命名为 geoOpportunities，正式GEO机会只能来自Canonical Truth Guard
+// Key fixes (Round-9.3):
+//   - Deduplicate enterprise status: merge into single card
+//   - Fix question count: show 5 input, 3 directions
+//   - Fix information direction copy mapping
+//   - Fix measurement composition labels
+//   - Fix evidence Chinese labels
+//   - Fix mobile density
 // ============================================================================
 
 /** Summary row in 决策摘要 */
@@ -604,6 +593,10 @@ export const EnterpriseReportViewModel = z.object({
   enterpriseStatusDescription: z.string(),
   /** Top strength for display. */
   topStrength: Strength.nullable(),
+  /** 原始客户问题数量 */
+  inputQuestionCount: z.number(),
+  /** 信息方向数量 */
+  informationDirectionCount: z.number(),
   /** 客户需求与信息机会 — 公开信息完善方向 */
   informationOpportunities: z.array(EnterpriseInformationOpportunity).max(5),
   /** 竞争环境与同行观察 — 条件显示 */

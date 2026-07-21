@@ -46,7 +46,7 @@ export function ScoreHeadline({ overallScore, scoreCoverage, composition }: Scor
           <span data-testid="measurement-composition">
             {" · 公开网页估算 "}
             {formatPercent(composition.estimatedWeight)}
-            {" · 证据支持 "}
+            {" · 实测 "}
             {formatPercent(composition.measuredWeight)}
             {composition.insufficientWeight > 0 && ` · 证据不足 ${formatPercent(composition.insufficientWeight)}`}
             {composition.providerFailedWeight > 0 && ` · 暂未测得 ${formatPercent(composition.providerFailedWeight)}`}

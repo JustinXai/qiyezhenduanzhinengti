@@ -655,32 +655,39 @@ function buildInformationOpportunities(
 }
 
 /**
- * Round-9.2: Build content asset plans from priority directions
+ * Round-9.3: Build content asset plans from priority directions
  * Each plan has: title, suggestedAssets[], businessValue
+ * Uses specific copy mapping per category
  */
 function buildContentAssetPlans(dirs: PriorityDirection[]): EnterpriseContentAssetPlan[] {
-  const CATEGORY_DETAILS: Record<string, { suggestedAssets: string[]; businessValue: string }> = {
+  const CATEGORY_DETAILS: Record<string, { title: string; suggestedAssets: string[]; businessValue: string }> = {
     PRODUCT_SELECTION: {
-      suggestedAssets: ["产品选购指南", "口味与规格对照", "保质期及过敏原说明", "产品FAQ"],
+      title: "产品选购与品质说明",
+      suggestedAssets: ["产品选购指南", "规格对照", "保质期与过敏原说明", "产品FAQ"],
       businessValue: "帮助消费者在购买前快速判断产品差异，减少重复咨询",
     },
     QUALITY_AND_SAFETY: {
-      suggestedAssets: ["原料来源说明", "生产工艺说明", "食品安全与品质控制", "相关认证和检测信息"],
-      businessValue: "让消费者、采购方和渠道合作方更容易核验产品品质依据",
+      title: "原料、工艺与品质保障",
+      suggestedAssets: ["原料来源说明", "生产工艺说明", "食品安全与品质控制", "认证及检测信息"],
+      businessValue: "方便消费者、采购方和渠道伙伴核验产品品质依据",
     },
     BUSINESS_COOPERATION: {
-      suggestedAssets: ["团购和批量采购入口", "经销及商超合作流程", "代工能力说明", "可公开案例和咨询入口"],
-      businessValue: "降低采购方和合作伙伴了解合作条件的沟通成本",
+      title: "企业合作与渠道说明",
+      suggestedAssets: ["合作入口", "合作流程", "渠道政策说明", "可公开案例"],
+      businessValue: "降低采购方和合作伙伴确认合作条件的沟通成本",
     },
     SERVICE_AND_DELIVERY: {
+      title: "服务与交付",
       suggestedAssets: ["服务流程FAQ", "交付时间说明", "售后政策页"],
       businessValue: "减少客户对服务流程的咨询，提升合作效率",
     },
     CASES_AND_TRUST: {
+      title: "案例与信任",
       suggestedAssets: ["合作案例展示", "资质证书页", "认证说明"],
       businessValue: "增强采购方和合作方的信任感",
     },
     FAQ_OTHER: {
+      title: "常见问题",
       suggestedAssets: ["企业FAQ页", "通用问答内容"],
       businessValue: "覆盖客户常见问题，减少重复咨询",
     },
@@ -693,11 +700,12 @@ function buildContentAssetPlans(dirs: PriorityDirection[]): EnterpriseContentAss
     if (seen.has(catKey)) continue;
     seen.add(catKey);
     const meta = CATEGORY_DETAILS[catKey] ?? {
+      title: dir.title,
       suggestedAssets: ["FAQ页面"],
       businessValue: "覆盖客户常见问题",
     };
     plans.push({
-      title: dir.title,
+      title: meta.title,
       suggestedAssets: meta.suggestedAssets,
       businessValue: meta.businessValue,
     });
@@ -735,14 +743,17 @@ export function toEnterpriseReportViewModel(report: DiagnosisReport): Enterprise
   const { stats } = buildQuestionCoverageStats(report.questionCoverageAssessments);
   const priorityDirs = buildPriorityDirections(report.questionCoverageGaps);
 
-  // Round-9.2: informationOpportunities from priority directions (max 5)
+  // Round-9.3: informationOpportunities from priority directions (max 5)
   const informationOpportunities = buildInformationOpportunities(priorityDirs, report.questionCoverageGaps);
 
-  // Round-9.2: competitor observations (conditional)
+  // Round-9.3: competitor observations (conditional)
   const competitorObservations = buildCompetitorObservations(report.competitorGaps, index);
 
-  // Round-9.2: content asset plans (dynamic 2-5)
+  // Round-9.3: content asset plans (dynamic 2-5)
   const contentAssetPlans = buildContentAssetPlans(priorityDirs);
+
+  // Round-9.3: input question count from question coverage assessments
+  const inputQuestionCount = report.questionCoverageAssessments?.length ?? 0;
 
   return {
     diagnosisId: report.diagnosisId,
@@ -762,6 +773,8 @@ export function toEnterpriseReportViewModel(report: DiagnosisReport): Enterprise
     estimationNotice: estimationNoticeFor(composition),
     enterpriseStatusDescription: buildEnterpriseStatusDescription(report.companyProfile, topStrength),
     topStrength,
+    inputQuestionCount,
+    informationDirectionCount: contentAssetPlans.length,
     informationOpportunities,
     ...(competitorObservations.length > 0 ? { competitorObservations } : {}),
     contentAssetPlans,
