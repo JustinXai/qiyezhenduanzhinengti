@@ -149,24 +149,17 @@ function collectQuickTexts(quick: QuickReportViewModel): Field[] {
     fields.push({ where: "quick.competitorGapSummary.reason", value: quick.competitorGapSummary.reason });
   }
 
-  // Round-7: 检查 PublicInformationOpportunity 禁用词
-  quick.publicInformationOpportunities.forEach((opp, i) => {
-    fields.push({ where: `quick.publicInformationOpportunities[${i}].customerQuestion`, value: opp.customerQuestion });
-    fields.push({ where: `quick.publicInformationOpportunities[${i}].observedScope`, value: opp.observedScope });
-    fields.push({ where: `quick.publicInformationOpportunities[${i}].missingPublicInformation`, value: opp.missingPublicInformation });
-    fields.push({ where: `quick.publicInformationOpportunities[${i}].suggestedContentAction`, value: opp.suggestedContentAction });
-    fields.push({ where: `quick.publicInformationOpportunities[${i}].potentialBusinessValue`, value: opp.potentialBusinessValue });
+  // Round-8 FINAL: 检查 PriorityDirection 禁用词（从 PublicInformationOpportunity 迁移）
+  quick.priorityDirections.forEach((dir, i) => {
+    fields.push({ where: `quick.priorityDirections[${i}].title`, value: dir.title });
+    dir.linkedQuestions.forEach((q) => fields.push({ where: `quick.priorityDirections[${i}].linkedQuestions`, value: q }));
+    fields.push({ where: `quick.priorityDirections[${i}].suggestedAsset`, value: dir.suggestedAsset });
+    fields.push({ where: `quick.priorityDirections[${i}].businessValue`, value: dir.businessValue });
   });
 
-  if (quick.topPublicInformationOpportunity) {
-    const t = quick.topPublicInformationOpportunity;
-    fields.push({ where: "quick.topPublicInformationOpportunity.suggestedContentAction", value: t.suggestedContentAction });
-  }
-
-  // Round-7: 检查 PublicInformationAction
-  quick.publicInformationActions.forEach((action, i) => {
-    fields.push({ where: `quick.publicInformationActions[${i}].actionText`, value: action.actionText });
-  });
+  // Round-8 FINAL: QuestionCoverageStats — 检查统计标签
+  const { total, supported, partial, unanswered } = quick.questionCoverageStats;
+  // Stats are numbers, not text — no banned-phrase scan needed on numeric fields.
 
   return fields;
 }
@@ -189,9 +182,6 @@ export function countQuickVisibleChars(quick: QuickReportViewModel): number {
   if (quick.topStrength) parts.push(...claimTexts(quick.topStrength));
   if (quick.topIssue) parts.push(...claimTexts(quick.topIssue));
   if (quick.topOpportunity) parts.push(...claimTexts(quick.topOpportunity));
-  quick.coreIssues.forEach((c) => parts.push(...claimTexts(c)));
-  quick.geoOpportunities.forEach((c) => parts.push(...claimTexts(c)));
-  quick.aiVisibilitySamples.forEach((t) => parts.push(t.question));
 
   if (quick.competitorGapSummary.available) {
     quick.competitorGapSummary.gaps.forEach((g) => parts.push(g.gapStatement));
@@ -213,22 +203,12 @@ export function countQuickVisibleChars(quick: QuickReportViewModel): number {
     );
   }
 
-  // Round-7: 统计 PublicInformationOpportunity 字符
-  quick.publicInformationOpportunities.forEach((opp) => {
-    parts.push(opp.customerQuestion);
-    parts.push(opp.observedScope);
-    parts.push(opp.missingPublicInformation);
-    parts.push(opp.suggestedContentAction);
-    parts.push(opp.potentialBusinessValue);
-  });
-
-  if (quick.topPublicInformationOpportunity) {
-    parts.push(quick.topPublicInformationOpportunity.suggestedContentAction);
-  }
-
-  // Round-7: 统计 PublicInformationAction 字符
-  quick.publicInformationActions.forEach((action) => {
-    parts.push(action.actionText);
+  // Round-8 FINAL: PriorityDirection 字符统计
+  quick.priorityDirections.forEach((dir) => {
+    parts.push(dir.title);
+    dir.linkedQuestions.forEach((q) => parts.push(q));
+    parts.push(dir.suggestedAsset);
+    parts.push(dir.businessValue);
   });
 
   return parts.reduce((sum, s) => sum + [...stripWhitespace(s)].length, 0);

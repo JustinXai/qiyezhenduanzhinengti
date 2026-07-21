@@ -272,7 +272,8 @@ async function main(): Promise<void> {
         },
         assertPresentation: (report) => {
           const views = presentReport(report);
-          if (views.quick.coreIssues.length !== 0 || views.quick.topIssue !== null) {
+          // Round-8 FINAL: coreIssues and geoOpportunities removed from Quick.
+          if (views.quick.topIssue !== null) {
             throw new Error("ROUND53_QUICK_NON_DIRECT_ISSUE_REMAINS");
           }
           if (views.deep.coreIssues.length !== 0) throw new Error("ROUND53_DEEP_DETERMINISTIC_ISSUE_REMAINS");
@@ -322,8 +323,8 @@ async function main(): Promise<void> {
           deepNeedsConfirmationCount: result.deepNeedsConfirmation.length,
           pruneReasons: result.prunedClaims,
           quick: {
-            coreIssues: views.quick.coreIssues.length,
-            opportunities: views.quick.geoOpportunities.length,
+            // Round-8 FINAL: coreIssues and geoOpportunities removed from Quick.
+            priorityDirections: views.quick.priorityDirections.length,
             visibleCharacters: countQuickVisibleChars(views.quick),
           },
           deep: {

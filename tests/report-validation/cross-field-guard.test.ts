@@ -29,18 +29,15 @@ function minimalQuick(report = buildValidReport()): QuickReportViewModel {
     topStrength: report.strengths[0] ?? null,
     topIssue: report.coreIssues[0] ?? null,
     topOpportunity: report.geoOpportunities[0] ?? null,
-    aiVisibilitySamples: [],
     competitorGapSummary: {
       available: false,
       reason: "已收到竞品输入,但本次公开证据不足,暂不做确定性比较。",
     },
-    coreIssues: [],
+    // Round-8 FINAL: new fields
+    questionCoverageStats: { total: 0, supported: 0, partial: 0, unanswered: 0, providerFailed: 0 },
+    questionCoverageRestraintNote: null,
+    priorityDirections: [],
     demonstrationFix: null,
-    geoOpportunities: [],
-    // Round-7: 新增字段
-    publicInformationOpportunities: [],
-    topPublicInformationOpportunity: null,
-    publicInformationActions: [],
   };
 }
 

@@ -12,7 +12,7 @@
 // excludes by design).
 // ============================================================================
 
-/** 综合分只能命名为「GEO可见度基础指数」,禁用这些别名 — docs/REPORT_CONTRACT.md §1. */
+/** 综合分只能命名为「GEO基础诊断指数」，禁用这些别名 — docs/REPORT_CONTRACT.md §1. */
 export const BANNED_SCORE_ALIASES = [
   "AI排名",
   "AI推荐分",

@@ -3,230 +3,338 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-// Real submit → Agent E API flow: POST /api/diagnoses drives the whole
-// diagnosis pipeline (mock providers) synchronously to a terminal state; on a
-// READY result we navigate to the public report page. No fixture, no hardcoded
-// report — the page that opens fetches the canonical report the API stored.
+// ============================================================================
+// 企业诊断智能体 — 首页表单 (Round-8 FINAL MVP)
+// 表单字段顺序固定: 1.企业/品牌名称  2.企业官网  3.所属行业  4.主要产品或服务
+//                  5.所在地区  6.客户最常问的问题  7.主要竞品(选填)  8.联系人/手机(选填)
+//
+// 设计原则:
+//   - "客户最常问的问题" 是必填项, textarea 每行一个问题, 进入 customerQuestions
+//     不会被任何模板覆盖。
+//   - 联系方式只用于报告解读联系, 不进入诊断 payload, 也不写入数据库。
+//   - 提交后导航到 /api/diagnoses 同步生成的 /report/{token} 页面。
+// ============================================================================
+
+interface ApiResponse {
+  publicToken?: string;
+  status?: string;
+  error?: string;
+  issues?: { path: string; message: string }[];
+}
+
+const MIN_QUESTIONS = 3;
+const MAX_QUESTIONS = 10;
+
+function parseQuestions(raw: string): string[] {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 export function DiagnoseForm() {
   const router = useRouter();
-  const [website, setWebsite] = useState("");
+
   const [brandName, setBrandName] = useState("");
+  const [website, setWebsite] = useState("");
   const [industry, setIndustry] = useState("");
   const [productOrService, setProductOrService] = useState("");
   const [targetRegion, setTargetRegion] = useState("");
-  const [customerQuestions, setCustomerQuestions] = useState("");
+  const [customerQuestionsText, setCustomerQuestionsText] = useState("");
+  const [competitors, setCompetitors] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
     setError(null);
 
-    // Basic client-side validation: productOrService is required
-    if (!productOrService.trim()) {
-      setError("请填写主要产品或服务");
-      setLoading(false);
+    const questions = parseQuestions(customerQuestionsText);
+    if (questions.length < MIN_QUESTIONS) {
+      setError(`请至少填写 ${MIN_QUESTIONS} 个客户最常问的问题,每行一个。`);
+      return;
+    }
+    if (questions.length > MAX_QUESTIONS) {
+      setError(`客户问题最多 ${MAX_QUESTIONS} 个,当前已填写 ${questions.length} 个。`);
       return;
     }
 
+    setLoading(true);
     try {
-      const questions = customerQuestions
-        .split("\n")
-        .map((q) => q.trim())
-        .filter((q) => q.length > 0)
-        .slice(0, 5);
-
-      const payload: Record<string, unknown> = {
-        productOrService: productOrService.trim(),
+      const payload = {
+        website: website.trim(),
+        brandName: brandName.trim(),
+        industry: industry.trim() || undefined,
+        productOrService: productOrService.trim() || undefined,
+        targetRegion: targetRegion.trim() || undefined,
+        customerQuestions: questions.map((q) => ({ question: q })),
+        competitors:
+          competitors.trim().length > 0
+            ? competitors
+                .split(/[,,、\s]+/)
+                .map((c) => c.trim())
+                .filter(Boolean)
+                .slice(0, 20)
+            : undefined,
+        // 联系方式只用于报告解读联系,不进入 payload, 也不入数据库
       };
-
-      if (brandName.trim()) {
-        payload.brandName = brandName.trim();
-      }
-      if (website.trim()) {
-        payload.website = website.trim();
-      }
-      if (industry.trim()) {
-        payload.industry = industry.trim();
-      }
-      if (targetRegion.trim()) {
-        payload.targetRegion = targetRegion.trim();
-      }
-      if (questions.length > 0) {
-        payload.customerQuestions = questions.map((question) => ({ question }));
-      }
 
       const res = await fetch("/api/diagnoses", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = (await res.json()) as {
-        publicToken?: string;
-        status?: string;
-        error?: string;
-        issues?: { path: string; message: string }[];
-      };
-      if (res.status === 201 && data.publicToken) {
-        router.push(`/diagnose/processing?token=${encodeURIComponent(data.publicToken)}`);
+      const data = (await res.json()) as ApiResponse;
+
+      if (res.status === 201 && data.status === "READY" && data.publicToken) {
+        if (contactName || contactPhone) {
+          try {
+            sessionStorage.setItem(
+              `diagnosis-contact:${data.publicToken}`,
+              JSON.stringify({ name: contactName.trim(), phone: contactPhone.trim() }),
+            );
+          } catch {
+            // sessionStorage may be unavailable (private mode); fall through silently.
+          }
+        }
+        router.push(`/report/${data.publicToken}`);
         return;
       }
       if (data.error === "INVALID_INPUT") {
-        setError("请检查输入信息是否正确。");
+        const first = data.issues?.[0];
+        setError(
+          first
+            ? `输入有误: ${first.path || ""} ${first.message}`.trim()
+            : "请检查输入字段后重试。",
+        );
       } else {
-        setError("诊断未能完成，请稍后重试。");
+        setError(`诊断未能完成(状态:${data.status ?? "未知"})。请稍后重试。`);
       }
     } catch {
-      setError("网络错误，请稍后重试。");
+      setError("网络错误,请稍后重试。");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-      <form onSubmit={onSubmit} className="flex flex-col gap-5 text-left">
-        {/* 企业名称/品牌名称 */}
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-neutral-700">
-            企业名称/品牌名称
-          </span>
-          <input
-            type="text"
-            value={brandName}
-            onChange={(e) => setBrandName(e.target.value)}
-            placeholder="例如：安徽XX食品有限公司"
-            data-testid="input-brand-name"
-            className="rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-900/10 transition"
-          />
-          <span className="text-xs text-neutral-400">
-            填写企业名称或消费者熟悉的品牌名称即可
-          </span>
-        </label>
+    <form
+      onSubmit={onSubmit}
+      noValidate
+      data-testid="diagnose-form"
+      className="mx-auto flex w-full max-w-[720px] flex-col gap-4 rounded-2xl border border-neutral-200 bg-white p-6 text-left shadow-sm sm:p-8"
+    >
+      {/* 1. 企业/品牌名称 (必填) */}
+      <Field
+        id="brandName"
+        label="企业/品牌名称"
+        required
+        help="例如: 安徽乐锦记食品有限公司"
+      >
+        <input
+          id="brandName"
+          required
+          value={brandName}
+          onChange={(e) => setBrandName(e.target.value)}
+          placeholder="请填写企业的工商注册名或对外品牌名"
+          data-testid="input-brand-name"
+          className={inputClass}
+          autoComplete="organization"
+        />
+      </Field>
 
-        {/* 官网 */}
-        <label className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-1">
-            <span className="text-sm font-medium text-neutral-700">官网</span>
-            <span className="text-xs text-neutral-400">(选填)</span>
-          </div>
-          <input
-            type="text"
-            value={website}
-            onChange={(e) => setWebsite(e.target.value)}
-            placeholder="例如：www.xxx.com"
-            data-testid="input-website"
-            className="rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-900/10 transition"
-          />
-          <span className="text-xs text-neutral-400">
-            没有官网也可以填写品牌名称，我们将根据公开信息分析
-          </span>
-        </label>
+      {/* 2. 企业官网 (必填) */}
+      <Field id="website" label="企业官网" required help="需包含 http:// 或 https://">
+        <input
+          id="website"
+          type="url"
+          required
+          value={website}
+          onChange={(e) => setWebsite(e.target.value)}
+          placeholder="https://example.com"
+          data-testid="input-website"
+          className={inputClass}
+          autoComplete="url"
+          inputMode="url"
+        />
+      </Field>
 
-        {/* 行业 */}
-        <label className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-1">
-            <span className="text-sm font-medium text-neutral-700">所属行业</span>
-            <span className="text-xs text-neutral-400">(选填)</span>
-          </div>
+      {/* 3. 所属行业 (必填) + 4. 主要产品或服务 — 两列 */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field id="industry" label="所属行业" required help="例如: 食品制造业">
           <input
-            type="text"
+            id="industry"
+            required
             value={industry}
             onChange={(e) => setIndustry(e.target.value)}
-            placeholder="例如：食品饮料、餐饮服务"
+            placeholder="请填写主营业务所属的行业"
             data-testid="input-industry"
-            className="rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-900/10 transition"
+            className={inputClass}
           />
-        </label>
-
-        {/* 主要产品或服务 */}
-        <label className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-1">
-            <span className="text-sm font-medium text-neutral-700">
-              主要产品或服务 <span className="text-red-500">*</span>
-            </span>
-          </div>
+        </Field>
+        <Field
+          id="productOrService"
+          label="主要产品或服务"
+          required
+          help="例如: 糕点、面包、烘焙食品"
+        >
           <input
-            type="text"
+            id="productOrService"
             required
             value={productOrService}
             onChange={(e) => setProductOrService(e.target.value)}
-            placeholder="例如：预制菜、奶茶加盟、企业咨询"
-            data-testid="input-product-service"
-            className="rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-900/10 transition"
+            placeholder="一句话概括主营业务"
+            data-testid="input-product"
+            className={inputClass}
           />
-        </label>
+        </Field>
+      </div>
 
-        {/* 主要市场地区 */}
-        <label className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-1">
-            <span className="text-sm font-medium text-neutral-700">主要市场地区</span>
-            <span className="text-xs text-neutral-400">(选填)</span>
-          </div>
+      {/* 5. 所在地区 (必填) */}
+      <Field id="targetRegion" label="所在地区" required help="例如: 中国 / 长三角 / 上海">
+        <input
+          id="targetRegion"
+          required
+          value={targetRegion}
+          onChange={(e) => setTargetRegion(e.target.value)}
+          placeholder="请填写主要业务或客户所在地区"
+          data-testid="input-region"
+          className={inputClass}
+        />
+      </Field>
+
+      {/* 6. 客户最常问的问题 (必填, textarea) */}
+      <Field
+        id="customerQuestions"
+        label="客户最常问的问题"
+        required
+        help={`请填写 ${MIN_QUESTIONS} 至 ${MAX_QUESTIONS} 个问题,每行一个`}
+      >
+        <textarea
+          id="customerQuestions"
+          required
+          rows={5}
+          value={customerQuestionsText}
+          onChange={(e) => setCustomerQuestionsText(e.target.value)}
+          placeholder={"请填写3至5个客户在选购、采购或合作前最常问的问题，每行一个。"}
+          data-testid="input-customer-questions"
+          className={`${inputClass} resize-y leading-relaxed`}
+        />
+        <p className="mt-1 text-xs text-neutral-400" data-testid="questions-count">
+          当前已填写 {parseQuestions(customerQuestionsText).length} / 最多 {MAX_QUESTIONS} 个
+        </p>
+      </Field>
+
+      {/* 7. 主要竞品 (选填) */}
+      <Field
+        id="competitors"
+        label="主要竞品"
+        optional
+        help="多个用逗号或换行分隔,最多 20 个"
+      >
+        <textarea
+          id="competitors"
+          rows={2}
+          value={competitors}
+          onChange={(e) => setCompetitors(e.target.value)}
+          placeholder="选填。如: 桃李面包、盼盼食品、达利食品"
+          data-testid="input-competitors"
+          className={`${inputClass} resize-y leading-relaxed`}
+        />
+      </Field>
+
+      {/* 8. 联系人和手机号 (选填, 仅用于报告解读联系) */}
+      <div className="rounded-xl border border-dashed border-neutral-200 bg-neutral-50 p-4">
+        <div className="mb-2 flex items-baseline gap-2">
+          <span className="text-sm font-medium text-neutral-800">联系人和手机号</span>
+          <span className="text-xs text-neutral-400">选填</span>
+        </div>
+        <p className="mb-3 text-xs leading-relaxed text-neutral-500">
+          仅用于报告解读联系,不会写入诊断结果,也不会出现在公开报告内容中。
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <input
-            type="text"
-            value={targetRegion}
-            onChange={(e) => setTargetRegion(e.target.value)}
-            placeholder="例如：全国、华东、安徽"
-            data-testid="input-region"
-            className="rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-900/10 transition"
+            value={contactName}
+            onChange={(e) => setContactName(e.target.value)}
+            placeholder="联系人姓名"
+            data-testid="input-contact-name"
+            className={inputClass}
+            autoComplete="name"
           />
-        </label>
-
-        {/* 客户最关心的问题 */}
-        <label className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-1">
-            <span className="text-sm font-medium text-neutral-700">
-              客户最关心的问题
-            </span>
-            <span className="text-xs text-neutral-400">(选填，最多5个)</span>
-          </div>
-          <textarea
-            value={customerQuestions}
-            onChange={(e) => setCustomerQuestions(e.target.value)}
-            placeholder={`例如：
-产品有什么优势？
-如何购买？
-如何合作？`}
-            rows={4}
-            data-testid="input-customer-questions"
-            className="rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-900/10 transition resize-none"
+          <input
+            value={contactPhone}
+            onChange={(e) => setContactPhone(e.target.value)}
+            placeholder="手机号"
+            data-testid="input-contact-phone"
+            className={inputClass}
+            autoComplete="tel"
+            inputMode="tel"
           />
-          <span className="text-xs text-neutral-400">
-            每行填写一个问题，不填写将使用常见问题模板
-          </span>
-        </label>
+        </div>
+      </div>
 
-        {error ? (
-          <p
-            className="rounded-lg border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-600"
-            role="alert"
-            data-testid="form-error"
-          >
-            {error}
-          </p>
-        ) : null}
-
-        <button
-          type="submit"
-          disabled={loading}
-          data-testid="submit-diagnose"
-          className="mt-1 flex items-center justify-center gap-2 rounded-xl bg-neutral-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+      {error ? (
+        <p
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          role="alert"
+          data-testid="form-error"
         >
-          {loading ? (
-            <>
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              诊断生成中…
-            </>
-          ) : (
-            <>
-              <span aria-hidden>🚀</span>
-              开始诊断
-            </>
-          )}
-        </button>
-      </form>
+          {error}
+        </p>
+      ) : null}
+
+      <button
+        type="submit"
+        disabled={loading}
+        data-testid="submit-diagnose"
+        className="mt-1 inline-flex h-12 w-full items-center justify-center rounded-lg bg-neutral-900 px-5 text-base font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {loading ? "报告生成中…" : "生成企业诊断报告"}
+      </button>
+
+      <p className="text-center text-xs leading-relaxed text-neutral-500">
+        通常 1 至 3 分钟生成,结果基于本次公开网络信息,不承诺排名或经营结果。
+      </p>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Local helpers
+// ---------------------------------------------------------------------------
+
+const inputClass =
+  "block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-sm leading-relaxed text-neutral-900 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 disabled:bg-neutral-50 disabled:text-neutral-400";
+
+interface FieldProps {
+  id: string;
+  label: string;
+  required?: boolean;
+  optional?: boolean;
+  help?: string;
+  children: React.ReactNode;
+}
+
+function Field({ id, label, required, optional, help, children }: FieldProps) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label
+        htmlFor={id}
+        className="flex items-baseline gap-1.5 text-sm font-medium text-neutral-800"
+      >
+        <span>{label}</span>
+        {required ? (
+          <span className="text-xs font-medium text-red-600" aria-label="必填">
+            *
+          </span>
+        ) : null}
+        {optional ? <span className="text-xs font-normal text-neutral-400">选填</span> : null}
+      </label>
+      {children}
+      {help ? <p className="text-xs leading-relaxed text-neutral-500">{help}</p> : null}
     </div>
   );
 }
