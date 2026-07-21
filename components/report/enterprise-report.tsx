@@ -3,17 +3,13 @@
 import type { ReactNode } from "react";
 import type { EnterpriseReportViewModel } from "../../src/contracts";
 import { ScoreHeadline } from "./score-card";
-import { CtaSection } from "./cta-section";
-import { Roadmap } from "./roadmap";
 import { formatDate } from "./labels";
 import { PRIMARY_CTA_LABEL, SECONDARY_CTA_LABEL, SERVICE_BRAND_NAME } from "../../src/product/customer-copy";
 import { EvidenceView } from "./evidence-view";
 import { useState } from "react";
 
 // ============================================================================
-// Round-9.1 FINAL: Enterprise GEO Consulting Report
-// Density and Mobile Readability Optimization
-//
+// Round-9.2 FINAL: Enterprise GEO Consulting Report
 // Single unified report — no Quick/Deep tabs.
 // Modules conditionally hidden when no valid content.
 //
@@ -21,14 +17,10 @@ import { useState } from "react";
 //   01 决策摘要
 //   02 企业现状分析
 //   03 客户需求与信息机会
-//   04 内容资产建设建议
-//   05 优先行动路线
-//   06 星媄数据服务方向
+//   04 竞争环境与同行观察 (conditional)
+//   05 重点内容资产方案
+//   06 推进路线与星媄数据协作
 //   07 证据附件
-//
-// Semantic correction (Round-9.1):
-//   - informationOpportunities from priorityDirections, NOT formal GEO opportunities
-//   - 不得把公开信息完善方向伪装成正式GEO机会
 // ============================================================================
 
 interface EnterpriseReportProps {
@@ -47,7 +39,7 @@ export function EnterpriseReport({ vm }: EnterpriseReportProps) {
             <h1 className="mt-0.5 text-base font-semibold text-neutral-900">企业GEO诊断报告</h1>
           </div>
           <div className="text-right text-xs text-neutral-400">
-            <div>{vm.brandName}</div>
+            <div className="break-words">{vm.brandName}</div>
             <div className="mt-0.5">{formatDate(vm.reportDate)}</div>
           </div>
         </header>
@@ -130,8 +122,9 @@ export function EnterpriseReport({ vm }: EnterpriseReportProps) {
         {/* Module 03: 客户需求与信息机会 */}
         {vm.informationOpportunities.length > 0 && (
           <Section index={3} title="客户需求与信息机会" className="mb-4">
-            <p className="mb-3 text-xs text-neutral-500">
-              以下信息机会来源于公开网络分析，反映客户在决策过程中关注的问题。
+            {/* Overall judgment */}
+            <p className="mb-3 text-sm text-neutral-600 leading-relaxed">
+              本次分析的{vm.informationOpportunities.length}个客户决策问题中，各方向已具备部分公开信息基础，但客户在产品选择、品质保障和企业合作等场景仍缺少集中、清晰的回答入口。
             </p>
             {/* Two-column cards on desktop, single on mobile */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -142,38 +135,56 @@ export function EnterpriseReport({ vm }: EnterpriseReportProps) {
           </Section>
         )}
 
-        {/* Module 04: 内容资产建设建议 */}
-        {vm.contentAssets.length > 0 && (
-          <Section index={4} title="内容资产建设建议" className="mb-4">
-            {/* Three-column on desktop, single on mobile */}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {vm.contentAssets.map((asset, i) => (
-                <AssetCard key={i} asset={asset} />
+        {/* Module 04: 竞争环境与同行观察 (conditional) */}
+        {vm.competitorObservations && vm.competitorObservations.length > 0 && (
+          <Section index={4} title="竞争环境与同行观察" className="mb-4">
+            <p className="mb-3 text-xs text-neutral-500">
+              在本次公开检索范围内，对同行品牌的信息展示进行观察。
+            </p>
+            <div className="space-y-2">
+              {vm.competitorObservations.map((obs, i) => (
+                <CompetitorObservationCard key={i} observation={obs} />
               ))}
             </div>
           </Section>
         )}
 
-        {/* Module 05: 优先行动路线 */}
-        <Section index={5} title="优先行动路线" className="mb-4">
-          <Roadmap />
-        </Section>
+        {/* Module 05: 重点内容资产方案 */}
+        {vm.contentAssetPlans.length > 0 && (
+          <Section index={vm.competitorObservations ? 5 : 4} title="重点内容资产方案" className="mb-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {vm.contentAssetPlans.map((plan, i) => (
+                <AssetPlanCard key={i} plan={plan} index={i + 1} />
+              ))}
+            </div>
+          </Section>
+        )}
 
-        {/* Module 06: 星媄数据服务方向 */}
-        <Section index={6} title="星媄数据服务方向" className="mb-4">
-          <p className="mb-3 text-xs text-neutral-500">
-            {SERVICE_BRAND_NAME}可协助企业进行以下工作，具体方案需结合实际情况确认。
-          </p>
-          {/* 2x2 grid on desktop, single on mobile */}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {SERVICE_DIRECTIONS.map((d, i) => (
-              <ServiceItem key={i} title={d.title} description={d.description} />
-            ))}
+        {/* Module 06: 推进路线与星媄数据协作 */}
+        <Section
+          index={vm.competitorObservations ? 6 : (vm.contentAssetPlans.length > 0 ? 5 : 4)}
+          title="推进路线与星媄数据协作"
+          className="mb-4"
+        >
+          <RoadmapInline />
+          <div className="mt-4 border-t border-neutral-100 pt-4">
+            <h3 className="mb-2 text-xs font-semibold text-neutral-500">星媄数据协作范围</h3>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {SERVICE_COLLAB_ITEMS.map((item, i) => (
+                <div key={i} className="rounded bg-neutral-50 px-2 py-1.5 text-xs text-neutral-700">
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
         </Section>
 
         {/* Module 07: 证据附件 */}
-        <Section index={7} title="证据附件" className="mb-4">
+        <Section
+          index={vm.competitorObservations ? 7 : (vm.contentAssetPlans.length > 0 ? 6 : 5)}
+          title="证据附件"
+          className="mb-4"
+        >
           <EvidenceSection evidence={vm.evidence} />
         </Section>
 
@@ -249,32 +260,61 @@ function OpportunityCard({ opportunity, index }: { opportunity: EnterpriseReport
   );
 }
 
-function AssetCard({ asset }: { asset: EnterpriseReportViewModel["contentAssets"][number] }) {
+function CompetitorObservationCard({ observation }: { observation: NonNullable<EnterpriseReportViewModel["competitorObservations"]>[number] }) {
   return (
-    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5">
-      <h4 className="mb-1 text-xs font-semibold text-neutral-700">{asset.category}</h4>
-      <ul className="space-y-0.5">
-        {asset.items.map((item, i) => (
-          <li key={i} className="flex items-center gap-1.5 text-xs text-neutral-600">
-            <span className="h-1 w-1 shrink-0 rounded-full bg-neutral-400" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
+    <div className="flex items-start gap-2 rounded-lg border border-neutral-200 bg-white p-2.5">
+      <span className="mt-0.5 shrink-0 text-neutral-400">·</span>
+      <div className="flex-1">
+        <p className="text-xs font-medium text-neutral-700">{observation.dimension}</p>
+        <p className="mt-0.5 text-xs text-neutral-600 leading-relaxed">{observation.observation}</p>
+      </div>
     </div>
   );
 }
 
-function ServiceItem({ title, description }: { title: string; description: string }) {
+function AssetPlanCard({ plan, index }: { plan: EnterpriseReportViewModel["contentAssetPlans"][number]; index: number }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-neutral-200 bg-white p-2.5">
-      <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-[10px] font-bold text-neutral-600">
-        ·
-      </span>
-      <div>
-        <p className="text-xs font-medium text-neutral-800">{title}</p>
-        <p className="mt-0.5 text-[11px] text-neutral-500">{description}</p>
+    <div className="rounded-lg border border-neutral-200 bg-white p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700">
+          {String.fromCharCode(64 + index)}
+        </span>
+        <h3 className="flex-1 text-sm font-semibold text-neutral-900">{plan.title}</h3>
       </div>
+      <ul className="space-y-0.5">
+        {plan.suggestedAssets.map((asset, i) => (
+          <li key={i} className="flex items-start gap-1.5 text-xs text-neutral-600">
+            <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-neutral-400" />
+            <span>{asset}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 border-t border-neutral-100 pt-1.5 text-xs text-neutral-500">{plan.businessValue}</p>
+    </div>
+  );
+}
+
+function RoadmapInline() {
+  const stages = [
+    { goal: "整理企业事实与内容口径", output: "品牌、产品、品质和合作基础资料" },
+    { goal: "建设客户决策内容", output: "产品指南、FAQ、品质说明、合作页面和案例内容" },
+    { goal: "持续验证与迭代", output: "公开信息检查、客户问题复测和内容更新建议" },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {stages.map((stage, i) => (
+        <div key={i} className="rounded-lg border border-neutral-200 bg-white p-3">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-neutral-800 text-[10px] font-bold text-white">
+              {i + 1}
+            </span>
+            <span className="text-xs font-semibold text-neutral-700">阶段{i + 1}</span>
+          </div>
+          <p className="text-xs font-medium text-neutral-800">{stage.goal}</p>
+          <p className="mt-1 text-xs text-neutral-500">输出：{stage.output}</p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -311,9 +351,9 @@ function EvidenceSection({ evidence }: { evidence: EnterpriseReportViewModel["ev
   );
 }
 
-const SERVICE_DIRECTIONS: { title: string; description: string }[] = [
-  { title: "企业知识资产整理", description: "梳理现有公开信息，识别信息缺口" },
-  { title: "GEO内容体系建设", description: "规划面向客户决策问题的内容资产" },
-  { title: "客户问题覆盖优化", description: "提供内容建设方向建议" },
-  { title: "AI搜索表现分析", description: "持续监测AI搜索场景中的覆盖情况" },
+const SERVICE_COLLAB_ITEMS = [
+  "企业知识资产整理",
+  "客户决策内容建设",
+  "GEO内容体系规划",
+  "持续诊断与优化建议",
 ];

@@ -518,24 +518,25 @@ export const EvidenceViewModel = z.object({
 export type EvidenceViewModel = z.infer<typeof EvidenceViewModel>;
 
 // ============================================================================
-// Round-9 FINAL: EnterpriseGEOReportViewModel — single unified enterprise report.
+// Round-9.2 FINAL: EnterpriseGEOReportViewModel — single unified enterprise report.
 // Projected from Canonical DiagnosisReport. No Quick/Deep dual version.
 // No new scoring. No new Canonical fields. Pure presentation projection.
 //
-// 7-module structure (per REQUEST):
-//   01 决策摘要 (brand, date, score, summary)
-//   02 企业现状分析 (from Profile + Strength)
-//   03 客户需求与信息机会 (from priorityDirections / gaps — MERGED)
-//   04 内容资产建设建议 (from priorityDirections — aggregated by type)
-//   05 优先行动路线 (roadmap)
-//   06 星媄数据服务方向 (static)
-//   07 证据附件 (EvidenceView)
+// 7-module structure (per REQUEST Round-9.2):
+//   01 决策摘要
+//   02 企业现状分析
+//   03 客户需求与信息机会
+//   04 竞争环境与同行观察 (conditional)
+//   05 重点内容资产方案
+//   06 推进路线与星媄数据协作
+//   07 证据附件
 //
 // REMOVED:
-//   - 客户决策问题分析 (独立模块, coverage统计为空时感知价值低)
-//   - AI检索场景观察 (空洞, 融合进入03)
+//   - 客户决策问题分析 (独立模块)
+//   - AI检索场景观察 (空洞)
+//   - 建议先做的3件事 (固定模块)
 //
-// SEMANTIC CORRECTION (Round-9.1):
+// SEMANTIC CORRECTION:
 //   - informationOpportunities 来自 priorityDirections，是公开信息完善方向
 //   - 不得命名为 geoOpportunities，正式GEO机会只能来自Canonical Truth Guard
 // ============================================================================
@@ -563,12 +564,29 @@ export const EnterpriseInformationOpportunity = z.object({
 });
 export type EnterpriseInformationOpportunity = z.infer<typeof EnterpriseInformationOpportunity>;
 
-/** Content asset recommendation */
-export const EnterpriseContentAsset = z.object({
-  category: z.string(),
-  items: z.array(z.string()),
+/**
+ * Round-9.2: Content Asset Plan
+ * 重点内容资产方案模块的展示卡片
+ * 来自 QuestionCoverageGap 聚类，每项必须具体
+ */
+export const EnterpriseContentAssetPlan = z.object({
+  title: z.string(),
+  suggestedAssets: z.array(z.string()),
+  businessValue: z.string(),
 });
-export type EnterpriseContentAsset = z.infer<typeof EnterpriseContentAsset>;
+export type EnterpriseContentAssetPlan = z.infer<typeof EnterpriseContentAssetPlan>;
+
+/**
+ * Round-9.2: Competitor Observation
+ * 竞争环境与同行观察模块
+ * 只能使用已验证的竞品证据
+ */
+export const EnterpriseCompetitorObservation = z.object({
+  dimension: z.string(),
+  observation: z.string(),
+  competitorMentioned: z.boolean(),
+});
+export type EnterpriseCompetitorObservation = z.infer<typeof EnterpriseCompetitorObservation>;
 
 export const EnterpriseReportViewModel = z.object({
   diagnosisId: z.string(),
@@ -586,9 +604,12 @@ export const EnterpriseReportViewModel = z.object({
   enterpriseStatusDescription: z.string(),
   /** Top strength for display. */
   topStrength: Strength.nullable(),
-  /** Round-9.1: 客户需求与信息机会 — 公开信息完善方向，不是正式GEO机会 */
+  /** 客户需求与信息机会 — 公开信息完善方向 */
   informationOpportunities: z.array(EnterpriseInformationOpportunity).max(5),
-  contentAssets: z.array(EnterpriseContentAsset),
+  /** 竞争环境与同行观察 — 条件显示 */
+  competitorObservations: z.array(EnterpriseCompetitorObservation).max(3).optional(),
+  /** 重点内容资产方案 — 动态数量2-5 */
+  contentAssetPlans: z.array(EnterpriseContentAssetPlan).max(5),
   demonstrationFix: DemonstrationFix.nullable(),
   evidence: EvidenceViewModel,
 });

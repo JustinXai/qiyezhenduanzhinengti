@@ -175,21 +175,29 @@ describe("toEnterpriseReportViewModel", () => {
     }
   });
 
-  it("does NOT use geoOpportunities naming (semantic correction Round-9.1)", () => {
+  it("does NOT use geoOpportunities naming (semantic correction)", () => {
     const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
     expect(vm).not.toHaveProperty("geoOpportunities");
     expect(vm).toHaveProperty("informationOpportunities");
   });
 
-  it("includes contentAssets from priority directions", () => {
+  it("includes contentAssetPlans with specific deliverables", () => {
     const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
-    for (const asset of vm.contentAssets) {
-      expect(asset.category).toBeTruthy();
-      expect(asset.items.length).toBeGreaterThan(0);
+    expect(vm.contentAssetPlans.length).toBeGreaterThan(0);
+    for (const plan of vm.contentAssetPlans) {
+      expect(plan.title).toBeTruthy();
+      expect(plan.suggestedAssets.length).toBeGreaterThan(0);
+      expect(plan.businessValue).toBeTruthy();
     }
   });
 
-  it("does NOT include customerQuestions or aiObservations (removed in Round-9 FINAL)", () => {
+  it("does NOT include contentAssets (replaced by contentAssetPlans)", () => {
+    const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    expect(vm).not.toHaveProperty("contentAssets");
+    expect(vm).toHaveProperty("contentAssetPlans");
+  });
+
+  it("does NOT include customerQuestions or aiObservations (removed)", () => {
     const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
     expect(vm).not.toHaveProperty("customerQuestions");
     expect(vm).not.toHaveProperty("aiObservations");
@@ -197,10 +205,8 @@ describe("toEnterpriseReportViewModel", () => {
 
   it("informationOpportunities are NOT formal GEO opportunities", () => {
     const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
-    // These are public information improvement directions, not Truth-Guard-passed GEO opportunities
     expect(vm.informationOpportunities.length).toBeLessThanOrEqual(5);
     for (const opp of vm.informationOpportunities) {
-      // Each has the required 4 fields
       expect(opp).toHaveProperty("customerQuestion");
       expect(opp).toHaveProperty("currentStatus");
       expect(opp).toHaveProperty("suggestedAsset");
@@ -212,6 +218,18 @@ describe("toEnterpriseReportViewModel", () => {
     const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
     expect(vm.evidence).toBeTruthy();
     expect(vm.evidence.items.length).toBeGreaterThan(0);
+  });
+
+  it("competitorObservations is optional and conditional", () => {
+    const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    // Should be present when there are valid competitor gaps
+    if (vm.competitorObservations) {
+      expect(vm.competitorObservations.length).toBeLessThanOrEqual(3);
+      for (const obs of vm.competitorObservations) {
+        expect(obs.dimension).toBeTruthy();
+        expect(obs.observation).toBeTruthy();
+      }
+    }
   });
 });
 

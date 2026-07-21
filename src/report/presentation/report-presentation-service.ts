@@ -31,7 +31,8 @@ import type {
   QuestionCoverageAssessment,
   EnterpriseReportViewModel,
   EnterpriseInformationOpportunity,
-  EnterpriseContentAsset,
+  EnterpriseContentAssetPlan,
+  EnterpriseCompetitorObservation,
 } from "../../contracts";
 import { sanitizeEvidenceUrl } from "./evidence-url";
 import {
@@ -653,44 +654,74 @@ function buildInformationOpportunities(
   });
 }
 
-function buildContentAssets(dirs: PriorityDirection[]): EnterpriseContentAsset[] {
-  const CATEGORY_ASSET_MAP: Record<string, { label: string; items: string[] }> = {
+/**
+ * Round-9.2: Build content asset plans from priority directions
+ * Each plan has: title, suggestedAssets[], businessValue
+ */
+function buildContentAssetPlans(dirs: PriorityDirection[]): EnterpriseContentAssetPlan[] {
+  const CATEGORY_DETAILS: Record<string, { suggestedAssets: string[]; businessValue: string }> = {
     PRODUCT_SELECTION: {
-      label: "产品选购",
-      items: ["产品选购指南", "产品FAQ", "规格说明页"],
+      suggestedAssets: ["产品选购指南", "口味与规格对照", "保质期及过敏原说明", "产品FAQ"],
+      businessValue: "帮助消费者在购买前快速判断产品差异，减少重复咨询",
     },
     QUALITY_AND_SAFETY: {
-      label: "品质与安全",
-      items: ["原料工艺说明", "食品安全说明", "品质认证展示"],
+      suggestedAssets: ["原料来源说明", "生产工艺说明", "食品安全与品质控制", "相关认证和检测信息"],
+      businessValue: "让消费者、采购方和渠道合作方更容易核验产品品质依据",
     },
     BUSINESS_COOPERATION: {
-      label: "商务合作",
-      items: ["合作流程说明", "渠道合作页", "企业团购说明"],
+      suggestedAssets: ["团购和批量采购入口", "经销及商超合作流程", "代工能力说明", "可公开案例和咨询入口"],
+      businessValue: "降低采购方和合作伙伴了解合作条件的沟通成本",
     },
     SERVICE_AND_DELIVERY: {
-      label: "服务与交付",
-      items: ["服务流程FAQ", "售后说明页", "交付流程"],
+      suggestedAssets: ["服务流程FAQ", "交付时间说明", "售后政策页"],
+      businessValue: "减少客户对服务流程的咨询，提升合作效率",
     },
     CASES_AND_TRUST: {
-      label: "案例与资质",
-      items: ["合作案例展示", "资质证书页", "认证说明"],
+      suggestedAssets: ["合作案例展示", "资质证书页", "认证说明"],
+      businessValue: "增强采购方和合作方的信任感",
     },
     FAQ_OTHER: {
-      label: "常见问题",
-      items: ["企业FAQ页", "通用问答内容"],
+      suggestedAssets: ["企业FAQ页", "通用问答内容"],
+      businessValue: "覆盖客户常见问题，减少重复咨询",
     },
   };
 
   const seen = new Set<string>();
-  const assets: EnterpriseContentAsset[] = [];
+  const plans: EnterpriseContentAssetPlan[] = [];
   for (const dir of dirs) {
     const catKey = dir.id.replace("dir_", "").toUpperCase();
     if (seen.has(catKey)) continue;
     seen.add(catKey);
-    const meta = CATEGORY_ASSET_MAP[catKey] ?? { label: "其他", items: ["FAQ页面"] };
-    assets.push({ category: meta.label, items: meta.items });
+    const meta = CATEGORY_DETAILS[catKey] ?? {
+      suggestedAssets: ["FAQ页面"],
+      businessValue: "覆盖客户常见问题",
+    };
+    plans.push({
+      title: dir.title,
+      suggestedAssets: meta.suggestedAssets,
+      businessValue: meta.businessValue,
+    });
   }
-  return assets;
+  return plans;
+}
+
+/**
+ * Round-9.2: Build competitor observations from valid competitor gaps
+ * Only uses evidence-backed gaps, limited to 3 observations
+ */
+function buildCompetitorObservations(
+  gaps: CompetitorGap[],
+  index: EvidenceIndex,
+): EnterpriseCompetitorObservation[] {
+  // Filter to only gaps with semantic support
+  const validGaps = gaps.filter((gap) => hasSemanticSupport(gap.evidenceIds, index));
+  if (validGaps.length === 0) return [];
+
+  return validGaps.slice(0, 3).map((gap) => ({
+    dimension: gap.competitorName,
+    observation: gap.gapStatement,
+    competitorMentioned: true,
+  }));
 }
 
 export function toEnterpriseReportViewModel(report: DiagnosisReport): EnterpriseReportViewModel {
@@ -704,8 +735,14 @@ export function toEnterpriseReportViewModel(report: DiagnosisReport): Enterprise
   const { stats } = buildQuestionCoverageStats(report.questionCoverageAssessments);
   const priorityDirs = buildPriorityDirections(report.questionCoverageGaps);
 
-  // Round-9.1: informationOpportunities from priority directions (max 5)
+  // Round-9.2: informationOpportunities from priority directions (max 5)
   const informationOpportunities = buildInformationOpportunities(priorityDirs, report.questionCoverageGaps);
+
+  // Round-9.2: competitor observations (conditional)
+  const competitorObservations = buildCompetitorObservations(report.competitorGaps, index);
+
+  // Round-9.2: content asset plans (dynamic 2-5)
+  const contentAssetPlans = buildContentAssetPlans(priorityDirs);
 
   return {
     diagnosisId: report.diagnosisId,
@@ -726,7 +763,8 @@ export function toEnterpriseReportViewModel(report: DiagnosisReport): Enterprise
     enterpriseStatusDescription: buildEnterpriseStatusDescription(report.companyProfile, topStrength),
     topStrength,
     informationOpportunities,
-    contentAssets: buildContentAssets(priorityDirs),
+    ...(competitorObservations.length > 0 ? { competitorObservations } : {}),
+    contentAssetPlans,
     demonstrationFix: report.demonstrationFix,
     evidence,
   };
