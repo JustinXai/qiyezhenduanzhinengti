@@ -89,12 +89,12 @@ export const ZH_PUBLIC_INFO_COVERAGE_LABEL: Record<
 export const QUICK_FIRST_SCREEN_MODULE = {
   /** 一句话诊断结论 */
   headline: "一句话诊断结论",
-  /** GEO基础诊断指数 */
-  score: "GEO基础诊断指数",
+  /** 综合分 */
+  score: "GEO可见度基础指数",
   /** 测量构成 */
   composition: "实测/公开网页估算构成",
-  /** 最重要的完善方向 */
-  topOpportunity: "最重要的完善方向",
+  /** 最重要的公开信息完善机会 */
+  topOpportunity: "最重要的公开信息完善机会",
   /** 主 CTA */
   primaryCta: "预约报告解读",
 } as const;
@@ -104,14 +104,18 @@ export const QUICK_FIRST_SCREEN_MODULE = {
  * 动态显示，空模块隐藏
  */
 export const QUICK_MODULE_TITLES = {
-  /** 客户决策问题覆盖 */
-  customerQuestionCoverage: "客户决策问题覆盖",
-  /** 条件性竞品观察 */
-  competitorObservation: "竞品观察",
-  /** 优先完善方向 */
-  priorityDirections: "优先完善方向",
-  /** 建议推进路径 */
-  improvementPath: "建议推进路径",
+  /** AI 当前理解 */
+  aiUnderstanding: "AI 当前如何谈论企业",
+  /** 公开信息完善机会 */
+  publicInfoOpportunities: "公开信息完善机会",
+  /** 核心问题 */
+  coreIssues: "核心问题",
+  /** GEO 机会 */
+  geoOpportunities: "GEO 机会",
+  /** 行动建议 */
+  actionSuggestions: "建议先做的 3 件事",
+  /** 三阶段路线图 */
+  roadmap: "三阶段路线图",
   /** 下一步 */
   nextSteps: "下一步",
 } as const;

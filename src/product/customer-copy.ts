@@ -25,16 +25,6 @@
 import { DemonstrationFix } from "../contracts";
 
 // ---------------------------------------------------------------------------
-// §0 — Brand identity
-// ---------------------------------------------------------------------------
-
-/** 服务品牌名称。不得使用凡间AI或其他别名。 */
-export const SERVICE_BRAND_NAME = "星媄数据";
-
-/** 报告产品名称。 */
-export const REPORT_PRODUCT_NAME = "企业GEO诊断报告";
-
-// ---------------------------------------------------------------------------
 // §1 — Primary / secondary CTA labels (docs/REPORT_CONTRACT.md §8).
 // ---------------------------------------------------------------------------
 
@@ -54,16 +44,17 @@ export const CTA_DESCRIPTION =
 // ---------------------------------------------------------------------------
 // §3 — 30-minute session points (docs/REPORT_CONTRACT.md §8, verbatim).
 // The leading "1）2）3）" numbering is rendered by the component; the frozen
-// clause text is stored here. Contains the service brand name「星媄数据」.
+// clause text is stored here. Contains the service brand name「凡间AI」— kept
+// verbatim pending OQ-6 (see docs/REQUIREMENTS_TRACEABILITY.md).
 // ---------------------------------------------------------------------------
 
 /** UI heading immediately above the three points (punctuation-normalised). */
 export const THIRTY_MINUTE_HEADING = "30 分钟解读会将帮助您：";
 
 export const THIRTY_MINUTE_POINTS = [
-  "核验本报告中的企业信息和客户问题；",
-  "确定优先完善的内容方向；",
-  "明确企业需提供的资料、交付内容和验收方式。",
+  "核验报告中的关键结论是否符合企业实际；",
+  "确定最值得优先处理的 3 件事；",
+  "明确企业需提供什么、凡间AI可以交付什么，以及如何验收。",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -71,7 +62,7 @@ export const THIRTY_MINUTE_POINTS = [
 // ---------------------------------------------------------------------------
 
 /** 综合分固定命名。 */
-export const OVERALL_SCORE_LABEL = "GEO基础诊断指数";
+export const OVERALL_SCORE_LABEL = "GEO可见度基础指数";
 
 // 综合分禁用别名 — 不得出现在任何客户可见文案中。这是「检测清单」而非展示文案，
 // 故每行标注 `security-check:allow`，与 src/report/validation/cta-guard.ts 中的
@@ -109,9 +100,6 @@ export const COMPETITOR_INSUFFICIENT_EVIDENCE =
 export const SCORE_HINT_ALL_ESTIMATED = "本次结果主要基于公开网络信息估算。";
 /** 存在未测得维度（INSUFFICIENT_EVIDENCE / PROVIDER_FAILED）时。 */
 export const SCORE_HINT_SOME_UNMEASURED = "部分维度暂未测得。";
-
-/** 评分完整度标签 — 替代旧版「有效评分覆盖率」。 */
-export const SCORE_COVERAGE_LABEL = "评分完整度";
 
 // ---------------------------------------------------------------------------
 // §8 — AI-visibility sample disclaimer (docs/PRODUCT_TRUTH_RULES.md §8).

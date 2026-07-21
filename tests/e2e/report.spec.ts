@@ -46,9 +46,9 @@ test.describe("Quick report page (end-to-end)", () => {
     }
   });
 
-  test("shows the canonical综合分 label GEO基础诊断指数 (not a banned alias)", async ({ page, request }) => {
+  test("shows the canonical综合分 label GEO可见度基础指数 (not a banned alias)", async ({ page, request }) => {
     await page.goto(await createReportPath(request));
-    await expect(page.getByTestId("geo-index")).toContainText("GEO基础诊断指数");
+    await expect(page.getByTestId("geo-index")).toContainText("GEO可见度基础指数");
   });
 
   test("primary + secondary CTA are visible with the frozen copy", async ({ page, request }) => {

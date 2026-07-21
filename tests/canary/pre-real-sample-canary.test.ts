@@ -74,7 +74,9 @@ describe("Round-3 canaries (data plane, full boundary, MOCK)", () => {
     expect(quick.diagnosisId).toBe(deep.diagnosisId);
     expect(quick.overallScore).toBe(deep.scores.overallScore);
     const evidenceIds = new Set(evidence.items.map((i) => i.id));
-    // Round-8 FINAL: coreIssues removed from Quick — skip evidence id check on quick.coreIssues.
+    for (const iss of quick.coreIssues) {
+      for (const id of iss.evidenceIds) expect(evidenceIds.has(id)).toBe(true);
+    }
     expect(countQuickVisibleChars(quick)).toBeLessThanOrEqual(1800);
   });
 
@@ -106,10 +108,9 @@ describe("Round-3 canaries (data plane, full boundary, MOCK)", () => {
         coverageStatus: "NOT_ESTABLISHED",
       }),
     ]);
-    // Quick view surfaces no fabricated procurement core issue (coreIssues removed from Quick in Round-8).
+    // Quick view surfaces no fabricated procurement core issue.
     const { quick } = presentReport(report);
-    // The canonical report should not have a procurement core issue either.
-    expect(report.coreIssues.some((c) => c.statement.includes("采购"))).toBe(false);
+    expect(quick.coreIssues.some((c) => c.statement.includes("采购"))).toBe(false);
   });
 
   it("Canary C — AMBIGUOUS competitor yields NO deterministic competitor gap", async () => {

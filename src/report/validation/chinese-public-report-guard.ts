@@ -175,6 +175,8 @@ export function chinesePublicReportGuard(views: {
     { field: "quick.headlineConclusion", text: quick.headlineConclusion },
     { field: "quick.measurementStatusSummary", text: quick.measurementStatusSummary },
     { field: "quick.estimationNotice", text: quick.estimationNotice ?? "" },
+    ...claimFields("quick.coreIssues", quick.coreIssues),
+    ...claimFields("quick.geoOpportunities", quick.geoOpportunities),
     ...(quick.competitorGapSummary.available
       ? quick.competitorGapSummary.gaps.map((g, i) => ({
           field: `quick.competitorGaps[${i}].gapStatement`,
@@ -183,16 +185,30 @@ export function chinesePublicReportGuard(views: {
       : [{ field: "quick.competitorGapSummary.reason", text: quick.competitorGapSummary.reason }]),
   ];
 
-  // Round-8 FINAL: 检查 PriorityDirection 字段（替代 PublicInformationOpportunities/Actions）
-  quick.priorityDirections.forEach((dir, i) => {
+  // Round-7: 检查 PublicInformationOpportunity 和 PublicInformationAction 字段
+  quick.publicInformationOpportunities.forEach((opp, i) => {
     quickFields.push(
-      { field: `quick.priorityDirections[${i}].title`, text: dir.title },
-      ...dir.linkedQuestions.map((q, qi) => ({
-        field: `quick.priorityDirections[${i}].linkedQuestions[${qi}]`,
-        text: q,
-      })),
-      { field: `quick.priorityDirections[${i}].suggestedAsset`, text: dir.suggestedAsset },
-      { field: `quick.priorityDirections[${i}].businessValue`, text: dir.businessValue },
+      { field: `quick.publicInformationOpportunities[${i}].customerQuestion`, text: opp.customerQuestion },
+      { field: `quick.publicInformationOpportunities[${i}].observedScope`, text: opp.observedScope },
+      { field: `quick.publicInformationOpportunities[${i}].missingPublicInformation`, text: opp.missingPublicInformation },
+      { field: `quick.publicInformationOpportunities[${i}].suggestedContentAction`, text: opp.suggestedContentAction },
+      { field: `quick.publicInformationOpportunities[${i}].potentialBusinessValue`, text: opp.potentialBusinessValue },
+    );
+  });
+
+  // Round-7: 检查 topPublicInformationOpportunity
+  if (quick.topPublicInformationOpportunity) {
+    const t = quick.topPublicInformationOpportunity;
+    quickFields.push(
+      { field: "quick.topPublicInformationOpportunity.customerQuestion", text: t.customerQuestion },
+      { field: "quick.topPublicInformationOpportunity.suggestedContentAction", text: t.suggestedContentAction },
+    );
+  }
+
+  // Round-7: 检查 PublicInformationAction
+  quick.publicInformationActions.forEach((action, i) => {
+    quickFields.push(
+      { field: `quick.publicInformationActions[${i}].actionText`, text: action.actionText },
     );
   });
 

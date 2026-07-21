@@ -70,12 +70,7 @@ export function chineseConversionReview(
   // 6 企业特异: headline/issues must name the brand or cite issue statements
   // grounded in evidence (heuristic: brand mentioned somewhere in quick prose).
   const brand = report.companyProfile.brandName;
-  // Round-8 FINAL: coreIssues removed from Quick — use headline + priorityDirections instead.
-  const quickProse = [
-    quick.headlineConclusion,
-    ...quick.priorityDirections.map((d) => d.title),
-    ...quick.priorityDirections.flatMap((d) => d.linkedQuestions),
-  ].join(" ");
+  const quickProse = [quick.headlineConclusion, ...quick.coreIssues.map((c) => c.statement)].join(" ");
   add(6, "quick-company-specific", quickProse.includes(brand), `brand=${brand}`);
   // 7–9 机会 lineage.
   const opps = report.geoOpportunities;
@@ -109,8 +104,8 @@ export function chineseConversionReview(
   add(12, "composition-shown-not-just-coverage", compMatches, "quick+deep consistent, no re-compute");
   // 13–14 动态标题 / 连续编号: structural facts the component derives from
   // counts; verified here on the VM side (component render is e2e-covered).
-  add(13, "dynamic-direction-count", quick.priorityDirections.length <= 3, `directions=${quick.priorityDirections.length}`);
-  add(14, "no-empty-modules-data", quick.priorityDirections.length > 0 || quick.topOpportunity === null, "no phantom opportunity");
+  add(13, "dynamic-issue-count", quick.coreIssues.length <= 3, `issues=${quick.coreIssues.length}`);
+  add(14, "no-empty-modules-data", quick.geoOpportunities.length > 0 || quick.topOpportunity === null, "no phantom opportunity");
   // 15 字符预算.
   const chars = countQuickVisibleChars(quick);
   add(15, "quick-within-1800", chars <= 1800, `chars=${chars}`);

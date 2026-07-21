@@ -41,13 +41,13 @@ export function ScoreHeadline({ overallScore, scoreCoverage, composition }: Scor
         )}
       </div>
       <p className="mt-2 text-xs text-neutral-400">
-        评分构成 {formatPercent(scoreCoverage)}
+        有效评分覆盖率 {formatPercent(scoreCoverage)}
         {composition && (
           <span data-testid="measurement-composition">
+            {" · 实测 "}
+            {formatPercent(composition.measuredWeight)}
             {" · 公开网页估算 "}
             {formatPercent(composition.estimatedWeight)}
-            {" · 证据支持 "}
-            {formatPercent(composition.measuredWeight)}
             {composition.insufficientWeight > 0 && ` · 证据不足 ${formatPercent(composition.insufficientWeight)}`}
             {composition.providerFailedWeight > 0 && ` · 暂未测得 ${formatPercent(composition.providerFailedWeight)}`}
           </span>

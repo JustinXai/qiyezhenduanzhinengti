@@ -166,8 +166,7 @@ describe("Round-5.3 temporary SQLite offline finalization", () => {
         },
         assertPresentation: (candidate) => {
           const presented = presentReport(candidate);
-          // Round-8 FINAL: coreIssues removed from Quick — check canonical report instead.
-          expect(candidate.coreIssues.map((item) => item.id)).toEqual(["iss_1"]);
+          expect(presented.quick.coreIssues.map((item) => item.id)).toEqual(["iss_1"]);
           expect(presented.deep.coreIssues.map((item) => item.id)).toEqual(["iss_1"]);
         },
       },

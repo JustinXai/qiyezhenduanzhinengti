@@ -1,61 +1,68 @@
 import { DiagnoseForm } from "../components/diagnose-form";
 
-// ============================================================================
-// 企业诊断智能体 — 首页 (Round-8 FINAL MVP)
-// ============================================================================
-
 export default function HomePage() {
   return (
-    <main className="min-h-screen w-full bg-neutral-50">
-      <div className="mx-auto flex w-full max-w-5xl flex-col items-stretch gap-6 px-4 py-8 sm:px-6 sm:py-12">
-        {/* 标题区 */}
-        <header className="flex flex-col items-center gap-3 text-center sm:gap-4">
-          <h1
-            className="text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl"
-            data-testid="home-title"
-          >
+    <main className="mx-auto flex min-h-screen flex-col items-center">
+      {/* Hero Section */}
+      <section className="w-full bg-gradient-to-b from-neutral-50 to-white px-6 pt-16 pb-12 text-center">
+        <div className="mx-auto max-w-2xl">
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-500 shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            企业级 AI 诊断工具
+          </div>
+          <h1 className="mb-3 text-4xl font-bold tracking-tight text-neutral-900 sm:text-5xl">
             企业诊断智能体
           </h1>
-          <p
-            className="max-w-2xl text-sm leading-relaxed text-neutral-600 sm:text-base"
-            data-testid="home-subtitle"
-          >
-            基于公开信息与客户决策问题分析，帮助企业发现AI搜索时代的信息建设机会。
+          <p className="text-base leading-relaxed text-neutral-500 sm:text-lg">
+            输入企业基本信息，生成一份基于公开信息和客户需求的企业GEO诊断报告。
           </p>
+        </div>
+      </section>
 
-          {/* 能力点 */}
-          <ul
-            className="mt-1 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-neutral-500 sm:text-sm"
-            data-testid="home-capabilities"
-          >
-            <li className="inline-flex items-center gap-1.5">
-              <Dot /> 公开信息诊断
-            </li>
-            <li className="inline-flex items-center gap-1.5">
-              <Dot /> 客户决策问题覆盖
-            </li>
-            <li className="inline-flex items-center gap-1.5">
-              <Dot /> 证据可追溯
-            </li>
-          </ul>
-        </header>
+      {/* Capabilities */}
+      <section className="w-full bg-white px-6 py-10">
+        <div className="mx-auto grid max-w-2xl grid-cols-2 gap-4 sm:grid-cols-4">
+          {CAPABILITIES.map((cap) => (
+            <div
+              key={cap.title}
+              className="flex flex-col items-center gap-2 rounded-xl border border-neutral-100 bg-neutral-50 p-4 text-center transition hover:border-neutral-200 hover:shadow-sm"
+            >
+              <span className="text-2xl" aria-hidden>
+                {cap.icon}
+              </span>
+              <span className="text-xs font-medium text-neutral-700 leading-snug">
+                {cap.title}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
 
-        {/* 表单卡片 */}
-        <DiagnoseForm />
-
-        <footer className="pb-4 pt-2 text-center text-xs text-neutral-400">
-          本报告基于公开网络信息生成,结果不承诺排名或经营结果。
-        </footer>
-      </div>
+      {/* Form Section */}
+      <section className="w-full flex-1 bg-white px-6 pb-16 pt-4">
+        <div className="mx-auto max-w-md">
+          <DiagnoseForm />
+        </div>
+      </section>
     </main>
   );
 }
 
-function Dot() {
-  return (
-    <span
-      aria-hidden
-      className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-400"
-    />
-  );
-}
+const CAPABILITIES = [
+  {
+    icon: "🔍",
+    title: "公开信息诊断",
+  },
+  {
+    icon: "🧠",
+    title: "AI 认知样本",
+  },
+  {
+    icon: "📋",
+    title: "客户问题覆盖",
+  },
+  {
+    icon: "📎",
+    title: "证据可追溯",
+  },
+] as const;

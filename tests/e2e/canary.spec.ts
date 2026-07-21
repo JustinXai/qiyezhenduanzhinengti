@@ -54,7 +54,7 @@ test.describe("Round-3 canaries (page, 390px, MOCK)", () => {
     // No competitor was provided → the module is omitted entirely (Round-5.1
     // 空模块不保留空壳), never rendered as an empty shell.
     await expect(page.getByTestId("quick-module-competitor")).toHaveCount(0);
-    await expect(page.getByTestId("geo-index")).toContainText("GEO基础诊断指数");
+    await expect(page.getByTestId("geo-index")).toContainText("GEO可见度基础指数");
     await expect(page.getByTestId("primary-cta")).toContainText("预约报告解读");
     await assertNoLeakOrBannedCopy(await page.locator("body").innerText());
   });
