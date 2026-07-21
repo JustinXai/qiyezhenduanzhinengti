@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "企业诊断智能体",
-  description: "输入企业官网与客户常问问题,生成一份基于公开证据的企业诊断报告。",
+  title: "企业GEO诊断报告",
+  description: "基于公开信息与客户决策问题分析，帮助企业发现AI搜索时代的信息建设机会。",
 };
 
 export default function RootLayout({

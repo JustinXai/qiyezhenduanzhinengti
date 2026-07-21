@@ -516,3 +516,87 @@ export const EvidenceViewModel = z.object({
   ),
 });
 export type EvidenceViewModel = z.infer<typeof EvidenceViewModel>;
+
+// ============================================================================
+// Round-9: EnterpriseGEOReportViewModel — the single unified enterprise report.
+// Projected from Canonical DiagnosisReport. No Quick/Deep dual version.
+// No new scoring. No new Canonical fields. Pure presentation projection.
+//
+// 9-module structure:
+//   1. 决策摘要 (brand, date, score, summary)
+//   2. 企业现状分析 (from Profile + Strength)
+//   3. 客户决策问题分析 (from assessments)
+//   4. AI检索场景观察 (from assessments — no model names)
+//   5. GEO机会地图 (from priorityDirections / gaps)
+//   6. 内容资产建设建议 (from priorityDirections — aggregated by type)
+//   7. 优先行动路线 (roadmap)
+//   8. 星媄数据服务方向 (static)
+//   9. 证据附件 (EvidenceView)
+// ============================================================================
+
+/** Summary row in 决策摘要 */
+export const EnterpriseSummaryRow = z.object({
+  label: z.string(),
+  value: z.string(),
+});
+export type EnterpriseSummaryRow = z.infer<typeof EnterpriseSummaryRow>;
+
+/** Customer question in 客户决策问题分析 */
+export const EnterpriseCustomerQuestion = z.object({
+  questionText: z.string(),
+  coverageStatus: z.enum(["完整覆盖", "部分覆盖", "待补充"]),
+  currentInformation: z.string(),
+  improvementDirection: z.string(),
+});
+export type EnterpriseCustomerQuestion = z.infer<typeof EnterpriseCustomerQuestion>;
+
+/** AI search observation */
+export const EnterpriseAIObservation = z.object({
+  questionText: z.string(),
+  currentStatus: z.string(),
+  suggestedAsset: z.string(),
+});
+export type EnterpriseAIObservation = z.infer<typeof EnterpriseAIObservation>;
+
+/** GEO opportunity entry */
+export const EnterpriseGeoOpportunity = z.object({
+  title: z.string(),
+  customerQuestion: z.string(),
+  currentStatus: z.string(),
+  suggestedAsset: z.string(),
+  businessValue: z.string(),
+});
+export type EnterpriseGeoOpportunity = z.infer<typeof EnterpriseGeoOpportunity>;
+
+/** Content asset recommendation */
+export const EnterpriseContentAsset = z.object({
+  category: z.string(),
+  items: z.array(z.string()),
+});
+export type EnterpriseContentAsset = z.infer<typeof EnterpriseContentAsset>;
+
+export const EnterpriseReportViewModel = z.object({
+  diagnosisId: z.string(),
+  publicToken: z.string(),
+  reportLanguage: ReportLanguage.default("zh-CN"),
+  brandName: z.string(),
+  reportDate: z.string(),
+  /** One-sentence enterprise status summary. */
+  enterpriseStatusSummary: z.string(),
+  overallScore: z.number().nullable(),
+  scoreCoverage: z.number(),
+  measurementComposition: MeasurementComposition,
+  estimationNotice: z.string().nullable(),
+  questionCoverageStats: QuestionCoverageStats,
+  /** Enterprise business understanding from Profile + Strength. */
+  enterpriseStatusDescription: z.string(),
+  /** Top strength for display. */
+  topStrength: Strength.nullable(),
+  customerQuestions: z.array(EnterpriseCustomerQuestion).max(5),
+  aiObservations: z.array(EnterpriseAIObservation).max(3),
+  geoOpportunities: z.array(EnterpriseGeoOpportunity).max(3),
+  contentAssets: z.array(EnterpriseContentAsset),
+  demonstrationFix: DemonstrationFix.nullable(),
+  evidence: EvidenceViewModel,
+});
+export type EnterpriseReportViewModel = z.infer<typeof EnterpriseReportViewModel>;

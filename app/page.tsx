@@ -20,7 +20,7 @@ export default function HomePage() {
             className="max-w-2xl text-sm leading-relaxed text-neutral-600 sm:text-base"
             data-testid="home-subtitle"
           >
-            输入企业官网与客户常问问题,生成一份基于公开证据的企业诊断报告。
+            基于公开信息与客户决策问题分析，帮助企业发现AI搜索时代的信息建设机会。
           </p>
 
           {/* 能力点 */}

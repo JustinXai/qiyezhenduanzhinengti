@@ -25,6 +25,16 @@
 import { DemonstrationFix } from "../contracts";
 
 // ---------------------------------------------------------------------------
+// §0 — Brand identity
+// ---------------------------------------------------------------------------
+
+/** 服务品牌名称。不得使用凡间AI或其他别名。 */
+export const SERVICE_BRAND_NAME = "星媄数据";
+
+/** 报告产品名称。 */
+export const REPORT_PRODUCT_NAME = "企业GEO诊断报告";
+
+// ---------------------------------------------------------------------------
 // §1 — Primary / secondary CTA labels (docs/REPORT_CONTRACT.md §8).
 // ---------------------------------------------------------------------------
 
@@ -44,17 +54,16 @@ export const CTA_DESCRIPTION =
 // ---------------------------------------------------------------------------
 // §3 — 30-minute session points (docs/REPORT_CONTRACT.md §8, verbatim).
 // The leading "1）2）3）" numbering is rendered by the component; the frozen
-// clause text is stored here. Contains the service brand name「凡间AI」— kept
-// verbatim pending OQ-6 (see docs/REQUIREMENTS_TRACEABILITY.md).
+// clause text is stored here. Contains the service brand name「星媄数据」.
 // ---------------------------------------------------------------------------
 
 /** UI heading immediately above the three points (punctuation-normalised). */
 export const THIRTY_MINUTE_HEADING = "30 分钟解读会将帮助您：";
 
 export const THIRTY_MINUTE_POINTS = [
-  "核验报告中的关键结论是否符合企业实际；",
-  "确定最值得优先处理的 3 件事；",
-  "明确企业需提供什么、凡间AI可以交付什么，以及如何验收。",
+  "核验本报告中的企业信息和客户问题；",
+  "确定优先完善的内容方向；",
+  "明确企业需提供的资料、交付内容和验收方式。",
 ] as const;
 
 // ---------------------------------------------------------------------------

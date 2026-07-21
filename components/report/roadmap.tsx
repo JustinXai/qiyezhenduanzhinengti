@@ -1,44 +1,44 @@
-// 三阶段路线图 (docs/REPORT_CONTRACT.md §7). Client version shows phase GOALS
-// and expected outcomes only — never weekly tasks, hours, material lists,
-// pricing, acceptance criteria or a paid SOW. The frozen phase-goal names come
-// from the single product-copy source; the outcome prose is presentation UI.
-
-import { ROADMAP_PHASE_GOALS } from "../../src/product/customer-copy";
+// Round-9: 优先行动路线 (REPORT_PRODUCTIZATION_V2)
+// 三阶段路线图，输出导向，不含SOW时长承诺。
 
 const PHASES = [
   {
     phase: "阶段一",
-    goal: ROADMAP_PHASE_GOALS[0],
-    outcome: "让客户与 AI 在首屏就能准确理解企业是谁、为谁解决什么问题。",
+    title: "完善企业基础信息",
+    output: "品牌、产品、服务结构化内容",
   },
   {
     phase: "阶段二",
-    goal: ROADMAP_PHASE_GOALS[1],
-    outcome: "围绕采购决策补齐结构化内容，减少高意向客户在比价阶段的信息缺口。",
+    title: "覆盖客户决策问题",
+    output: "FAQ、场景页、案例页",
   },
   {
     phase: "阶段三",
-    goal: ROADMAP_PHASE_GOALS[2],
-    outcome: "定期复测 AI 问答与内容表现，按证据持续调整，而非一次性交付。",
+    title: "持续优化和监测",
+    output: "持续检测和内容迭代",
   },
 ] as const;
 
 export function Roadmap() {
   return (
-    <ol className="space-y-2.5">
+    <div className="space-y-3">
       {PHASES.map((p, i) => (
-        <li key={p.phase} className="flex gap-3 rounded-xl border border-neutral-200 p-3">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-semibold text-neutral-700">
+        <div key={p.phase} className="flex gap-4 rounded-xl border border-neutral-200 p-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-sm font-bold text-neutral-700">
             {i + 1}
-          </span>
-          <div>
-            <p className="text-sm font-medium text-neutral-900">
-              {p.phase} · {p.goal}
-            </p>
-            <p className="mt-0.5 text-xs text-neutral-600">{p.outcome}</p>
           </div>
-        </li>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-neutral-400">{p.phase}</span>
+              <span className="text-sm font-semibold text-neutral-900">{p.title}</span>
+            </div>
+            <div className="mt-1 flex items-center gap-2 text-xs text-neutral-500">
+              <span className="font-medium text-neutral-400">输出：</span>
+              <span>{p.output}</span>
+            </div>
+          </div>
+        </div>
       ))}
-    </ol>
+    </div>
   );
 }

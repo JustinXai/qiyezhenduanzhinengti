@@ -25,11 +25,15 @@ import type {
   QuickReportViewModel,
   EvidenceViewModel,
   Strength,
-  PublicInformationOpportunity,
   QuestionCoverageGap,
   PriorityDirection,
   QuestionCoverageStats,
   QuestionCoverageAssessment,
+  EnterpriseReportViewModel,
+  EnterpriseCustomerQuestion,
+  EnterpriseAIObservation,
+  EnterpriseGeoOpportunity,
+  EnterpriseContentAsset,
 } from "../../contracts";
 import { sanitizeEvidenceUrl } from "./evidence-url";
 import {
@@ -563,14 +567,180 @@ export interface ReportPresentation {
   quick: QuickReportViewModel;
   deep: DeepReportViewModel;
   evidence: EvidenceViewModel;
+  enterprise: EnterpriseReportViewModel;
 }
 
-/** Project a Canonical report into all three read view models in one pass. */
+/** Project a Canonical report into all four read view models in one pass. */
 export function presentReport(report: DiagnosisReport): ReportPresentation {
   return {
     quick: toQuickReportViewModel(report),
     deep: toDeepReportViewModel(report),
     evidence: toEvidenceViewModel(report),
+    enterprise: toEnterpriseReportViewModel(report),
+  };
+}
+
+// ============================================================================
+// Round-9: Enterprise GEO Consulting Report — single unified enterprise report.
+// Pure projection from Canonical. No new scoring, no new Canonical fields.
+// ============================================================================
+
+function mapAssessmentStatus(
+  status: "FULLY_SUPPORTED" | "PARTIALLY_SUPPORTED" | "UNANSWERED",
+): EnterpriseCustomerQuestion["coverageStatus"] {
+  if (status === "FULLY_SUPPORTED") return "完整覆盖";
+  if (status === "PARTIALLY_SUPPORTED") return "部分覆盖";
+  return "待补充";
+}
+
+function buildEnterpriseStatusDescription(
+  profile: DiagnosisReport["companyProfile"],
+  strength: Strength | null,
+): string {
+  if (strength) {
+    return `${strength.statement}`;
+  }
+  return `企业已在公开渠道具备基础信息展示。`;
+}
+
+function buildEnterpriseStatusSummary(
+  profile: DiagnosisReport["companyProfile"],
+  strength: Strength | null,
+  priorityDirs: PriorityDirection[],
+  stats: QuestionCoverageStats,
+): string {
+  if (priorityDirs.length > 0) {
+    const topDir = priorityDirs[0]!;
+    return `企业已经具备基本的公开信息基础，但在${topDir.title}等客户决策场景中仍存在信息缺口，影响用户快速了解产品、服务和合作方式。`;
+  }
+  if (stats.unanswered > 0) {
+    return `企业已经具备基本的公开信息基础，但部分客户决策问题仍缺乏集中展示的信息内容。`;
+  }
+  return `企业已在公开渠道建立基本的信息展示基础。`;
+}
+
+function buildGeoOpportunities(
+  dirs: PriorityDirection[],
+  gaps: QuestionCoverageGap[] | undefined,
+): EnterpriseGeoOpportunity[] {
+  const gapMap = new Map<string, QuestionCoverageGap>();
+  for (const g of gaps ?? []) {
+    gapMap.set(g.questionId, g);
+  }
+
+  return dirs.map((dir) => {
+    const firstQ = dir.linkedQuestionIds[0] ?? "";
+    const gap = gapMap.get(firstQ);
+    return {
+      title: dir.title,
+      customerQuestion: dir.linkedQuestions[0] ?? "",
+      currentStatus: gap?.observedScope ?? "相关信息有待集中整理。",
+      suggestedAsset: dir.suggestedAsset,
+      businessValue: dir.businessValue,
+    };
+  });
+}
+
+function buildContentAssets(dirs: PriorityDirection[]): EnterpriseContentAsset[] {
+  const CATEGORY_ASSET_MAP: Record<string, { label: string; items: string[] }> = {
+    PRODUCT_SELECTION: {
+      label: "产品选购",
+      items: ["产品选购指南", "产品FAQ", "规格说明页"],
+    },
+    QUALITY_AND_SAFETY: {
+      label: "品质与安全",
+      items: ["原料工艺说明", "食品安全说明", "品质认证展示"],
+    },
+    BUSINESS_COOPERATION: {
+      label: "商务合作",
+      items: ["合作流程说明", "渠道合作页", "企业团购说明"],
+    },
+    SERVICE_AND_DELIVERY: {
+      label: "服务与交付",
+      items: ["服务流程FAQ", "售后说明页", "交付流程"],
+    },
+    CASES_AND_TRUST: {
+      label: "案例与资质",
+      items: ["合作案例展示", "资质证书页", "认证说明"],
+    },
+    FAQ_OTHER: {
+      label: "常见问题",
+      items: ["企业FAQ页", "通用问答内容"],
+    },
+  };
+
+  const seen = new Set<string>();
+  const assets: EnterpriseContentAsset[] = [];
+  for (const dir of dirs) {
+    const catKey = dir.id.replace("dir_", "").toUpperCase();
+    if (seen.has(catKey)) continue;
+    seen.add(catKey);
+    const meta = CATEGORY_ASSET_MAP[catKey] ?? { label: "其他", items: ["FAQ页面"] };
+    assets.push({ category: meta.label, items: meta.items });
+  }
+  return assets;
+}
+
+export function toEnterpriseReportViewModel(report: DiagnosisReport): EnterpriseReportViewModel {
+  const evidence = toEvidenceViewModel(report);
+
+  const index = indexEvidence(report);
+  const rankedStrengths = rankClaims(report.strengths, index);
+  const topStrength = rankedStrengths[0] ?? null;
+  const composition = computeMeasurementComposition(report.scores);
+
+  const { stats } = buildQuestionCoverageStats(report.questionCoverageAssessments);
+  const priorityDirs = buildPriorityDirections(report.questionCoverageGaps);
+
+  const assessments = report.questionCoverageAssessments ?? [];
+
+  const customerQuestions: EnterpriseCustomerQuestion[] = assessments.slice(0, 5).map((a) => {
+    const gap = report.questionCoverageGaps?.find((g) => g.questionId === a.questionId);
+    return {
+      questionText: a.questionText,
+      coverageStatus: mapAssessmentStatus(a.status),
+      currentInformation: gap?.observedScope ?? "相关信息有待进一步确认。",
+      improvementDirection: gap?.suggestedAction ?? "建议整理相关公开信息。",
+    };
+  });
+
+  const aiObservations: EnterpriseAIObservation[] = assessments
+    .filter((a) => a.status !== "FULLY_SUPPORTED")
+    .slice(0, 3)
+    .map((a) => {
+      const gap = report.questionCoverageGaps?.find((g) => g.questionId === a.questionId);
+      return {
+        questionText: a.questionText,
+        currentStatus: gap?.observedScope ?? "相关信息分散，缺少集中整理。",
+        suggestedAsset: gap?.suggestedAction ?? "建议建设相关FAQ内容。",
+      };
+    });
+
+  return {
+    diagnosisId: report.diagnosisId,
+    publicToken: report.publicToken,
+    reportLanguage: report.reportLanguage,
+    brandName: report.companyProfile.brandName,
+    reportDate: report.generatedAt,
+    enterpriseStatusSummary: buildEnterpriseStatusSummary(
+      report.companyProfile,
+      topStrength,
+      priorityDirs,
+      stats,
+    ),
+    overallScore: report.scores.overallScore,
+    scoreCoverage: report.scores.scoreCoverage,
+    measurementComposition: composition,
+    estimationNotice: estimationNoticeFor(composition),
+    questionCoverageStats: stats,
+    enterpriseStatusDescription: buildEnterpriseStatusDescription(report.companyProfile, topStrength),
+    topStrength,
+    customerQuestions,
+    aiObservations,
+    geoOpportunities: buildGeoOpportunities(priorityDirs, report.questionCoverageGaps),
+    contentAssets: buildContentAssets(priorityDirs),
+    demonstrationFix: report.demonstrationFix,
+    evidence,
   };
 }
 
