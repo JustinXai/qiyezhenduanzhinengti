@@ -122,8 +122,10 @@ function reputationSnapshot(): ReputationAndPublicOpinionSnapshotV1 {
     neutralSignals: [],
     responseSignals: [],
     riskThemes: ["退费争议"],
-    overallReputationScore: 82,
-    riskLevel: "LOW",
+    overallReputationScore: 62,
+    reputationHealthScore: 62,
+    evidenceConfidence: "HIGH",
+    riskLevel: "MEDIUM",
     summary: "legacy",
     evidenceIds: ["ev_negative", "ev_response", "ev_news", "ev_4", "ev_5", "ev_6", "ev_7"],
     generatedAt: "2026-07-22T00:00:00.000Z",
@@ -177,7 +179,7 @@ describe("customer readability polish report", () => {
     }
   });
 
-  it("renders reputation evidence counts, LOW explanation and representative evidence", () => {
+  it("renders reputation evidence counts, MEDIUM explanation and representative evidence", () => {
     const html = renderCustomerReportWithReputation({
       ...reputationSnapshot(),
       complaintSignals: [reputationSnapshot().reputationSignals[0]!],
@@ -187,11 +189,11 @@ describe("customer readability polish report", () => {
     expect(html).toContain("查看舆情依据（7 条）");
     expect(html).toContain("<details class=");
     expect(html).not.toContain("<details open");
-    expect(html).toContain("风险等级 低");
-    expect(html).toContain("负面舆情线索");
-    expect(html).toContain("风险等级为低");
+    expect(html).toContain("风险等级 中");
+    expect(html).toContain("客户可见负面舆情");
+    expect(html).toContain("风险等级为中");
     expect(html).toContain("主要舆情情况");
-    expect(html).toContain("本项主要因退费争议出现公开风险信号");
+    expect(html).toContain("本项因发现客户可见的退费争议扣除 20 分");
     expect(html).toContain("企业回应");
     expect(html).toContain("查看原文链接");
     expect(html).toContain("[overflow-wrap:anywhere]");

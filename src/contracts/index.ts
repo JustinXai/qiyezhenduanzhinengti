@@ -170,6 +170,8 @@ export const ReputationAndPublicOpinionSnapshotV1 = z.object({
   riskThemes: z.array(z.string()),
   responseSignals: z.array(ReputationSignalV1),
   overallReputationScore: z.number().min(0).max(100).nullable(),
+  reputationHealthScore: z.number().min(0).max(100).nullable().optional(),
+  evidenceConfidence: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   riskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "UNKNOWN"]),
   summary: z.string(),
   evidenceIds: z.array(z.string()),

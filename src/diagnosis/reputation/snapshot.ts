@@ -14,6 +14,22 @@ type SignalType = ReputationSignalV1["signalType"];
 type Sentiment = ReputationSignalV1["sentiment"];
 type ResolutionStatus = ReputationSignalV1["resolutionStatus"];
 type EntityMatch = ReputationSignalV1["entityMatch"];
+type EvidenceConfidence = NonNullable<ReputationAndPublicOpinionSnapshotV1["evidenceConfidence"]>;
+
+export interface ReputationPenaltyBreakdown {
+  baseScore: number;
+  validCustomerVisibleNegativeCount: number;
+  invalidOrWeakSignalCount: number;
+  independentNegativeSourceCount: number;
+  concreteNegativeThemes: string[];
+  baseNegativePenalty: number;
+  repeatedSourcePenalty: number;
+  noResponsePenalty: number;
+  authoritySeverityPenalty: number;
+  totalPenalty: number;
+  scoreCap: number | null;
+  evidenceConfidence: EvidenceConfidence;
+}
 
 const NEGATIVE_TERMS = ["投诉", "退费", "退款", "虚假宣传", "霸王条款", "纠纷", "合同", "课程缩水", "教学质量", "欺骗", "差评", "维权"];
 const POSITIVE_TERMS = ["好评", "满意", "推荐", "靠谱", "优质", "认可", "口碑好"];
@@ -39,6 +55,10 @@ function hasAffirmativeResponse(text: string): boolean {
 
 function hasNonzeroOfficialRisk(text: string): boolean {
   return /自身风险\s*[1-9]\d*\s*条|[1-9]\d*\s*条\s*自身风险|司法案件\s*[1-9]\d*\s*条|[1-9]\d*\s*条\s*司法案件|行政处罚\s*[1-9]\d*\s*条|[1-9]\d*\s*条\s*行政处罚|被执行(?:人)?\s*[1-9]\d*\s*条|[1-9]\d*\s*条\s*被执行(?:人)?|失信(?:被执行人)?\s*[1-9]\d*\s*条|[1-9]\d*\s*条\s*失信(?:被执行人)?|限制消费\s*[1-9]\d*\s*条|[1-9]\d*\s*条\s*限制消费/.test(text);
+}
+
+function hasConcreteNegativeIssue(text: string): boolean {
+  return hasNonzeroOfficialRisk(text) || containsAny(text, NEGATIVE_TERMS);
 }
 
 function sourceCategory(item: EvidenceItem): string {
@@ -68,7 +88,7 @@ function entityMatch(item: EvidenceItem, names: readonly string[], region: strin
 function resolutionStatus(text: string): ResolutionStatus {
   if (/已完成|已解决|双方达成|处理完成/.test(text)) return "RESOLVED";
   if (hasAffirmativeResponse(text)) return "RESPONDED";
-  if (containsAny(text, NEGATIVE_TERMS) || hasNonzeroOfficialRisk(text)) return "UNRESOLVED";
+  if (hasConcreteNegativeIssue(text)) return "UNRESOLVED";
   return "UNKNOWN";
 }
 
@@ -77,7 +97,7 @@ function classifySignal(item: EvidenceItem, names: readonly string[], region: st
   const match = entityMatch(item, names, region);
   if (match === "LOW" || match === "CONFLICTED") return null;
   const officialRisk = hasNonzeroOfficialRisk(text);
-  const negative = containsAny(text, NEGATIVE_TERMS) || officialRisk;
+  const negative = hasConcreteNegativeIssue(text);
   const positive = containsAny(text, POSITIVE_TERMS);
   const responded = hasAffirmativeResponse(text);
   let signalType: SignalType = "NEUTRAL_MENTION";
@@ -96,7 +116,7 @@ function classifySignal(item: EvidenceItem, names: readonly string[], region: st
   }
   const policyThemes = selectReputationPolicy({ brandName: names[0], industry: "", productOrService: "" }).riskThemes;
   const riskTheme = negative
-    ? policyThemes.find((theme) => text.includes(theme.slice(0, 2))) ?? (officialRisk ? "司法与企业风险提示" : text.includes("退") ? "退费争议" : text.includes("合同") ? "合同条款争议" : text.includes("课程") ? "课程交付争议" : "口碑与投诉风险")
+    ? policyThemes.find((theme) => text.includes(theme.slice(0, 2))) ?? (officialRisk ? "司法案件与公开企业风险信息" : text.includes("退") ? "退费争议" : text.includes("合同") ? "合同条款争议" : text.includes("课程") ? "课程交付争议" : "口碑与投诉风险")
     : "常规公开评价";
   return {
     signalId: `rep_${item.id}`,
@@ -115,33 +135,105 @@ function classifySignal(item: EvidenceItem, names: readonly string[], region: st
   };
 }
 
-export function reputationDeductionFromSignals(negativeSignals: readonly ReputationSignalV1[], responses: readonly ReputationSignalV1[]): number {
-  const byTheme = new Map<string, ReputationSignalV1[]>();
-  for (const signal of negativeSignals) {
-    const key = signal.riskTheme || signal.signalType;
-    byTheme.set(key, [...(byTheme.get(key) ?? []), signal]);
-  }
-  const responseThemes = new Set(responses.map((signal) => signal.riskTheme).filter(Boolean));
-  let total = 0;
-  for (const [theme, items] of Array.from(byTheme.entries()).slice(0, 3)) {
-    const hasDirectAuthority = items.some((item) => /法院|人民法院|裁判文书网|wenshu|court\.gov|gov\.cn|监管局|市场监督管理局|行政处罚决定书/.test(`${item.sourceName} ${item.url}`));
-    const hasMedia = items.some((item) => item.signalType === "MEDIA_REPORT" || item.sourceCategory === "新闻媒体");
-    const hasComplaintSource = items.some((item) => item.signalType === "COMPLAINT" || item.sourceCategory === "黑猫投诉" || item.sourceCategory === "消费投诉平台");
-    const uniqueSources = new Set(items.map((item) => `${item.sourceName}:${item.url}`)).size;
-    let deduction = 4;
-    if (uniqueSources >= 2 && hasComplaintSource) deduction = 7;
-    if (hasMedia) deduction = 10;
-    if (hasDirectAuthority) deduction = 18;
-    if (responseThemes.has(theme)) deduction = Math.max(0, deduction - 2);
-    total += deduction;
-  }
-  return Math.min(30, total);
+function isCustomerVisibleNegative(signal: ReputationSignalV1): boolean {
+  const text = `${signal.title} ${signal.snippet}`;
+  return (signal.sentiment === "NEGATIVE" || signal.sentiment === "MIXED")
+    && (signal.entityMatch === "HIGH" || signal.entityMatch === "MEDIUM")
+    && hasConcreteNegativeIssue(text)
+    && /^https?:\/\//.test(signal.url);
 }
 
-function scoreFromSignals(negativeSignals: readonly ReputationSignalV1[], positives: readonly ReputationSignalV1[], responses: readonly ReputationSignalV1[]): number {
-  const deduction = reputationDeductionFromSignals(negativeSignals, responses);
-  const credit = Math.min(4, positives.length * 1 + responses.length * 2);
-  return Math.max(0, Math.min(100, 82 - deduction + credit));
+function independentSourceKey(signal: ReputationSignalV1): string {
+  const host = (() => {
+    try {
+      return new URL(signal.url).hostname.replace(/^www\./, "");
+    } catch {
+      return signal.sourceName.replace(/^www\./, "");
+    }
+  })();
+  if (/qcc|企查查/.test(`${host} ${signal.sourceName}`)) return "qcc";
+  if (/qixin|启信宝/.test(`${host} ${signal.sourceName}`)) return "qixin";
+  if (/tianyancha|天眼查/.test(`${host} ${signal.sourceName}`)) return "tianyancha";
+  return host || signal.sourceName || signal.url;
+}
+
+function hasDirectAuthorityRisk(signals: readonly ReputationSignalV1[]): boolean {
+  return signals.some((item) => /法院|人民法院|裁判文书网|wenshu|court\.gov|gov\.cn|监管局|市场监督管理局|行政处罚决定书|被执行人信息/.test(`${item.sourceName} ${item.url}`));
+}
+
+function evidenceConfidenceFor(signals: readonly ReputationSignalV1[], sourceCoverage: readonly string[]): EvidenceConfidence {
+  const uniqueSources = new Set(signals.map(independentSourceKey)).size;
+  if (signals.length >= 5 && (uniqueSources >= 2 || sourceCoverage.length >= 2)) return "HIGH";
+  if (signals.length >= 2 || sourceCoverage.length >= 1) return "MEDIUM";
+  return "LOW";
+}
+
+export function reputationPenaltyBreakdown(
+  negativeSignals: readonly ReputationSignalV1[],
+  responses: readonly ReputationSignalV1[],
+  allSignals: readonly ReputationSignalV1[] = negativeSignals,
+  sourceCoverage: readonly string[] = [],
+  baseScore = 82,
+): ReputationPenaltyBreakdown {
+  const validSignals = negativeSignals.filter(isCustomerVisibleNegative);
+  const byTheme = new Map<string, ReputationSignalV1[]>();
+  const bySource = new Map<string, ReputationSignalV1[]>();
+  for (const signal of validSignals) {
+    const key = signal.riskTheme || signal.signalType;
+    byTheme.set(key, [...(byTheme.get(key) ?? []), signal]);
+    const sourceKey = independentSourceKey(signal);
+    bySource.set(sourceKey, [...(bySource.get(sourceKey) ?? []), signal]);
+  }
+  const concreteNegativeThemes = Array.from(byTheme.keys()).slice(0, 3);
+  const independentNegativeSourceCount = bySource.size;
+  const validCustomerVisibleNegativeCount = validSignals.length;
+  const baseNegativePenalty = validCustomerVisibleNegativeCount > 0 ? 20 : 0;
+  const repeatedSourcePenalty = independentNegativeSourceCount >= 2 ? 5 : 0;
+  const noResponsePenalty = validCustomerVisibleNegativeCount > 0 && responses.length === 0 ? 5 : 0;
+  const directAuthority = hasDirectAuthorityRisk(validSignals);
+  const authoritySeverityPenalty = directAuthority ? 10 : 0;
+  const totalPenalty = validCustomerVisibleNegativeCount > 0
+    ? Math.min(45, Math.max(20, baseNegativePenalty + repeatedSourcePenalty + noResponsePenalty + authoritySeverityPenalty))
+    : 0;
+  const scoreCap = directAuthority
+    ? 50
+    : independentNegativeSourceCount >= 2 && responses.length === 0
+      ? 57
+      : validCustomerVisibleNegativeCount > 0
+        ? 62
+        : null;
+  return {
+    baseScore,
+    validCustomerVisibleNegativeCount,
+    invalidOrWeakSignalCount: Math.max(0, negativeSignals.length - validCustomerVisibleNegativeCount),
+    independentNegativeSourceCount,
+    concreteNegativeThemes,
+    baseNegativePenalty,
+    repeatedSourcePenalty,
+    noResponsePenalty,
+    authoritySeverityPenalty,
+    totalPenalty,
+    scoreCap,
+    evidenceConfidence: evidenceConfidenceFor(allSignals, sourceCoverage),
+  };
+}
+
+export function reputationDeductionFromSignals(negativeSignals: readonly ReputationSignalV1[], responses: readonly ReputationSignalV1[]): number {
+  return reputationPenaltyBreakdown(negativeSignals, responses).totalPenalty;
+}
+
+function riskLevelFromPenalty(score: number, breakdown: ReputationPenaltyBreakdown): ReputationAndPublicOpinionSnapshotV1["riskLevel"] {
+  if (breakdown.validCustomerVisibleNegativeCount === 0) return "LOW";
+  if (score < 45 || breakdown.authoritySeverityPenalty >= 10 || breakdown.concreteNegativeThemes.length >= 2) return "HIGH";
+  return "MEDIUM";
+}
+
+function scoreFromSignals(negativeSignals: readonly ReputationSignalV1[], positives: readonly ReputationSignalV1[], responses: readonly ReputationSignalV1[], allSignals: readonly ReputationSignalV1[], sourceCoverage: readonly string[]): number {
+  const breakdown = reputationPenaltyBreakdown(negativeSignals, responses, allSignals, sourceCoverage);
+  const responseCredit = responses.length > 0 ? Math.min(3, responses.length) : 0;
+  const raw = breakdown.baseScore - breakdown.totalPenalty + responseCredit;
+  const capped = breakdown.scoreCap === null ? raw : Math.min(raw, breakdown.scoreCap);
+  return Math.max(0, Math.min(100, capped));
 }
 
 function summaryFor(negativeSignals: readonly ReputationSignalV1[], responses: readonly ReputationSignalV1[], score: number | null): string {
@@ -167,13 +259,12 @@ export function buildReputationSnapshot(input: {
   const positiveSignals = signals.filter((item) => item.sentiment === "POSITIVE");
   const neutralSignals = signals.filter((item) => item.sentiment === "NEUTRAL");
   const responseSignals = signals.filter((item) => item.signalType === "COMPANY_RESPONSE" || item.resolutionStatus === "RESPONDED" || item.resolutionStatus === "RESOLVED");
-  const score = scoreFromSignals(complaintSignals, positiveSignals, responseSignals);
-  const deduction = reputationDeductionFromSignals(complaintSignals, responseSignals);
-  const riskThemeCount = new Set(complaintSignals.map((item) => item.riskTheme)).size;
-  const riskLevel = deduction >= 18 ? "HIGH" : deduction >= 7 || riskThemeCount >= 2 ? "MEDIUM" : "LOW";
   const sourceCoverage = REPUTATION_SOURCE_CATEGORIES.filter((category) =>
     signals.some((signal) => signal.sourceCategory === category),
   );
+  const score = scoreFromSignals(complaintSignals, positiveSignals, responseSignals, signals, sourceCoverage);
+  const breakdown = reputationPenaltyBreakdown(complaintSignals, responseSignals, signals, sourceCoverage);
+  const riskLevel = riskLevelFromPenalty(score, breakdown);
   return {
     diagnosisId: input.diagnosisId,
     companyName,
@@ -188,6 +279,8 @@ export function buildReputationSnapshot(input: {
     riskThemes: Array.from(new Set(complaintSignals.map((item) => item.riskTheme))).slice(0, 5),
     responseSignals,
     overallReputationScore: score,
+    reputationHealthScore: score,
+    evidenceConfidence: breakdown.evidenceConfidence,
     riskLevel,
     summary: summaryFor(complaintSignals, responseSignals, score),
     evidenceIds: Array.from(new Set(signals.map((item) => item.evidenceId))),

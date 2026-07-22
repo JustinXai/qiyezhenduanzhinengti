@@ -51,7 +51,7 @@ function snapshot(overrides: Partial<ReputationAndPublicOpinionSnapshotV1> = {})
 }
 
 describe("reputation report summary", () => {
-  it("case 1: LOW risk with complaint and response still surfaces evidence and risk", () => {
+  it("case 1: customer-visible negative uses conversion-impact deduction even with response", () => {
     const negative = signal({
       signalId: "rep_ev_neg",
       evidenceId: "ev_neg",
@@ -81,17 +81,19 @@ describe("reputation report summary", () => {
       responseSignals: [response],
       neutralSignals: [response, neutral],
       evidenceIds: ["ev_neg", "ev_response", "ev_news", "ev_4", "ev_5", "ev_6", "ev_7"],
-      riskLevel: "LOW",
+      overallReputationScore: 62,
+      riskLevel: "MEDIUM",
     }));
     expect(summary.searchedQueryCount).toBe(8);
     expect(summary.matchedEvidenceCount).toBe(7);
     expect(summary.negativeSignalCount).toBe(1);
     expect(summary.companyResponseCount).toBeGreaterThan(0);
-    expect(summary.reputationDeduction).toBe(4);
+    expect(summary.reputationDeduction).toBe(20);
+    expect(summary.validCustomerVisibleNegativeCount).toBe(1);
     expect(summary.issueThemes[0]?.theme).toBe("退费争议");
-    expect(summary.deductionExplanation).toContain("扣除 4 分");
-    expect(summary.summary).toContain("负面舆情线索");
-    expect(summary.summary).toContain("风险等级为低");
+    expect(summary.deductionExplanation).toContain("扣除 20 分");
+    expect(summary.summary).toContain("客户可见负面舆情");
+    expect(summary.summary).toContain("风险等级为中");
     expect(summary.summary).not.toContain("未发现舆情");
     expect(summary.summary).not.toContain("未发现负面");
     expect(summary.representativeEvidence.map((item) => item.evidenceType)).toContain("投诉或争议信号");
@@ -99,7 +101,7 @@ describe("reputation report summary", () => {
     expect(summary.guardViolations).toEqual([]);
   });
 
-  it("classifies official enterprise risk hints as one bounded issue theme", () => {
+  it("classifies official enterprise risk hints as customer-visible conversion risk", () => {
     const risk = signal({
       signalId: "rep_ev_qixin",
       evidenceId: "ev_qixin",
@@ -109,26 +111,26 @@ describe("reputation report summary", () => {
       sourceName: "qixin.com",
       title: "测试企业_投资融资 - 启信宝",
       snippet: "自身风险 3条 司法案件 启信分 608分，相关事实需进一步核验。",
-      riskTheme: "司法与企业风险提示",
+      riskTheme: "司法案件与公开企业风险信息",
       url: "https://www.qixin.com/company/example",
     });
     const summary = buildReputationReportSummary(snapshot({
       reputationSignals: [risk, signal({ evidenceId: "ev_registry", sourceCategory: "官方公开渠道" })],
       complaintSignals: [risk],
       responseSignals: [],
-      riskThemes: ["司法与企业风险提示"],
+      riskThemes: ["司法案件与公开企业风险信息"],
       evidenceIds: ["ev_qixin", "ev_registry"],
-      overallReputationScore: 78,
-      riskLevel: "LOW",
+      overallReputationScore: 57,
+      riskLevel: "MEDIUM",
     }));
 
     expect(summary.negativeSignalCount).toBe(1);
     expect(summary.companyResponseCount).toBe(0);
-    expect(summary.reputationDeduction).toBe(4);
+    expect(summary.reputationDeduction).toBe(25);
     expect(summary.issueThemes).toEqual([
-      expect.objectContaining({ theme: "司法与企业风险提示", count: 1 }),
+      expect.objectContaining({ theme: "司法案件与公开企业风险信息", count: 1 }),
     ]);
-    expect(summary.summary).toContain("需进一步核实具体事实");
+    expect(summary.summary).toContain("暂未发现集中、清晰的企业公开回应");
     expect(summary.representativeEvidence[0]?.summary).toContain("企业风险提示");
     expect(summary.guardViolations).toEqual([]);
   });
@@ -173,7 +175,7 @@ describe("reputation report summary", () => {
       responseSignals: [response],
       evidenceIds: ["ev_neg", "ev_resp"],
       riskThemes: ["合同争议"],
-      riskLevel: "LOW",
+      riskLevel: "MEDIUM",
     }));
     const rendered = [summary.summary, ...summary.riskReasons, ...summary.representativeEvidence.map((item) => item.summary)].join("\n");
     expect(rendered).toContain("投诉、争议");
