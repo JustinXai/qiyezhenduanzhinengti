@@ -1,0 +1,30 @@
+# =============================================================================
+# Caddyfile snippet for Enterprise Diagnosis Agent
+# Add to /etc/caddy/Caddyfile when domain is ready
+# =============================================================================
+
+# Replace DIAGNOSIS_DOMAIN with actual subdomain
+# Replace 3710 with deployed port if different
+
+DIAGNOSIS_DOMAIN {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:3710 {
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Real-IP {remote_host}
+    }
+
+    header / {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    log {
+        output file /var/log/caddy/diagnosis.log {
+            roll_size 10MiB
+            roll_keep 5
+        }
+        level INFO
+    }
+}

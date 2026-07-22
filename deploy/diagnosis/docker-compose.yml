@@ -1,0 +1,58 @@
+# =============================================================================
+# Docker Compose for Enterprise Diagnosis Agent - Production
+# =============================================================================
+
+services:
+  diagnosis-web:
+    image: xingmei-enterprise-diagnosis:${IMAGE_TAG:-latest}
+    container_name: xingmei-diagnosis-web
+    restart: unless-stopped
+    
+    # Resource limits
+    mem_limit: 4g
+    cpus: "2.5"
+    pids_limit: 256
+    
+    # Port binding - only localhost
+    ports:
+      - "127.0.0.1:3710:3000"
+    
+    # Environment
+    env_file:
+      - /opt/xingmei/diagnosis/shared/.env.production
+    
+    # Volumes for data persistence
+    volumes:
+      - /opt/xingmei/diagnosis/data:/data
+      - /opt/xingmei/diagnosis/logs:/app/logs
+    
+    # Logging with rotation
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Security - no privileged, no docker socket
+    security_opt:
+      - no-new-privileges:true
+    
+    # User
+    user: "1000:1000"
+    
+    # Networks - isolated
+    networks:
+      - xingmei-diagnosis-net
+
+networks:
+  xingmei-diagnosis-net:
+    name: xingmei-diagnosis-net
+    driver: bridge

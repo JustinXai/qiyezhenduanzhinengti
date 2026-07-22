@@ -1,0 +1,68 @@
+# Git
+.git
+.github
+.gitignore
+
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+.next
+out
+dist
+build
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Data
+*.sqlite
+*.sqlite3
+*.db
+data
+*.log
+
+# Development
+*.tsbuildinfo
+coverage
+.nyc_output
+test-results
+playwright-report
+playwright-report-*
+/.nycrc
+/.eslintcache
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Screenshots and private
+screenshots
+project-private
+private
+企业诊断智能体_private
+worktrees
+
+# Agent
+agent-output
+agent-transcripts
+
+# Docs (not needed for production)
+*.md
+!README.md
+docs
+
+# Temporary
+tmp
+temp
+*.tmp
+*.temp
+
+# OS
+.DS_Store
+Thumbs.db
