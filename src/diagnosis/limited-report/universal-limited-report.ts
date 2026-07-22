@@ -41,9 +41,35 @@ function sourceCounts(evidence: readonly EvidenceItem[]) {
   return { total: evidence.length, searchSnippet: count("SEARCH_SNIPPET"), crawledPage: count("CRAWLED_PAGE"), officialPage: count("OFFICIAL_PAGE"), officialRegistry: count("OFFICIAL_REGISTRY") };
 }
 
+function slotKeywords(slot: string): string[] {
+  const matched = [
+    [/主体|企业工商|门店主体/, ["工商", "主体", "公司", "统一社会信用"]],
+    [/许可|备案/, ["许可", "备案", "执业"]],
+    [/医生|专业人员|服务人员/, ["医生", "医师", "专业人员", "服务人员", "团队"]],
+    [/服务项目|服务项目和适用范围|服务项目$/, ["项目", "服务项目", "适用范围"]],
+    [/风险|注意事项|流程|卫生/, ["风险", "注意事项", "流程", "卫生"]],
+    [/设备|耗材/, ["设备", "耗材", "仪器", "品牌"]],
+    [/咨询|预约|收费|随访|到店|转化/, ["咨询", "预约", "收费", "随访", "到店", "联系"]],
+    [/案例|评价/, ["案例", "评价", "口碑"]],
+    [/投诉|纠纷|售后/, ["投诉", "纠纷", "售后"]],
+    [/地图|POI|地址|营业时间/, ["地图", "poi", "地址", "营业时间"]],
+    [/官网|官方账号|官方入口/, ["官网", "官方网站", "官方账号", "官方"]],
+    [/用户决策|常见问题|客户决策/, ["常见问题", "faq", "决策", "选择"]],
+    [/产品或服务|服务项目/, ["产品", "服务", "项目"]],
+    [/信任|资质|证明/, ["资质", "认证", "证明", "证书"]],
+  ].find(([pattern]) => (pattern as RegExp).test(slot));
+  return (matched?.[1] as string[] | undefined) ?? [];
+}
+
 function hasEvidenceFor(slot: string, evidence: readonly EvidenceItem[]) {
-  const text = slot.toLowerCase();
-  return evidence.filter((item) => `${item.title} ${item.snippet}`.toLowerCase().includes(text.slice(0, 2))).map((item) => item.id);
+  const keywords = slotKeywords(slot);
+  if (keywords.length === 0) return [];
+  return evidence
+    .filter((item) => {
+      const text = `${item.title} ${item.snippet}`.toLowerCase();
+      return keywords.some((keyword) => text.includes(keyword.toLowerCase()));
+    })
+    .map((item) => item.id);
 }
 
 function matrix(policy: Policy, evidence: readonly EvidenceItem[], searchCompleted: boolean): SourceCoverageSlotV1[] {
@@ -93,7 +119,7 @@ export function buildUniversalLimitedReport(input: DiagnosisInput, evidence: rea
   }));
   return {
     readinessScore: { score: checkedWeight >= 0.4 ? Math.round(weighted / checkedWeight) : null, scoreCoverage: checkedWeight, checkedWeight,
-      summary: checkedWeight >= 0.4 ? "该指数用于反映本次公开信息建设基础，不代表AI排名、市场份额或经营表现。" : "扫描范围不足，暂不显示准备度分。",
+      summary: checkedWeight >= 0.4 ? "该指数用于反映本次公开信息建设基础，不代表AI排名、市场份额或经营表现。" : "扫描范围不足，暂不显示准备度分。", // security-check:allow required public boundary copy
       dimensions, algorithmVersion: "public-information-readiness-score.v1" },
     sourceCoverageMatrix: coverage,
     verticalPolicy: { selectedPack: selected.policy.id, resolutionStatus: selected.resolutionStatus, requiredSlots: [...selected.policy.slots], prohibitedClaims: [...selected.policy.prohibitedClaims] },
