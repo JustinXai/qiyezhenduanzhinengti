@@ -34,9 +34,9 @@ export const ZH_SUPPORT_LABEL: Record<Exclude<EvidenceSupportLevel, "UNSUPPORTED
 };
 
 export const ZH_SOURCE_TYPE_LABEL: Record<EvidenceItem["sourceType"], string> = {
-  FIRST_PARTY_EVIDENCE: "企业官方来源",
-  OBSERVED_WEB_EVIDENCE: "公开网络来源",
-  COMPETITOR_WEB_EVIDENCE: "竞品官方来源",
+  FIRST_PARTY_EVIDENCE: "企业官方证据",
+  OBSERVED_WEB_EVIDENCE: "公开网络证据",
+  COMPETITOR_WEB_EVIDENCE: "竞品公开证据",
 };
 
 /** Evidence content language → customer-facing origin note. */
@@ -67,3 +67,51 @@ export const ZH_DIMENSION_LABEL: Record<ScoreDimensionKey, string> = {
 export function zhSupportLabel(level: EvidenceSupportLevel): string {
   return level === "UNSUPPORTED" ? ZH_SUPPORT_LABEL.CONTEXT_ONLY : ZH_SUPPORT_LABEL[level];
 }
+
+// ---------------------------------------------------------------------------
+// Round-7: PublicInformationOpportunity 标签映射
+// 来源于 docs/product/ROUND7_QUICK_FIRST_SME_CONVERSION.md
+// ---------------------------------------------------------------------------
+
+/** PublicInformationOpportunity 覆盖状态 → 公开中文标签 */
+export const ZH_PUBLIC_INFO_COVERAGE_LABEL: Record<
+  "PARTIALLY_SUPPORTED" | "UNANSWERED",
+  string
+> = {
+  PARTIALLY_SUPPORTED: "部分覆盖",
+  UNANSWERED: "未覆盖",
+};
+
+/**
+ * Round-7 首屏固定模块标题
+ * 源自 docs/product/ROUND7_QUICK_FIRST_SME_CONVERSION.md §四
+ */
+export const QUICK_FIRST_SCREEN_MODULE = {
+  /** 一句话诊断结论 */
+  headline: "一句话诊断结论",
+  /** GEO基础诊断指数 */
+  score: "GEO基础诊断指数",
+  /** 测量构成 */
+  composition: "实测/公开网页估算构成",
+  /** 最重要的完善方向 */
+  topOpportunity: "最重要的完善方向",
+  /** 主 CTA */
+  primaryCta: "预约报告解读",
+} as const;
+
+/**
+ * Round-7 Quick 模块标题（用于后续模块）
+ * 动态显示，空模块隐藏
+ */
+export const QUICK_MODULE_TITLES = {
+  /** 客户决策问题覆盖 */
+  customerQuestionCoverage: "客户决策问题覆盖",
+  /** 条件性竞品观察 */
+  competitorObservation: "竞品观察",
+  /** 优先完善方向 */
+  priorityDirections: "优先完善方向",
+  /** 建议推进路径 */
+  improvementPath: "建议推进路径",
+  /** 下一步 */
+  nextSteps: "下一步",
+} as const;

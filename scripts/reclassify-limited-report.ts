@@ -5,6 +5,7 @@ import {
   evaluateCompletionProfile,
 } from "../src/diagnosis/orchestration/control-plane";
 import { parseDiagnosisInput, type DiagnosisInput } from "../src/runtime/diagnosis-input";
+import { buildUniversalLimitedReport } from "../src/diagnosis/limited-report/universal-limited-report";
 import { openMigratedDatabase } from "../src/storage/migrate";
 import { SqliteStorageAdapter } from "../src/storage/sqlite-adapter";
 import {
@@ -36,6 +37,7 @@ function inputFromStoredJson(serialized: string): DiagnosisInput {
     productOrService:
       typeof raw.productOrService === "string" ? raw.productOrService : undefined,
     targetRegion: typeof raw.targetRegion === "string" ? raw.targetRegion : undefined,
+    customerQuestions: Array.isArray(raw.customerQuestions) ? raw.customerQuestions : undefined,
   };
   const parsed = parseDiagnosisInput(candidate);
   if (!parsed.ok) {
@@ -58,12 +60,6 @@ async function main(): Promise<void> {
   if (!current) throw new Error("REPORT_NOT_FOUND");
 
   const canonical = DiagnosisReport.parse(current.canonical);
-  if (canonical.executionMode === "LIMITED_PUBLIC_SCAN") {
-    console.log(JSON.stringify({ diagnosisId, status: "ALREADY_LIMITED" }));
-    db.close();
-    return;
-  }
-
   const input = inputFromStoredJson(request.inputJson);
   const usage = (await storage.getProviderUsage(diagnosisId)).map((u) => ({
     provider: u.provider,
@@ -97,13 +93,20 @@ async function main(): Promise<void> {
     truthGuardPassed: false,
     evaluatedAt: new Date().toISOString(),
   });
-  const limited = DiagnosisReport.parse(applyCompletionProfileToReport(canonical, profile));
+  const limited = DiagnosisReport.parse({
+    ...applyCompletionProfileToReport(canonical, profile),
+    limitedReport: buildUniversalLimitedReport(
+      input,
+      canonical.evidence,
+      usage.some((u) => u.provider === "bocha" && (u.callCount ?? 0) > 0),
+    ),
+  });
 
   const appended = await revisions.append({
     diagnosisId,
     expectedParentReportId: current.reportId,
-    revisionReason: "EXECUTION_COMPLETENESS_RECLASSIFICATION",
-    algorithmVersion: profile.algorithmVersion,
+    revisionReason: "UNIVERSAL_LIMITED_REPORT_ENRICHMENT",
+    algorithmVersion: "universal-limited-report.v1",
     canonicalJson: JSON.stringify(limited),
     prunedClaims: [],
   });

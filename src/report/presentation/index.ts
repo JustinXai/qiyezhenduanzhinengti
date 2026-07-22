@@ -4,6 +4,7 @@ export {
   toQuickReportViewModel,
   toDeepReportViewModel,
   toEvidenceViewModel,
+  toEnterpriseReportViewModel,
   sanitizeEvidenceUrl,
   COMPETITOR_INSUFFICIENT_EVIDENCE_REASON,
   COMPETITOR_NOT_PROVIDED_REASON,

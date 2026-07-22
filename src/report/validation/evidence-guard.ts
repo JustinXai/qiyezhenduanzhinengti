@@ -29,9 +29,22 @@ import type {
   ClaimEvidenceRelation,
   EvidenceCoverage,
 } from "../../contracts/claim-evidence";
+import type { ClaimPublicationSourceContext } from "../../contracts/independent-support-source";
 import type { GuardResult, GuardRuleCode, GuardViolation } from "../../contracts/guard-types";
-import { classifyPolarity, extractVerifiableClaims } from "../../diagnosis/verification";
-import { countIndependentEvidenceDomains } from "./evidence-independence";
+import { extractVerifiableClaims } from "../../diagnosis/verification";
+import {
+  evaluateClaimPublication,
+  negativeScopeTextFromReport,
+  publicationSourceContextFromReport,
+  type ClaimPublicationCoverageScope,
+  type ClaimPublicationDecision,
+} from "./claim-publication-policy";
+import {
+  evaluateCompetitorGapPublication,
+  FAIL_CLOSED_COMPETITOR_GAP_METADATA,
+  type CompetitorGapPublicationContextById,
+  type CompetitorGapPublicationReason,
+} from "./competitor-gap-publication-policy";
 
 type GatedKind = "coreIssue" | "strength" | "geoOpportunity";
 
@@ -48,12 +61,21 @@ export interface EvidenceGuardInput {
   report: DiagnosisReport;
   relations: readonly ClaimEvidenceRelation[];
   coverage: EvidenceCoverage;
+  /** Explicit entity resolution for source independence; legacy callers default safely. */
+  sourceContext?: ClaimPublicationSourceContext;
+  coverageScope?: ClaimPublicationCoverageScope;
+  /** Resolver/verifier comparison metadata keyed by canonical competitor gap id. */
+  competitorGapContexts?: CompetitorGapPublicationContextById;
 }
 
 export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
   const { report, relations, coverage } = input;
   const violations: GuardViolation[] = [];
-  const evidenceIds = new Set(report.evidence.map((e) => e.id));
+  const sourceContext = publicationSourceContextFromReport(
+    report,
+    coverage,
+    input.sourceContext,
+  );
 
   const relationsByClaim = new Map<string, ClaimEvidenceRelation[]>();
   for (const r of relations) {
@@ -62,8 +84,8 @@ export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
     relationsByClaim.set(r.claimId, list);
   }
 
-  // Only the three gated claim kinds are publish-gated (competitorGaps are
-  // verified for traceability but not §4-gated, preserving prior behavior).
+  // The shared Claim policy gates these three claim kinds. Competitor gaps are
+  // evaluated separately below by CompetitorGapPublicationPolicyV1.
   const claims = extractVerifiableClaims(report).filter(
     (c): c is typeof c & { kind: GatedKind } => c.kind !== "competitorGap",
   );
@@ -71,12 +93,40 @@ export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
   for (const claim of claims) {
     evaluateClaim(
       claim,
+      negativeScopeTextFromReport(report, claim.kind, claim.id),
       relationsByClaim.get(claim.id) ?? [],
-      evidenceIds,
       report.evidence,
       coverage,
+      sourceContext,
+      input.coverageScope,
       violations,
     );
+  }
+
+  for (const gap of report.competitorGaps) {
+    const result = evaluateCompetitorGapPublication({
+      gap: {
+        id: gap.id,
+        competitorName: gap.competitorName,
+        gapStatement: gap.gapStatement,
+        evidenceIds: gap.evidenceIds,
+      },
+      evidence: report.evidence,
+      relations: relationsByClaim.get(gap.id) ?? [],
+      sourceContext,
+      metadata:
+        input.competitorGapContexts?.[gap.id] ??
+        FAIL_CLOSED_COMPETITOR_GAP_METADATA,
+    });
+    if (result.outcome === "PUBLISH") continue;
+    violations.push({
+      guard: "evidence",
+      rule: competitorGapGuardRule(result.reason),
+      message: `competitorGap ${gap.id} 未通过竞品差距发布策略(${result.reason}; CURRENT_RELATIONS=${result.currentCompanyRelationEvidenceIds.length}, COMPETITOR_OFFICIAL_RELATIONS=${result.competitorOfficialRelationEvidenceIds.length}, DIMENSION_MATCHED=${result.comparisonDimensionMatched}, COVERAGE=${result.coverageStatus})`,
+      claimType: "competitorGap",
+      claimId: gap.id,
+      evidenceIds: [...gap.evidenceIds],
+    });
   }
 
   checkDuplicateOpportunityRelations(report, relationsByClaim, violations);
@@ -84,138 +134,79 @@ export function evidenceGuard(input: EvidenceGuardInput): GuardResult {
   return violations.length === 0 ? { ok: true } : { ok: false, violations };
 }
 
+function competitorGapGuardRule(reason: CompetitorGapPublicationReason): GuardRuleCode {
+  const rules: Record<
+    Exclude<CompetitorGapPublicationReason, "PUBLISHED">,
+    GuardRuleCode
+  > = {
+    UNVERIFIED_COMPETITOR_ASSERTION:
+      "COMPETITOR_GAP_UNVERIFIED_COMPETITOR_ASSERTION",
+    MISSING_COMPETITOR_OFFICIAL_RELATION:
+      "COMPETITOR_GAP_MISSING_COMPETITOR_OFFICIAL_RELATION",
+    MISSING_CURRENT_COMPANY_RELATION:
+      "COMPETITOR_GAP_MISSING_CURRENT_COMPANY_RELATION",
+    COMPETITOR_ENTITY_NOT_RESOLVED:
+      "COMPETITOR_GAP_COMPETITOR_ENTITY_NOT_RESOLVED",
+    COMPARISON_DIMENSION_MISMATCH:
+      "COMPETITOR_GAP_COMPARISON_DIMENSION_MISMATCH",
+    COMPETITOR_COVERAGE_NOT_ESTABLISHED:
+      "COMPETITOR_GAP_COMPETITOR_COVERAGE_NOT_ESTABLISHED",
+  };
+  return reason === "PUBLISHED"
+    ? "COMPETITOR_GAP_UNVERIFIED_COMPETITOR_ASSERTION"
+    : rules[reason];
+}
+
 function evaluateClaim(
   claim: { id: string; kind: GatedKind; text: string; candidateEvidenceIds: string[] },
+  negativeScopeText: string,
   rels: ClaimEvidenceRelation[],
-  evidenceIds: Set<string>,
   evidence: DiagnosisReport["evidence"],
   coverage: EvidenceCoverage,
+  sourceContext: ClaimPublicationSourceContext,
+  coverageScope: ClaimPublicationCoverageScope | undefined,
   violations: GuardViolation[],
 ): void {
-  const polarity = classifyPolarity({ kind: claim.kind, text: claim.text });
-
-  // §4.6 — referential + verification integrity.
-  let integrityBroken = false;
-  for (const id of claim.candidateEvidenceIds) {
-    if (!evidenceIds.has(id)) {
-      integrityBroken = true;
-      violations.push({
-        guard: "evidence",
-        rule: "TRUTH_4_6_EVIDENCE_ID_NOT_FOUND",
-        message: `${claim.kind} ${claim.id} 引用了不存在的 Evidence:${id}`,
-        claimType: claim.kind,
-        claimId: claim.id,
-        evidenceIds: [id],
-      });
-    } else if (!rels.some((r) => r.evidenceId === id)) {
-      integrityBroken = true;
-      violations.push({
-        guard: "evidence",
-        rule: "TRUTH_4_6_EVIDENCE_ID_NOT_FOUND",
-        message: `${claim.kind} ${claim.id} 的候选证据 ${id} 缺少验证关系(未经 Claim–Evidence 验证)`,
-        claimType: claim.kind,
-        claimId: claim.id,
-        evidenceIds: [id],
-      });
-    }
-  }
-  for (const r of rels) {
-    if (!evidenceIds.has(r.evidenceId)) {
-      integrityBroken = true;
-      violations.push({
-        guard: "evidence",
-        rule: "TRUTH_4_6_EVIDENCE_ID_NOT_FOUND",
-        message: `${claim.kind} ${claim.id} 的关系引用了不存在的 Evidence:${r.evidenceId}`,
-        claimType: claim.kind,
-        claimId: claim.id,
-        evidenceIds: [r.evidenceId],
-      });
-    }
-  }
-  if (integrityBroken) return;
-
-  // §4.5 — an UNSUPPORTED relation must never back a published claim.
-  const unsupported = rels.filter((r) => r.supportLevel === "UNSUPPORTED");
-  if (unsupported.length > 0) {
-    violations.push({
-      guard: "evidence",
-      rule: "TRUTH_4_5_UNSUPPORTED_EVIDENCE_USED",
-      message: `${claim.kind} ${claim.id} 存在被判定为 UNSUPPORTED 的证据关系:${unsupported
-        .map((r) => r.evidenceId)
-        .join(", ")}`,
-      claimType: claim.kind,
-      claimId: claim.id,
-      evidenceIds: unsupported.map((r) => r.evidenceId),
-    });
-  }
-
-  const usable = rels.filter((r) => r.supportLevel !== "UNSUPPORTED");
-  const direct = usable.filter((r) => r.supportLevel === "DIRECT_SUPPORT").length;
-  const partial = usable.filter((r) => r.supportLevel === "PARTIAL_SUPPORT").length;
-  const independentPartial = countIndependentEvidenceDomains(
-    usable
-      .filter((relation) => relation.supportLevel === "PARTIAL_SUPPORT")
-      .map((relation) => relation.evidenceId),
+  const result = evaluateClaimPublication({
+    claim: {
+      id: claim.id,
+      kind: claim.kind,
+      text: claim.text,
+      negativeScopeText,
+      evidenceIds: claim.candidateEvidenceIds,
+    },
+    relations: rels,
     evidence,
-  );
-  const contextOnly = usable.filter((r) => r.supportLevel === "CONTEXT_ONLY").length;
-
-  if (polarity === "NEGATIVE_MISSING") {
-    const coverageBacked = usable.filter(
-      (r) =>
-        r.basis === "MEASUREMENT_BOUNDARY" &&
-        (r.supportLevel === "PARTIAL_SUPPORT" || r.supportLevel === "DIRECT_SUPPORT"),
-    ).length;
-    if (coverage.boundaryEstablished && coverageBacked >= 1) return; // satisfied
-
-    if (!coverage.boundaryEstablished) {
-      violations.push({
-        guard: "evidence",
-        rule: REQUIREMENT_RULE[claim.kind],
-        message: `${claim.kind} ${claim.id} 为负面/缺失型判断,但本次没有建立测量边界(coverage 未建立),不得作为客户事实发布`,
-        claimType: claim.kind,
-        claimId: claim.id,
-        evidenceIds: claim.candidateEvidenceIds,
-      });
-      return;
-    }
-    // Coverage exists but nothing coverage-backed (only context / non-first-party).
-    violations.push({
-      guard: "evidence",
-      rule: "TRUTH_4_4_CONTEXT_ONLY_INSUFFICIENT",
-      message: `${claim.kind} ${claim.id} 为负面/缺失型判断,缺少受控范围内首方页面的边界支持,不足以单独支撑`,
-      claimType: claim.kind,
-      claimId: claim.id,
-      evidenceIds: usable.map((r) => r.evidenceId),
-    });
-    return;
-  }
-
-  // Positive enterprise-capability claim.
-  const meets =
-    claim.kind === "coreIssue" ? direct >= 1 : direct >= 1 || independentPartial >= 2;
-  if (meets) return;
-
-  if (contextOnly > 0 && direct === 0 && partial === 0) {
-    violations.push({
-      guard: "evidence",
-      rule: "TRUTH_4_4_CONTEXT_ONLY_INSUFFICIENT",
-      message: `${claim.kind} ${claim.id} 仅有 CONTEXT_ONLY 关系,不足以单独支撑核心事实`,
-      claimType: claim.kind,
-      claimId: claim.id,
-      evidenceIds: usable.map((r) => r.evidenceId),
-    });
-    return;
-  }
+    coverage,
+    sourceContext,
+    coverageScope,
+  });
+  if (result.outcome === "PUBLISH") return;
 
   violations.push({
     guard: "evidence",
-    rule: REQUIREMENT_RULE[claim.kind],
-    message: `${claim.kind} ${claim.id} 未达到发布所需的证据支持等级(DIRECT=${direct}, PARTIAL=${partial}, INDEPENDENT_PARTIAL_DOMAINS=${independentPartial})`,
+    rule: guardRuleForDecision(claim.kind, result),
+    message: `${claim.kind} ${claim.id} 未通过统一发布策略(${result.rule}; DIRECT=${result.directCount}, PARTIAL=${result.partialCount}, CONTEXT=${result.contextCount}, INDEPENDENT_PARTIAL_SOURCES=${result.independentPartialSourceCount}, COVERAGE=${result.coverageStatus})`,
     claimType: claim.kind,
     claimId: claim.id,
     evidenceIds: claim.candidateEvidenceIds,
   });
+}
+
+function guardRuleForDecision(
+  kind: GatedKind,
+  result: ClaimPublicationDecision,
+): GuardRuleCode {
+  if (result.rule === "EVIDENCE_REFERENCE_INVALID") {
+    return "TRUTH_4_6_EVIDENCE_ID_NOT_FOUND";
+  }
+  if (result.rule === "UNSUPPORTED_EVIDENCE") {
+    return "TRUTH_4_5_UNSUPPORTED_EVIDENCE_USED";
+  }
+  if (result.rule === "CONTEXT_ONLY_INSUFFICIENT") {
+    return "TRUTH_4_4_CONTEXT_ONLY_INSUFFICIENT";
+  }
+  return REQUIREMENT_RULE[kind];
 }
 
 // §4.8 — block when >= threshold GEO opportunities reuse the identical relation

@@ -181,14 +181,15 @@ function projectQuick(report: DiagnosisReportType): QuickReportViewModelType {
     topStrength: report.strengths[0] ?? null,
     topIssue,
     topOpportunity: report.geoOpportunities[0] ?? null,
-    aiVisibilitySamples: validSamples,
     competitorGapSummary:
       report.competitorGaps.length > 0
         ? { available: true, gaps: report.competitorGaps }
         : { available: false, reason: "已收到竞品输入,但本次公开证据不足,暂不做确定性比较。" },
-    coreIssues: report.coreIssues.slice(0, 3),
+    // Round-8 FINAL: new fields
+    questionCoverageStats: { total: 0, supported: 0, partial: 0, unanswered: 0, providerFailed: 0 },
+    questionCoverageRestraintNote: null,
+    priorityDirections: [],
     demonstrationFix: report.demonstrationFix,
-    geoOpportunities: report.geoOpportunities.slice(0, 3),
   };
 }
 
@@ -300,9 +301,9 @@ async function main(): Promise<void> {
   const quick = QuickReportViewModel.parse(projectQuick(report));
   const deep = DeepReportViewModel.parse(projectDeep(report));
   const evidence = EvidenceViewModel.parse(projectEvidence(report));
-  if (quick.aiVisibilitySamples.length > 2) fail("Quick showed more than 2 AI samples");
+  // Round-8 FINAL: aiVisibilitySamples and coreIssues removed from Quick.
   ok(
-    `presentation: Quick(${quick.coreIssues.length} issues, ${quick.aiVisibilitySamples.length} AI samples) ` +
+    `presentation: Quick(${quick.priorityDirections.length} directions) ` +
       `/ Deep(${deep.aiVisibilityTests.length} tests) / Evidence(${evidence.items.length} items) projected + validated`,
   );
   seam("real ReportPresentationService lives in src/report/presentation (Agent F); smoke projects minimally.");

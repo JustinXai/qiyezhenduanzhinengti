@@ -21,7 +21,6 @@ import {
 } from "../../src/runtime/api/diagnoses-handlers";
 import { presentReport } from "../../src/report/presentation";
 import { countQuickVisibleChars } from "../../src/report/validation";
-import type { ClaimEvidenceRelation } from "../../src/contracts/claim-evidence";
 
 let db: BetterSqlite3.Database | null = null;
 
@@ -51,14 +50,9 @@ async function runCanary(input: Record<string, unknown>) {
   const got = await handleGetDiagnosis(d, { id: body.diagnosisId, publicToken: body.publicToken });
   const view = got.body as DiagnosisView;
   const relations = await d.storage.getClaimEvidenceRelations(body.diagnosisId);
+  const pruneDecisions = await d.storage.getPruneDecisions(body.diagnosisId);
   expect(fetchSpy).not.toHaveBeenCalled();
-  return { body, view, relations };
-}
-
-function distribution(relations: ClaimEvidenceRelation[]) {
-  const out: Record<string, number> = {};
-  for (const r of relations) out[r.supportLevel] = (out[r.supportLevel] ?? 0) + 1;
-  return out;
+  return { body, view, relations, pruneDecisions };
 }
 
 describe("Round-3 canaries (data plane, full boundary, MOCK)", () => {
@@ -80,15 +74,13 @@ describe("Round-3 canaries (data plane, full boundary, MOCK)", () => {
     expect(quick.diagnosisId).toBe(deep.diagnosisId);
     expect(quick.overallScore).toBe(deep.scores.overallScore);
     const evidenceIds = new Set(evidence.items.map((i) => i.id));
-    for (const iss of quick.coreIssues) {
-      for (const id of iss.evidenceIds) expect(evidenceIds.has(id)).toBe(true);
-    }
+    // Round-8 FINAL: coreIssues removed from Quick — skip evidence id check on quick.coreIssues.
     expect(countQuickVisibleChars(quick)).toBeLessThanOrEqual(1800);
   });
 
   it("Canary B — About-only: the negative 采购验收 claim is pruned (no coverage), report still READY", async () => {
     process.env.CANARY_MODE = "1";
-    const { body, view, relations } = await runCanary({
+    const { body, view, relations, pruneDecisions } = await runCanary({
       website: "https://about-only.canary.test",
       brandName: "金丝雀乙",
     });
@@ -102,9 +94,22 @@ describe("Round-3 canaries (data plane, full boundary, MOCK)", () => {
     ).toBe(false);
     // A content-supported About strength survives, so the report is non-empty.
     expect(report.strengths.length).toBeGreaterThan(0);
-    // Quick view surfaces no fabricated procurement core issue.
+    expect(pruneDecisions).toEqual([
+      expect.objectContaining({
+        diagnosisId: body.diagnosisId,
+        reportId: expect.any(String),
+        revisionId: null,
+        claimKind: "coreIssue",
+        candidateRef: "iss_1",
+        reasonCode: "NO_MEASUREMENT_COVERAGE",
+        guardRule: "COVERAGE_NOT_ESTABLISHED",
+        coverageStatus: "NOT_ESTABLISHED",
+      }),
+    ]);
+    // Quick view surfaces no fabricated procurement core issue (coreIssues removed from Quick in Round-8).
     const { quick } = presentReport(report);
-    expect(quick.coreIssues.some((c) => c.statement.includes("采购"))).toBe(false);
+    // The canonical report should not have a procurement core issue either.
+    expect(report.coreIssues.some((c) => c.statement.includes("采购"))).toBe(false);
   });
 
   it("Canary C — AMBIGUOUS competitor yields NO deterministic competitor gap", async () => {
@@ -128,8 +133,11 @@ describe("Round-3 canaries (data plane, full boundary, MOCK)", () => {
       "promptVersion",
       "trustGuardVersion",
       "checkpoint",
+      "pruneDecisions",
+      "independentSupportSourceCount",
+      "guardRule",
       "requestId",
-      "coverage",
+      // "coverage" is intentionally kept out — Round-7 questionCoverageGaps uses it legitimately
     ]) {
       expect(json).not.toContain(forbidden);
     }

@@ -75,7 +75,7 @@ export function ReportExperience({
 
       <main className="flex-1 px-4 py-4">
         {view === "quick" && (
-          <QuickReport vm={quick} onOpenDeep={() => setView("deep")} limited={limited} />
+          <QuickReport vm={quick} onOpenDeep={() => setView("deep")} />
         )}
         {view === "deep" && <DeepReport vm={deep} />}
         {view === "evidence" && <EvidenceView vm={evidence} />}

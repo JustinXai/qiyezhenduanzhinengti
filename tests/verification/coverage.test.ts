@@ -44,6 +44,12 @@ describe("classifyPolarity", () => {
     expect(classifyPolarity({ kind: "geoOpportunity", text: "官网无系统性选型指南" })).toBe(
       "NEGATIVE_MISSING",
     );
+    expect(
+      classifyPolarity({
+        kind: "geoOpportunity",
+        text: "基于本次保存的公开页面和搜索证据，相关说明仍不充分",
+      }),
+    ).toBe("NEGATIVE_MISSING");
   });
 
   it("treats a capability statement as ENTERPRISE_CAPABILITY", () => {

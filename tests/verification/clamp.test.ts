@@ -39,10 +39,15 @@ const rawDirect: RawVerdict = {
 };
 
 describe("clampVerdict — deterministic support ceiling", () => {
-  // Test 1: first-party About page cannot DIRECTLY support a "采购缺失" claim.
-  it("negative/missing claim: first-party in-scope page is coverage-backed PARTIAL, never DIRECT", () => {
+  it("negative/missing claim preserves a content-backed DIRECT verdict when coverage is established", () => {
     const out = clampVerdict(rawDirect, ev(), "NEGATIVE_MISSING", coverage());
-    expect(out.supportLevel).not.toBe("DIRECT_SUPPORT");
+    expect(out.supportLevel).toBe("DIRECT_SUPPORT");
+    expect(out.basis).toBe("MEASUREMENT_BOUNDARY");
+  });
+
+  it("negative/missing claim is not upgraded by coverage alone", () => {
+    const rawPartial: RawVerdict = { ...rawDirect, supportLevel: "PARTIAL_SUPPORT" };
+    const out = clampVerdict(rawPartial, ev(), "NEGATIVE_MISSING", coverage());
     expect(out.supportLevel).toBe("PARTIAL_SUPPORT");
     expect(out.basis).toBe("MEASUREMENT_BOUNDARY");
   });

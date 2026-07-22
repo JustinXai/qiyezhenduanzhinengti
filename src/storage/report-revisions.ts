@@ -1,6 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import { DiagnosisReport, type DiagnosisReport as DiagnosisReportType } from "../contracts";
 import type { DroppedClaimRecord } from "../contracts/claim-reason-codes";
+import type {
+  ClaimPublicationDecisionCandidateKey,
+  ClaimPublicationDecisionRecordInput,
+  PruneDecisionRecordInput,
+} from "./adapter";
+import {
+  insertClaimPublicationDecisionBatch,
+  withRevisionPublicationLineage,
+} from "./claim-publication-decisions";
 import type { SqliteDatabase } from "./migrate";
 
 export interface ReportRevisionRecord {
@@ -34,6 +43,18 @@ export interface AppendReportRevisionInput {
   algorithmVersion: string;
   canonicalJson: string;
   prunedClaims: DroppedClaimRecord[];
+  pruneDecisions?: Array<
+    Omit<PruneDecisionRecordInput, "id" | "reportId" | "revisionId">
+  >;
+  claimPublicationDecisionBatch?: {
+    expectedCandidates: ClaimPublicationDecisionCandidateKey[];
+    decisions: Array<
+      Omit<
+        ClaimPublicationDecisionRecordInput,
+        "id" | "reportId" | "revisionId" | "diagnosisId"
+      >
+    >;
+  };
 }
 
 export interface ReportRevisionRepository {
@@ -349,6 +370,47 @@ export class SqliteReportRevisionRepository implements ReportRevisionRepository 
           Math.floor(record.createdAt.getTime() / 1000),
         );
       });
+      const insertDecision = this.db.prepare(
+        `INSERT INTO prune_decisions
+           (id, diagnosis_id, report_id, revision_id, stage_run_id, claim_kind,
+            candidate_ref, source_issue_id, reason_code, guard_rule,
+            evidence_ids_json, independent_support_source_count, direct_count,
+            partial_count, context_count, coverage_status, created_at,
+            algorithm_version)
+         VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      (input.pruneDecisions ?? []).forEach((decision, index) => {
+        insertDecision.run(
+          `${record.id}:prune-decision:${index + 1}`,
+          record.diagnosisId,
+          record.id,
+          decision.stageRunId,
+          decision.claimKind,
+          decision.candidateRef,
+          decision.sourceIssueId,
+          decision.reasonCode,
+          decision.guardRule,
+          JSON.stringify(decision.evidenceIds),
+          decision.independentSupportSourceCount,
+          decision.directCount,
+          decision.partialCount,
+          decision.contextCount,
+          decision.coverageStatus,
+          Math.floor(decision.createdAt.getTime() / 1000),
+          decision.algorithmVersion,
+        );
+      });
+      if (input.claimPublicationDecisionBatch) {
+        insertClaimPublicationDecisionBatch(
+          this.db,
+          withRevisionPublicationLineage({
+            revisionId: record.id,
+            diagnosisId: record.diagnosisId,
+            expectedCandidates: input.claimPublicationDecisionBatch.expectedCandidates,
+            decisions: input.claimPublicationDecisionBatch.decisions,
+          }),
+        );
+      }
       return record;
     });
     return append();

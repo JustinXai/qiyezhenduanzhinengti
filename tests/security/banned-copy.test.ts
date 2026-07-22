@@ -19,7 +19,7 @@ import { BANNED_TERMS, findBannedTerms } from "../fixtures/banned-terms";
 const PRIMARY_CTA = "预约报告解读";
 const SECONDARY_CTA = "获取企业GEO优化方案";
 /** Frozen综合分命名 per docs/REPORT_CONTRACT.md §1. */
-const CANONICAL_SCORE_NAME = "GEO可见度基础指数";
+const CANONICAL_SCORE_NAME = "GEO基础诊断指数";
 
 /** Deep-collect every string value in an arbitrary JSON-like value. */
 function collectStrings(value: unknown, acc: string[] = []): string[] {

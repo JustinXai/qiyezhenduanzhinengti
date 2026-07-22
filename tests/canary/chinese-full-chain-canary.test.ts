@@ -134,7 +134,7 @@ function stagesFor(brand: string): (ev: readonly EvidenceItem[]) => Record<strin
           { statement: `${brand}官网清晰展示了产品线与目标场景`, businessImpact: "客户能快速判断是否对口", claimType: "DIAGNOSTIC_INFERENCE", evidenceIds: ids },
         ],
         coreIssues: [
-          { statement: `本次检查的公开页面中,未发现${brand}官网面向购买决策的结构化问答内容`, businessImpact: "高意向客户获取关键信息成本高", claimType: "DIAGNOSTIC_INFERENCE", fixDirection: "补充选型与售后FAQ", evidenceIds: ids },
+          { statement: `本次检查的公开页面中未发现${brand}官网面向购买决策的结构化问答内容`, businessImpact: "高意向客户获取关键信息成本高", claimType: "DIAGNOSTIC_INFERENCE", fixDirection: "补充选型与售后FAQ", evidenceIds: ids },
         ],
         geoOpportunities: [
           {
@@ -142,7 +142,7 @@ function stagesFor(brand: string): (ev: readonly EvidenceItem[]) => Record<strin
             businessImpact: "承接高意向搜索与问答流量",
             claimType: "DIAGNOSTIC_INFERENCE",
             customerQuestion: "运动相机怎么选购比较稳妥。",
-            contentGap: "官网缺少选型指南",
+            contentGap: "本次已检查的公开页面和搜索结果中未发现选型指南",
             sourceIssueId: "iss_1",
             recommendedAction: "在官网新增选型FAQ专区,覆盖防抖、续航与配件兼容三类高频问题",
             priorityReason: "该问题有第一方证据支撑,且直接影响购买决策阶段的转化",
@@ -234,7 +234,7 @@ describe("full-chain Canary A — 中文企业,中文证据充分", () => {
         item("https://www.zhmyx.cn/products", "智慧影像 产品中心", "运动相机、全景相机与配件产品线。"),
         item("https://media-example.cn/report", "行业观察:运动影像市场", "中文行业媒体报道运动影像市场趋势。"),
       ],
-      crawlBody: "智慧影像官网:运动相机、全景相机与配件,支持全国联保与售后服务。",
+      crawlBody: "智慧影像官网面向购买决策提供运动相机、全景相机与配件信息，支持全国联保与售后服务；公开页面未见结构化问答内容。",
     });
     expect(status).toBe("READY");
     expect(report.reportLanguage).toBe("zh-CN");

@@ -39,13 +39,7 @@ export const EvidenceSupportLevel = z.enum([
 ]);
 export type EvidenceSupportLevel = z.infer<typeof EvidenceSupportLevel>;
 
-export const EvidenceAcquisitionLevel = z.enum([
-  "SEARCH_SNIPPET",
-  "CRAWLED_PAGE",
-  "OFFICIAL_PAGE",
-  "CUSTOMER_SUPPLIED",
-  "OFFICIAL_REGISTRY",
-]);
+export const EvidenceAcquisitionLevel = z.enum(["SEARCH_SNIPPET", "CRAWLED_PAGE", "OFFICIAL_PAGE", "CUSTOMER_SUPPLIED", "OFFICIAL_REGISTRY"]);
 export type EvidenceAcquisitionLevel = z.infer<typeof EvidenceAcquisitionLevel>;
 
 export const ClaimType = z.enum(["DIAGNOSTIC_INFERENCE", "UNVERIFIED_HYPOTHESIS"]);
@@ -74,46 +68,31 @@ export const EvidenceItem = z.object({
   normalizedDomain: z.string().optional(),
   /** Deterministic merge key (normalizedDomain + normalized title head). */
   dedupeKey: z.string().optional(),
-  /** Production control plane: how this evidence was acquired. */
   acquisitionLevel: EvidenceAcquisitionLevel.optional(),
 });
 export type EvidenceItem = z.infer<typeof EvidenceItem>;
 
-export const DiagnosisExecutionMode = z.enum([
-  "FULL_DIAGNOSIS",
-  "LIMITED_PUBLIC_SCAN",
-  "NEEDS_CONFIRMATION",
-]);
+export const DiagnosisExecutionMode = z.enum(["FULL_DIAGNOSIS", "LIMITED_PUBLIC_SCAN", "NEEDS_CONFIRMATION"]);
 export type DiagnosisExecutionMode = z.infer<typeof DiagnosisExecutionMode>;
-
-export const PublicReportStatus = z.enum([
-  "FULL_READY",
-  "LIMITED_READY",
-  "NEEDS_CONFIRMATION",
-  "FAILED",
-]);
+export const PublicReportStatus = z.enum(["FULL_READY", "LIMITED_READY", "NEEDS_CONFIRMATION"]);
 export type PublicReportStatus = z.infer<typeof PublicReportStatus>;
-
 export const DiagnosisCompletionProfileV1 = z.object({
-  diagnosisId: z.string(),
-  entityResolutionStatus: z.string(),
-  searchCompleted: z.boolean(),
-  crawlCompleted: z.boolean(),
-  profileAnalysisCompleted: z.boolean(),
-  scoringAnalysisCompleted: z.boolean(),
-  aiVisibilityAnalysisCompleted: z.boolean(),
-  claimsAnalysisCompleted: z.boolean(),
-  claimEvidenceVerificationCompleted: z.boolean(),
-  truthGuardPassed: z.boolean(),
-  evidenceCoverageStatus: z.string(),
-  providerAvailabilityStatus: z.string(),
-  executionMode: DiagnosisExecutionMode,
-  publicReportEligible: z.boolean(),
-  completionReasons: z.array(z.string()),
-  evaluatedAt: z.string(),
-  algorithmVersion: z.literal("diagnosis-completion-profile.v1"),
+  diagnosisId: z.string(), entityResolutionStatus: z.string(), searchCompleted: z.boolean(), crawlCompleted: z.boolean(),
+  profileAnalysisCompleted: z.boolean(), scoringAnalysisCompleted: z.boolean(), aiVisibilityAnalysisCompleted: z.boolean(), claimsAnalysisCompleted: z.boolean(), claimEvidenceVerificationCompleted: z.boolean(), truthGuardPassed: z.boolean(), evidenceCoverageStatus: z.string(), providerAvailabilityStatus: z.string(), executionMode: DiagnosisExecutionMode, publicReportEligible: z.boolean(), completionReasons: z.array(z.string()), evaluatedAt: z.string(), algorithmVersion: z.literal("diagnosis-completion-profile.v1"),
 });
 export type DiagnosisCompletionProfileV1 = z.infer<typeof DiagnosisCompletionProfileV1>;
+export const PublicInformationSlotStatus = z.enum(["VERIFIED_PRESENT", "PARTIALLY_PRESENT", "VERIFIED_MISSING", "NOT_CHECKED", "PROVIDER_FAILED"]);
+export type PublicInformationSlotStatus = z.infer<typeof PublicInformationSlotStatus>;
+export const SourceCoverageStatus = z.enum(["FOUND", "PARTIAL", "NOT_FOUND_IN_CHECKED_SCOPE", "NOT_CHECKED", "CONFLICTED", "PROVIDER_FAILED"]);
+export type SourceCoverageStatus = z.infer<typeof SourceCoverageStatus>;
+export const VerticalPolicyPackId = z.enum(["GENERAL_BUSINESS", "CONSUMER_BRAND", "LOCAL_SERVICE", "LOCAL_LIFESTYLE_BEAUTY", "LOCAL_REGULATED_MEDICAL", "B2B_INDUSTRIAL"]);
+export type VerticalPolicyPackId = z.infer<typeof VerticalPolicyPackId>;
+export const PublicInformationReadinessScoreV1 = z.object({ score: z.number().min(0).max(100).nullable(), scoreCoverage: z.number().min(0).max(1), checkedWeight: z.number().min(0).max(1), summary: z.string(), dimensions: z.array(z.object({ id: z.string(), title: z.string(), weight: z.number().min(0).max(1), status: PublicInformationSlotStatus, score: z.number().min(0).max(100).nullable() })), algorithmVersion: z.literal("public-information-readiness-score.v1") });
+export type PublicInformationReadinessScoreV1 = z.infer<typeof PublicInformationReadinessScoreV1>;
+export const SourceCoverageSlotV1 = z.object({ slotId: z.string(), title: z.string(), category: z.string(), status: SourceCoverageStatus, evidenceIds: z.array(z.string()), checkedQueries: z.array(z.string()), sourceTypes: z.array(z.string()), findingSummary: z.string(), missingInformation: z.string(), recommendedAction: z.string(), confidence: z.number().min(0).max(1), requiredForFullDiagnosis: z.boolean() });
+export type SourceCoverageSlotV1 = z.infer<typeof SourceCoverageSlotV1>;
+export const LimitedReportDataV1 = z.object({ readinessScore: PublicInformationReadinessScoreV1, sourceCoverageMatrix: z.array(SourceCoverageSlotV1), verticalPolicy: z.object({ selectedPack: VerticalPolicyPackId, resolutionStatus: z.enum(["RESOLVED", "NEEDS_CONFIRMATION"]), requiredSlots: z.array(z.string()), prohibitedClaims: z.array(z.string()) }), questionCoverage: z.array(z.object({ question: z.string(), answerStatus: z.string(), missingInformation: z.string(), recommendedContent: z.string() })), contentAssetPlans: z.array(z.object({ title: z.string(), linkedQuestion: z.string(), suggestedContent: z.array(z.string()), businessValue: z.string(), evidenceBoundary: z.string() })).min(2).max(6), requestedMaterials: z.array(z.string()).max(6), evidenceCounts: z.object({ total: z.number(), searchSnippet: z.number(), crawledPage: z.number(), officialPage: z.number(), officialRegistry: z.number() }), algorithmVersion: z.literal("universal-limited-report.v1") });
+export type LimitedReportDataV1 = z.infer<typeof LimitedReportDataV1>;
 
 // ---------------------------------------------------------------------------
 // Scoring (docs/SCORE_CONTRACT.md - weights are frozen, do not change)
@@ -258,6 +237,159 @@ export const DemonstrationFix = z.object({
 export type DemonstrationFix = z.infer<typeof DemonstrationFix>;
 
 // ---------------------------------------------------------------------------
+// Round-7: PublicInformationOpportunityV1
+// 来源于 QuestionCoverageGapV1 的确定性映射，用于提示企业可以补充的公开信息
+// 不是正式 GEO Opportunity，不进入 Opportunity 统计，不影响 Truth Guard 门槛
+// ---------------------------------------------------------------------------
+
+export const PublicInformationCoverageStatus = z.enum([
+  "PARTIALLY_SUPPORTED",
+  "UNANSWERED",
+]);
+export type PublicInformationCoverageStatus = z.infer<typeof PublicInformationCoverageStatus>;
+
+/** 措辞模式：必须限定检查范围 */
+export const PublicInformationWordingMode = z.literal("WITHIN_CHECKED_SCOPE");
+export type PublicInformationWordingMode = z.infer<typeof PublicInformationWordingMode>;
+
+/**
+ * Round-8 FINAL: 问题覆盖统计 — 来源于 questionCoverageAssessments。
+ * 不是 Gap 统计，不等于 questionCoverageGaps.length。
+ * 仅从 questionCoverageAssessments 聚合，不造数。
+ */
+export const QuestionCoverageStats = z.object({
+  total: z.number().int().nonnegative(),
+  supported: z.number().int().nonnegative(),
+  partial: z.number().int().nonnegative(),
+  unanswered: z.number().int().nonnegative(),
+  providerFailed: z.number().int().nonnegative(),
+});
+export type QuestionCoverageStats = z.infer<typeof QuestionCoverageStats>;
+
+/**
+ * Round-8 FINAL: 优先完善方向 — 从 QuestionCoverageGaps 聚类生成。
+ * 最多 3 个方向，每个方向关联多个 questionIds。
+ */
+export const PriorityDirection = z.object({
+  /** 方向唯一 ID */
+  id: z.string(),
+  /** 方向标题（如「产品选购与品质说明」） */
+  title: z.string(),
+  /** 涵盖的客户问题文本列表 */
+  linkedQuestions: z.array(z.string()).min(1),
+  /** 关联的 questionId 列表（去重） */
+  linkedQuestionIds: z.array(z.string()).min(1),
+  /** 建议建设的内容资产（具体，非泛化） */
+  suggestedAsset: z.string(),
+  /** 具体商业价值 */
+  businessValue: z.string(),
+});
+export type PriorityDirection = z.infer<typeof PriorityDirection>;
+
+export const PublicInformationOpportunity = z.object({
+  /** 关联的客户问题 ID */
+  relatedQuestionId: z.string(),
+  /** 客户正在问什么 */
+  customerQuestion: z.string(),
+  /** 当前覆盖状态：仅允许 PARTIALLY_SUPPORTED 或 UNANSWERED */
+  currentCoverageStatus: PublicInformationCoverageStatus,
+  /** 在本次已检查范围内观察到的内容范围 */
+  observedScope: z.string(),
+  /** 缺失的公开信息描述 */
+  missingPublicInformation: z.string(),
+  /** 建议的具体补充动作 */
+  suggestedContentAction: z.string(),
+  /** 潜在商业价值说明 */
+  potentialBusinessValue: z.string(),
+  /** 关联的 Evidence ID 列表 */
+  evidenceIds: z.array(z.string()),
+  /** 措辞模式：必须限定检查范围 */
+  wordingMode: PublicInformationWordingMode,
+});
+export type PublicInformationOpportunity = z.infer<typeof PublicInformationOpportunity>;
+
+/** 行动建议来源标记 */
+export const PublicInformationActionSourceType = z.literal("PUBLIC_INFORMATION_ACTION");
+export type PublicInformationActionSourceType = z.infer<typeof PublicInformationActionSourceType>;
+
+/**
+ * 阶段一 Quick 行动建议
+ * 来源于 QuestionCoverageGap 的确定性映射
+ * 标记为 PUBLIC_INFORMATION_ACTION，不是正式 GEO Opportunity
+ */
+export const PublicInformationAction = z.object({
+  /** 行动建议文本 */
+  actionText: z.string(),
+  /** 来源标记：固定为 PUBLIC_INFORMATION_ACTION */
+  sourceType: PublicInformationActionSourceType,
+  /** 关联的客户问题 */
+  relatedQuestion: z.string().optional(),
+});
+export type PublicInformationAction = z.infer<typeof PublicInformationAction>;
+
+// ---------------------------------------------------------------------------
+// Round-7.1A: QuestionCoverageAssessment - 客户问题评估记录
+// ---------------------------------------------------------------------------
+
+/** 评估原因代码 */
+export const QuestionAssessmentReasonCode = z.enum([
+  "MATCHED_SIGNAL",       // 成功匹配 coverage signal
+  "NO_MATCHING_COVERAGE_SIGNAL",  // 无法匹配 coverage signal
+  "EVIDENCE_INSUFFICIENT",       // 证据不足
+]);
+export type QuestionAssessmentReasonCode = z.infer<typeof QuestionAssessmentReasonCode>;
+
+/**
+ * Round-7.1A: QuestionCoverageAssessmentV1
+ * 每个原始客户问题的评估记录
+ * 在请求创建时生成，持久化于 Diagnosis Request
+ */
+export const QuestionCoverageAssessment = z.object({
+  /** 稳定的问题 ID */
+  questionId: z.string(),
+  /** 原始问题文本 */
+  questionText: z.string(),
+  /** 匹配的 coverage criterion key（如果有） */
+  matchedCriterionKey: z.string().nullable(),
+  /** 覆盖状态 */
+  status: z.enum(["FULLY_SUPPORTED", "PARTIALLY_SUPPORTED", "UNANSWERED"]),
+  /** 关联的 Evidence ID */
+  evidenceIds: z.array(z.string()),
+  /** 评估原因代码 */
+  reasonCode: QuestionAssessmentReasonCode,
+  /** 评估时间 */
+  assessedAt: z.string(),
+  /** 算法版本 */
+  algorithmVersion: z.literal("1.0.0"),
+});
+export type QuestionCoverageAssessment = z.infer<typeof QuestionCoverageAssessment>;
+
+/**
+ * Round-7: QuestionCoverageGapV1
+ * 用于记录客户问题的覆盖情况
+ * 是 PublicInformationOpportunity 的来源
+ */
+export const QuestionCoverageGap = z.object({
+  /** 问题 ID */
+  questionId: z.string(),
+  /** 问题文本（客户正在问什么） */
+  questionText: z.string(),
+  /** 覆盖状态 */
+  coverageStatus: z.enum(["FULLY_SUPPORTED", "PARTIALLY_SUPPORTED", "UNANSWERED"]),
+  /** 观察到的内容范围 */
+  observedScope: z.string(),
+  /** 缺失的公开信息描述 */
+  missingInformation: z.string(),
+  /** 建议的具体补充动作 */
+  suggestedAction: z.string(),
+  /** 潜在商业价值 */
+  businessValue: z.string(),
+  /** 关联的 Evidence ID */
+  evidenceIds: z.array(z.string()),
+});
+export type QuestionCoverageGap = z.infer<typeof QuestionCoverageGap>;
+
+// ---------------------------------------------------------------------------
 // Canonical DiagnosisReport - the single stored report shape.
 // ---------------------------------------------------------------------------
 
@@ -295,11 +427,24 @@ export const DiagnosisReport = z.object({
   geoOpportunities: z.array(GeoOpportunity),
   demonstrationFix: DemonstrationFix.nullable(),
   evidence: z.array(EvidenceItem),
+  /**
+   * Round-7.1A: 客户问题评估记录
+   * 每个原始客户问题恰好有一个评估
+   * 在请求创建时生成并持久化
+   */
+  questionCoverageAssessments: z.array(QuestionCoverageAssessment).optional(),
+  /**
+   * Round-7: 客户问题覆盖缺口
+   * 用于生成 PublicInformationOpportunity
+   * 来源于 customerQuestionCoverage 维度的分析
+   */
+  questionCoverageGaps: z.array(QuestionCoverageGap).optional(),
   executionMode: DiagnosisExecutionMode.optional(),
   publicReportEligible: z.boolean().optional(),
   publicReportStatus: PublicReportStatus.optional(),
   completionProfile: DiagnosisCompletionProfileV1.optional(),
   reportProvenance: z.string().optional(),
+  limitedReport: LimitedReportDataV1.optional(),
 });
 export type DiagnosisReport = z.infer<typeof DiagnosisReport>;
 
@@ -335,14 +480,28 @@ export const QuickReportViewModel = z.object({
   topStrength: Strength.nullable(),
   topIssue: CoreIssue.nullable(),
   topOpportunity: GeoOpportunity.nullable(),
-  aiVisibilitySamples: z.array(AIVisibilityTest).max(2),
   competitorGapSummary: z.union([
     z.object({ available: z.literal(true), gaps: z.array(CompetitorGap) }),
     z.object({ available: z.literal(false), reason: z.string() }),
   ]),
-  coreIssues: z.array(CoreIssue).max(3),
+  /**
+   * Round-8 FINAL: 客户决策问题覆盖统计。
+   * 仅从 questionCoverageAssessments 聚合，不等于 questionCoverageGaps.length。
+   */
+  questionCoverageStats: QuestionCoverageStats,
+  /**
+   * 克制说明：当 assessment 数量与原始问题数量不一致时显示。
+   * 不造数，不补数。
+   */
+  questionCoverageRestraintNote: z.string().nullable(),
+  /**
+   * Round-8 FINAL: 优先完善方向。
+   * 最多 3 个，从 QuestionCoverageGaps 聚类生成。
+   * 具体行动直接嵌入方向卡片中，不再单独成模块。
+   */
+  priorityDirections: z.array(PriorityDirection).max(3),
+  // DemonstrationFix — 仅当有可信证据时存在。
   demonstrationFix: DemonstrationFix.nullable(),
-  geoOpportunities: z.array(GeoOpportunity).max(3),
 });
 export type QuickReportViewModel = z.infer<typeof QuickReportViewModel>;
 
@@ -391,3 +550,96 @@ export const EvidenceViewModel = z.object({
   ),
 });
 export type EvidenceViewModel = z.infer<typeof EvidenceViewModel>;
+
+// ============================================================================
+// Round-9.3: Enterprise GEO Consulting Report
+// Single unified report — no Quick/Deep tabs.
+//
+// Key fixes (Round-9.3):
+//   - Deduplicate enterprise status: merge into single card
+//   - Fix question count: show 5 input, 3 directions
+//   - Fix information direction copy mapping
+//   - Fix measurement composition labels
+//   - Fix evidence Chinese labels
+//   - Fix mobile density
+// ============================================================================
+
+/** Summary row in 决策摘要 */
+export const EnterpriseSummaryRow = z.object({
+  label: z.string(),
+  value: z.string(),
+});
+export type EnterpriseSummaryRow = z.infer<typeof EnterpriseSummaryRow>;
+
+/**
+ * Round-9.1: Information Opportunity Card
+ * 客户需求与信息机会模块的展示卡片
+ * 融合 customer questions + question coverage + public information improvement directions
+ * 展示字段: 客户关注 / 当前情况 / 建议资产 / 商业价值
+ * 不得命名为 geoOpportunities，正式GEO机会只能来自Canonical Truth Guard
+ */
+export const EnterpriseInformationOpportunity = z.object({
+  title: z.string(),
+  customerQuestion: z.string(),
+  currentStatus: z.string(),
+  suggestedAsset: z.string(),
+  businessValue: z.string(),
+});
+export type EnterpriseInformationOpportunity = z.infer<typeof EnterpriseInformationOpportunity>;
+
+/**
+ * Round-9.2: Content Asset Plan
+ * 重点内容资产方案模块的展示卡片
+ * 来自 QuestionCoverageGap 聚类，每项必须具体
+ */
+export const EnterpriseContentAssetPlan = z.object({
+  title: z.string(),
+  suggestedAssets: z.array(z.string()),
+  businessValue: z.string(),
+});
+export type EnterpriseContentAssetPlan = z.infer<typeof EnterpriseContentAssetPlan>;
+
+/**
+ * Round-9.2: Competitor Observation
+ * 竞争环境与同行观察模块
+ * 只能使用已验证的竞品证据
+ */
+export const EnterpriseCompetitorObservation = z.object({
+  dimension: z.string(),
+  observation: z.string(),
+  competitorMentioned: z.boolean(),
+});
+export type EnterpriseCompetitorObservation = z.infer<typeof EnterpriseCompetitorObservation>;
+
+export const EnterpriseReportViewModel = z.object({
+  diagnosisId: z.string(),
+  publicToken: z.string(),
+  reportLanguage: ReportLanguage.default("zh-CN"),
+  brandName: z.string(),
+  reportDate: z.string(),
+  /** One-sentence enterprise status summary. */
+  enterpriseStatusSummary: z.string(),
+  overallScore: z.number().nullable(),
+  scoreCoverage: z.number(),
+  measurementComposition: MeasurementComposition,
+  estimationNotice: z.string().nullable(),
+  /** Enterprise business understanding from Profile + Strength. */
+  enterpriseStatusDescription: z.string(),
+  /** Top strength for display. */
+  topStrength: Strength.nullable(),
+  /** 原始客户问题数量 */
+  inputQuestionCount: z.number(),
+  /** 信息方向数量 */
+  informationDirectionCount: z.number(),
+  /** 客户需求与信息机会 — 公开信息完善方向 */
+  informationOpportunities: z.array(EnterpriseInformationOpportunity).max(5),
+  /** 竞争环境与同行观察 — 条件显示 */
+  competitorObservations: z.array(EnterpriseCompetitorObservation).max(3).optional(),
+  /** 重点内容资产方案 — 动态数量2-5 */
+  contentAssetPlans: z.array(EnterpriseContentAssetPlan).max(5),
+  demonstrationFix: DemonstrationFix.nullable(),
+  evidence: EvidenceViewModel,
+  executionMode: DiagnosisExecutionMode,
+  limitedReport: LimitedReportDataV1.optional(),
+});
+export type EnterpriseReportViewModel = z.infer<typeof EnterpriseReportViewModel>;

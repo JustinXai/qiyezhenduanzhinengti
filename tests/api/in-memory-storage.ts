@@ -5,18 +5,24 @@
 // file, so vitest does not collect it as a suite.
 
 import type {
+  AnalysisCheckpointRecord,
   DiagnosisRequestRecord,
   DiagnosisStatus,
   EvidenceRecord,
   EvidenceRecordInput,
   ProviderUsageInput,
   ProviderUsageRecord,
+  PruneDecisionRecord,
+  PruneDecisionRecordInput,
+  ClaimPublicationDecisionBatchInput,
+  ClaimPublicationDecisionRecord,
   SaveReportInput,
   StorageAdapter,
   StoredReport,
 } from "../../src/storage/adapter";
 
 interface CheckpointEntry {
+  id: string;
   diagnosisId: string;
   stage: string;
   inputHash: string;
@@ -35,6 +41,8 @@ export class InMemoryStorageAdapter implements StorageAdapter {
   private readonly reports = new Map<string, StoredReport>();
   private readonly usage: ProviderUsageRecord[] = [];
   private readonly checkpoints: CheckpointEntry[] = [];
+  private readonly pruneDecisions: PruneDecisionRecord[] = [];
+  private readonly publicationDecisions: ClaimPublicationDecisionRecord[] = [];
   private readonly now: () => Date;
 
   constructor(now: () => Date = () => new Date()) {
@@ -127,6 +135,32 @@ export class InMemoryStorageAdapter implements StorageAdapter {
       .map((u) => ({ ...u }));
   }
 
+  async appendPruneDecisions(items: PruneDecisionRecordInput[]): Promise<void> {
+    this.pruneDecisions.push(...items.map((item) => ({ ...structuredClone(item) })));
+  }
+
+  async getPruneDecisions(diagnosisId: string): Promise<PruneDecisionRecord[]> {
+    return this.pruneDecisions
+      .filter((item) => item.diagnosisId === diagnosisId)
+      .map((item) => structuredClone(item));
+  }
+
+  async appendClaimPublicationDecisionBatch(
+    batch: ClaimPublicationDecisionBatchInput,
+  ): Promise<void> {
+    this.publicationDecisions.push(
+      ...batch.decisions.map((item) => structuredClone(item)),
+    );
+  }
+
+  async getClaimPublicationDecisions(
+    diagnosisId: string,
+  ): Promise<ClaimPublicationDecisionRecord[]> {
+    return this.publicationDecisions
+      .filter((item) => item.diagnosisId === diagnosisId)
+      .map((item) => structuredClone(item));
+  }
+
   async saveCheckpoint(checkpoint: {
     diagnosisId: string;
     stage: string;
@@ -138,7 +172,11 @@ export class InMemoryStorageAdapter implements StorageAdapter {
     promptVersion: string;
     trustGuardVersion: string;
   }): Promise<void> {
-    this.checkpoints.push({ ...checkpoint, completedAt: this.now() });
+    this.checkpoints.push({
+      id: `${checkpoint.diagnosisId}:${checkpoint.stage}:${this.checkpoints.length + 1}`,
+      ...checkpoint,
+      completedAt: this.now(),
+    });
   }
 
   async findReusableCheckpoint(query: {
@@ -167,5 +205,15 @@ export class InMemoryStorageAdapter implements StorageAdapter {
       }
     }
     return null;
+  }
+
+  async getLatestCheckpoint(
+    diagnosisId: string,
+    stage: string,
+  ): Promise<AnalysisCheckpointRecord | null> {
+    const checkpoint = [...this.checkpoints]
+      .reverse()
+      .find((item) => item.diagnosisId === diagnosisId && item.stage === stage);
+    return checkpoint ? structuredClone(checkpoint) : null;
   }
 }

@@ -22,10 +22,29 @@ import type {
   DroppedClaimRecord,
 } from "../../contracts/claim-reason-codes";
 import type { GuardRuleCode } from "../../contracts/guard-types";
+import type { ClaimPublicationSourceContext } from "../../contracts/independent-support-source";
 import { evidenceGuard } from "./evidence-guard";
+import type { ClaimPublicationCoverageScope } from "./claim-publication-policy";
+import type { CompetitorGapPublicationContextById } from "./competitor-gap-publication-policy";
 
 /** Map a prunable guard rule (+violation text) onto a §七 reason code. */
 function reasonCodeFor(rule: GuardRuleCode, message: string): ClaimPruneReasonCode {
+  const competitorGapReasons: Partial<Record<GuardRuleCode, ClaimPruneReasonCode>> = {
+    COMPETITOR_GAP_UNVERIFIED_COMPETITOR_ASSERTION:
+      "UNVERIFIED_COMPETITOR_ASSERTION",
+    COMPETITOR_GAP_MISSING_COMPETITOR_OFFICIAL_RELATION:
+      "MISSING_COMPETITOR_OFFICIAL_RELATION",
+    COMPETITOR_GAP_MISSING_CURRENT_COMPANY_RELATION:
+      "MISSING_CURRENT_COMPANY_RELATION",
+    COMPETITOR_GAP_COMPETITOR_ENTITY_NOT_RESOLVED:
+      "COMPETITOR_ENTITY_NOT_RESOLVED",
+    COMPETITOR_GAP_COMPARISON_DIMENSION_MISMATCH:
+      "COMPARISON_DIMENSION_MISMATCH",
+    COMPETITOR_GAP_COMPETITOR_COVERAGE_NOT_ESTABLISHED:
+      "COMPETITOR_COVERAGE_NOT_ESTABLISHED",
+  };
+  const competitorGapReason = competitorGapReasons[rule];
+  if (competitorGapReason) return competitorGapReason;
   if (/coverage|边界|覆盖/i.test(message)) return "COVERAGE_NOT_ESTABLISHED";
   if (rule === "TRUTH_4_4_CONTEXT_ONLY_INSUFFICIENT") return "INSUFFICIENT_INDEPENDENT_SUPPORT";
   return "INSUFFICIENT_INDEPENDENT_SUPPORT";
@@ -44,7 +63,18 @@ const PRUNABLE_RULES: ReadonlySet<GuardRuleCode> = new Set([
   "TRUTH_4_2_STRENGTH_NEEDS_SUPPORT",
   "TRUTH_4_3_OPPORTUNITY_NEEDS_SUPPORT",
   "TRUTH_4_4_CONTEXT_ONLY_INSUFFICIENT",
+  "COMPETITOR_GAP_MISSING_COMPETITOR_OFFICIAL_RELATION",
+  "COMPETITOR_GAP_MISSING_CURRENT_COMPANY_RELATION",
+  "COMPETITOR_GAP_COMPETITOR_ENTITY_NOT_RESOLVED",
+  "COMPETITOR_GAP_COMPARISON_DIMENSION_MISMATCH",
+  "COMPETITOR_GAP_COMPETITOR_COVERAGE_NOT_ESTABLISHED",
 ]);
+
+export interface PruneUnsupportedClaimsOptions {
+  sourceContext?: ClaimPublicationSourceContext;
+  coverageScope?: ClaimPublicationCoverageScope;
+  competitorGapContexts?: CompetitorGapPublicationContextById;
+}
 
 export interface PruneResult {
   report: DiagnosisReport;
@@ -68,6 +98,7 @@ export function pruneUnsupportedClaims(
   report: DiagnosisReport,
   relations: readonly ClaimEvidenceRelation[],
   coverage: EvidenceCoverage,
+  options: PruneUnsupportedClaimsOptions = {},
 ): PruneResult {
   let current = report;
   const pruned = new Set<string>();
@@ -75,7 +106,14 @@ export function pruneUnsupportedClaims(
   // Iterate: removing a claim can never create a new support violation, but the
   // loop is capped defensively.
   for (let i = 0; i < 8; i += 1) {
-    const res = evidenceGuard({ report: current, relations, coverage });
+    const res = evidenceGuard({
+      report: current,
+      relations,
+      coverage,
+      sourceContext: options.sourceContext,
+      coverageScope: options.coverageScope,
+      competitorGapContexts: options.competitorGapContexts,
+    });
     if (res.ok) break;
     const prunable = res.violations.filter(
       (v) => PRUNABLE_RULES.has(v.rule) && typeof v.claimId === "string",

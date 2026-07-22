@@ -18,9 +18,11 @@ describe("schema-driven migrate", () => {
       "analysis_repair_attempts",
       "analysis_stage_runs",
       "claim_evidence_relations",
+      "claim_publication_decisions",
       "diagnosis_requests",
       "evidence",
       "provider_usage",
+      "prune_decisions",
       "reports",
     ]);
   });
@@ -50,9 +52,11 @@ describe("schema-driven migrate", () => {
       "analysis_repair_attempts",
       "analysis_stage_runs",
       "claim_evidence_relations",
+      "claim_publication_decisions",
       "diagnosis_requests",
       "evidence",
       "provider_usage",
+      "prune_decisions",
       "reports",
     ]);
     db.close();

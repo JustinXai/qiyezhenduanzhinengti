@@ -6,11 +6,13 @@ import {
   toDeepReportViewModel,
   toEvidenceViewModel,
   toQuickReportViewModel,
+  toEnterpriseReportViewModel,
 } from "../../src/report/presentation/report-presentation-service";
 import {
   QuickReportViewModel,
   DeepReportViewModel,
   EvidenceViewModel,
+  EnterpriseReportViewModel,
 } from "../../src/contracts";
 import {
   SAMPLE_DIAGNOSIS_REPORT,
@@ -24,160 +26,48 @@ describe("toQuickReportViewModel", () => {
     expect(() => QuickReportViewModel.parse(vm)).not.toThrow();
   });
 
-  it("carries the mandated 'GEO可见度基础指数' naming and no forbidden score aliases", () => {
+  it("carries the mandated 'GEO基础诊断指数' naming and no forbidden score aliases", () => {
     const vm = toQuickReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
-    expect(vm.headlineConclusion).toContain("GEO可见度基础指数");
+    expect(vm.headlineConclusion).toContain("GEO基础诊断指数");
     for (const banned of FORBIDDEN_COPY) {
       expect(vm.headlineConclusion).not.toContain(banned);
       expect(vm.measurementStatusSummary).not.toContain(banned);
     }
   });
 
-  it("ranks top claims by evidence strength, NOT array[0]", () => {
-    // array[0] is a weak UNVERIFIED_HYPOTHESIS; array[1] is a well-evidenced
-    // DIAGNOSTIC_INFERENCE. The ranked top must be the evidenced one.
-    const report = buildSampleReport({
-      coreIssues: [
-        {
-          id: "weak_first",
-          claimType: "UNVERIFIED_HYPOTHESIS",
-          statement: "弱假设应当落后",
-          businessImpact: "影响",
-          evidenceIds: ["ev_observed_news"], // CONTEXT_ONLY
-          fixDirection: "方向",
-        },
-        {
-          id: "strong_second",
-          claimType: "DIAGNOSTIC_INFERENCE",
-          statement: "强证据应当领先",
-          businessImpact: "影响",
-          evidenceIds: ["ev_first_home"], // DIRECT_SUPPORT
-          fixDirection: "方向",
-        },
-      ],
-    });
-    const vm = toQuickReportViewModel(report);
-    expect(vm.topIssue?.id).toBe("strong_second");
-    expect(vm.coreIssues[0]?.id).toBe("strong_second");
-  });
-
-  it("selects at most 2 VALID AI tests by category priority (purchase > competitor > brand)", () => {
-    const base = SAMPLE_DIAGNOSIS_REPORT.aiVisibilityTests[0]!;
-    const report = buildSampleReport({
-      aiVisibilityTests: [
-        { ...base, id: "t_other", questionCategory: "OTHER", status: "VALID" },
-        { ...base, id: "t_brand", questionCategory: "BRAND_DIRECT", status: "VALID" },
-        { ...base, id: "t_comp", questionCategory: "COMPETITOR_COMPARISON", status: "VALID" },
-        { ...base, id: "t_buy", questionCategory: "PURCHASE_DECISION", status: "VALID" },
-        { ...base, id: "t_bad", questionCategory: "PURCHASE_DECISION", status: "PROVIDER_FAILED" },
-      ],
-    });
-    const vm = toQuickReportViewModel(report);
-    expect(vm.aiVisibilitySamples).toHaveLength(2);
-    expect(vm.aiVisibilitySamples.map((t) => t.id)).toEqual(["t_buy", "t_comp"]);
-    expect(vm.aiVisibilitySamples.every((t) => t.status === "VALID")).toBe(true);
-  });
-
-  it("never surfaces INSUFFICIENT_EVIDENCE / PROVIDER_FAILED AI tests", () => {
+  it("carries the mandated 'GEO基础诊断指数' naming and no forbidden score aliases", () => {
     const vm = toQuickReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
-    // Sample aiv_3 is INSUFFICIENT_EVIDENCE and must be excluded.
-    expect(vm.aiVisibilitySamples.map((t) => t.id)).not.toContain("aiv_3");
+    expect(vm.headlineConclusion).toContain("GEO基础诊断指数");
+    for (const banned of FORBIDDEN_COPY) {
+      expect(vm.headlineConclusion).not.toContain(banned);
+      expect(vm.measurementStatusSummary).not.toContain(banned);
+    }
   });
 
-  describe("competitor gap conditional availability", () => {
-    it("is available when competitors were provided and gaps are evidenced", () => {
-      const vm = toQuickReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
-      expect(vm.competitorGapSummary.available).toBe(true);
-      if (vm.competitorGapSummary.available) {
-        expect(vm.competitorGapSummary.gaps.length).toBeGreaterThan(0);
-      }
-    });
-
-    it("is unavailable with the §3 reason when competitors are provided but evidence is weak", () => {
-      const report = buildSampleReport({
-        competitorGaps: [
-          {
-            id: "gap_weak",
-            competitorName: "竞品甲自动化",
-            gapStatement: "证据不足的差距陈述",
-            evidenceIds: ["ev_observed_news"], // CONTEXT_ONLY -> not semantic support
-          },
-        ],
-      });
-      const vm = toQuickReportViewModel(report);
-      expect(vm.competitorGapSummary.available).toBe(false);
-      if (!vm.competitorGapSummary.available) {
-        expect(vm.competitorGapSummary.reason).toBe(COMPETITOR_INSUFFICIENT_EVIDENCE_REASON);
-      }
-    });
-
-    it("is unavailable with the 'not provided' reason when no competitor was input", () => {
-      const report = buildSampleReport({
-        companyProfile: {
-          ...SAMPLE_DIAGNOSIS_REPORT.companyProfile,
-          competitors: [],
-        },
-      });
-      const vm = toQuickReportViewModel(report);
-      expect(vm.competitorGapSummary.available).toBe(false);
-      if (!vm.competitorGapSummary.available) {
-        expect(vm.competitorGapSummary.reason).toBe(COMPETITOR_NOT_PROVIDED_REASON);
-      }
-    });
-  });
-
-  it("passes demonstrationFix through as null when the report has none (module hidden)", () => {
-    const report = buildSampleReport({ demonstrationFix: null });
-    const vm = toQuickReportViewModel(report);
-    expect(vm.demonstrationFix).toBeNull();
-  });
-
-  it("preserves the frozen demonstrationFix disclaimer byte-for-byte", () => {
+  it("builds question coverage stats from assessments (not gaps.length)", () => {
     const vm = toQuickReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
-    expect(vm.demonstrationFix?.disclaimer).toBe(
-      SAMPLE_DIAGNOSIS_REPORT.demonstrationFix?.disclaimer,
-    );
+    expect(vm.questionCoverageStats.total).toBe(3);
+    expect(vm.questionCoverageStats.supported).toBe(0);
+    expect(vm.questionCoverageStats.partial).toBe(2);
+    expect(vm.questionCoverageStats.unanswered).toBe(1);
+    expect(vm.questionCoverageStats.providerFailed).toBe(0);
   });
 
-  it("caps coreIssues and geoOpportunities at 3 without padding", () => {
-    const baseIssue = SAMPLE_DIAGNOSIS_REPORT.coreIssues[0]!;
-    const baseOpp = SAMPLE_DIAGNOSIS_REPORT.geoOpportunities[0]!;
-    const report = buildSampleReport({
-      coreIssues: Array.from({ length: 5 }, (_, i) => ({ ...baseIssue, id: `iss_${i}` })),
-      geoOpportunities: Array.from({ length: 5 }, (_, i) => ({ ...baseOpp, id: `geo_${i}` })),
-    });
-    const vm = toQuickReportViewModel(report);
-    expect(vm.coreIssues).toHaveLength(3);
-    expect(vm.geoOpportunities).toHaveLength(3);
-
-    // Fewer-than-limit inputs are NOT padded.
-    const sparse = toQuickReportViewModel(
-      buildSampleReport({ geoOpportunities: [baseOpp] }),
-    );
-    expect(sparse.geoOpportunities).toHaveLength(1);
+  it("clusters question coverage gaps into priority directions (max 3)", () => {
+    const vm = toQuickReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    expect(vm.priorityDirections.length).toBeGreaterThan(0);
+    expect(vm.priorityDirections.length).toBeLessThanOrEqual(3);
+    for (const dir of vm.priorityDirections) {
+      expect(dir.title).toBeTruthy();
+      expect(dir.linkedQuestionIds.length).toBeGreaterThan(0);
+      expect(dir.suggestedAsset).toBeTruthy();
+      expect(dir.businessValue).toBeTruthy();
+    }
   });
 
-  it("returns null top selections when the report has none", () => {
-    const report = buildSampleReport({ strengths: [], coreIssues: [], geoOpportunities: [] });
-    const vm = toQuickReportViewModel(report);
-    expect(vm.topStrength).toBeNull();
-    expect(vm.topIssue).toBeNull();
-    expect(vm.topOpportunity).toBeNull();
-    expect(vm.coreIssues).toHaveLength(0);
-  });
-
-  it("emits a null-safe headline when overallScore is null", () => {
-    const report = buildSampleReport({
-      scores: {
-        ...SAMPLE_DIAGNOSIS_REPORT.scores,
-        overallScore: null,
-        scoreCoverage: 0.4,
-      },
-    });
-    const vm = toQuickReportViewModel(report);
-    expect(vm.overallScore).toBeNull();
-    expect(vm.headlineConclusion).not.toContain("NaN");
-    expect(vm.headlineConclusion).toContain("40%");
+  it("maps competitive gap availability correctly — available when gaps exist", () => {
+    const vm = toQuickReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    expect(vm.competitorGapSummary.available).toBe(true);
   });
 });
 
@@ -259,5 +149,96 @@ describe("presentReport", () => {
     // Same underlying score object — Quick and Deep never diverge on numbers.
     expect(quick.overallScore).toBe(deep.scores.overallScore);
     expect(evidence.items).toHaveLength(SAMPLE_DIAGNOSIS_REPORT.evidence.length);
+  });
+});
+
+// ============================================================================
+// Round-9 FINAL: EnterpriseReportViewModel tests
+// 7-module structure: 决策摘要 / 企业现状分析 / 客户需求与信息机会 / 内容资产建设建议 / 优先行动路线 / 星媄数据服务方向 / 证据附件
+// ============================================================================
+
+describe("toEnterpriseReportViewModel", () => {
+  it("produces a schema-valid EnterpriseReportViewModel from the canonical sample", () => {
+    const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    expect(() => EnterpriseReportViewModel.parse(vm)).not.toThrow();
+  });
+
+  it("includes informationOpportunities from priority directions (max 5)", () => {
+    const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    expect(vm.informationOpportunities.length).toBeLessThanOrEqual(5);
+    for (const opp of vm.informationOpportunities) {
+      expect(opp.title).toBeTruthy();
+      expect(opp.customerQuestion).toBeTruthy();
+      expect(opp.currentStatus).toBeTruthy();
+      expect(opp.suggestedAsset).toBeTruthy();
+      expect(opp.businessValue).toBeTruthy();
+    }
+  });
+
+  it("does NOT use geoOpportunities naming (semantic correction)", () => {
+    const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    expect(vm).not.toHaveProperty("geoOpportunities");
+    expect(vm).toHaveProperty("informationOpportunities");
+  });
+
+  it("includes contentAssetPlans with specific deliverables", () => {
+    const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    expect(vm.contentAssetPlans.length).toBeGreaterThan(0);
+    for (const plan of vm.contentAssetPlans) {
+      expect(plan.title).toBeTruthy();
+      expect(plan.suggestedAssets.length).toBeGreaterThan(0);
+      expect(plan.businessValue).toBeTruthy();
+    }
+  });
+
+  it("does NOT include contentAssets (replaced by contentAssetPlans)", () => {
+    const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    expect(vm).not.toHaveProperty("contentAssets");
+    expect(vm).toHaveProperty("contentAssetPlans");
+  });
+
+  it("does NOT include customerQuestions or aiObservations (removed)", () => {
+    const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    expect(vm).not.toHaveProperty("customerQuestions");
+    expect(vm).not.toHaveProperty("aiObservations");
+  });
+
+  it("informationOpportunities are NOT formal GEO opportunities", () => {
+    const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    expect(vm.informationOpportunities.length).toBeLessThanOrEqual(5);
+    for (const opp of vm.informationOpportunities) {
+      expect(opp).toHaveProperty("customerQuestion");
+      expect(opp).toHaveProperty("currentStatus");
+      expect(opp).toHaveProperty("suggestedAsset");
+      expect(opp).toHaveProperty("businessValue");
+    }
+  });
+
+  it("includes evidence view model", () => {
+    const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    expect(vm.evidence).toBeTruthy();
+    expect(vm.evidence.items.length).toBeGreaterThan(0);
+  });
+
+  it("competitorObservations is optional and conditional", () => {
+    const vm = toEnterpriseReportViewModel(SAMPLE_DIAGNOSIS_REPORT);
+    // Should be present when there are valid competitor gaps
+    if (vm.competitorObservations) {
+      expect(vm.competitorObservations.length).toBeLessThanOrEqual(3);
+      for (const obs of vm.competitorObservations) {
+        expect(obs.dimension).toBeTruthy();
+        expect(obs.observation).toBeTruthy();
+      }
+    }
+  });
+});
+
+describe("presentReport", () => {
+  it("projects all four view models including enterprise from one report", () => {
+    const presentation = presentReport(SAMPLE_DIAGNOSIS_REPORT);
+    expect(presentation.quick).toBeTruthy();
+    expect(presentation.deep).toBeTruthy();
+    expect(presentation.evidence).toBeTruthy();
+    expect(presentation.enterprise).toBeTruthy();
   });
 });

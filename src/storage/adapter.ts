@@ -114,6 +114,114 @@ export interface ProviderUsageRecord {
   createdAt: Date;
 }
 
+export const PRUNE_DECISION_REASON_CODES = [
+  "NO_VALID_EVIDENCE",
+  "INVALID_EVIDENCE_REFERENCE",
+  "INVALID_SOURCE_ISSUE_REFERENCE",
+  "INSUFFICIENT_DIRECT_SUPPORT",
+  "INSUFFICIENT_INDEPENDENT_SUPPORT",
+  "FROZEN_SCOPE_PREFIX_MISSING",
+  "COVERAGE_NOT_ESTABLISHED",
+  // Round-6 uses these precise runtime reasons. The two older codes above stay
+  // accepted for append-only historical rows and frozen-recovery compatibility.
+  "NO_MEASUREMENT_COVERAGE",
+  "MISSING_COVERAGE_PREFIX",
+  "DUPLICATED_EVIDENCE_SET",
+  "GENERIC_OR_UNACTIONABLE",
+  "UNVERIFIED_COMPETITOR_ASSERTION",
+  "MISSING_COMPETITOR_OFFICIAL_RELATION",
+  "MISSING_CURRENT_COMPANY_RELATION",
+  "COMPETITOR_ENTITY_NOT_RESOLVED",
+  "COMPARISON_DIMENSION_MISMATCH",
+  "COMPETITOR_COVERAGE_NOT_ESTABLISHED",
+  "BANNED_OR_OVERPROMISING_COPY",
+  "SYSTEM_FAILURE_NOT_BUSINESS_ISSUE",
+] as const;
+
+export type PruneDecisionReasonCode = (typeof PRUNE_DECISION_REASON_CODES)[number];
+
+export type PruneDecisionCoverageStatus =
+  | "NOT_REQUIRED"
+  | "ESTABLISHED_AND_BOUNDED"
+  | "NOT_ESTABLISHED"
+  | "SCOPE_LIMITATION_MISSING";
+
+/** Complete, internal-only audit record for one removed generation candidate. */
+export interface PruneDecisionRecordInput {
+  id: string;
+  diagnosisId: string;
+  /** Exactly one of reportId/revisionId must be present. */
+  reportId: string | null;
+  revisionId: string | null;
+  stageRunId: string;
+  claimKind: string;
+  candidateRef: string;
+  sourceIssueId: string | null;
+  reasonCode: PruneDecisionReasonCode;
+  guardRule: string;
+  evidenceIds: string[];
+  independentSupportSourceCount: number;
+  directCount: number;
+  partialCount: number;
+  contextCount: number;
+  coverageStatus: PruneDecisionCoverageStatus;
+  createdAt: Date;
+  algorithmVersion: string;
+}
+
+export type PruneDecisionRecord = PruneDecisionRecordInput;
+
+export const CLAIM_PUBLICATION_STATUSES = [
+  "PUBLISHED",
+  "PRUNED",
+  "DEEP_NEEDS_CONFIRMATION",
+] as const;
+
+export type ClaimPublicationStatus = (typeof CLAIM_PUBLICATION_STATUSES)[number];
+export type ClaimPublicationCandidateSourceProvenance =
+  | "ANALYSIS_STAGE_RUN"
+  | "LEGACY_ANALYSIS_CHECKPOINT";
+
+export interface ClaimPublicationDecisionCandidateKey {
+  claimKind: string;
+  candidateRef: string;
+}
+
+/** Internal-only final disposition for one generation candidate. */
+export interface ClaimPublicationDecisionRecordInput {
+  id: string;
+  diagnosisId: string;
+  /** Exactly one of reportId/revisionId must be present. */
+  reportId: string | null;
+  revisionId: string | null;
+  /** Exactly one of stageRunId/legacyCheckpointId must be present. */
+  stageRunId: string | null;
+  legacyCheckpointId: string | null;
+  candidateSourceProvenance: ClaimPublicationCandidateSourceProvenance;
+  candidateSourcePayloadHash: string;
+  candidateRef: string;
+  claimKind: string;
+  publicationStatus: ClaimPublicationStatus;
+  reasonCode: string;
+  guardRule: string;
+  evidenceIds: string[];
+  directCount: number;
+  partialCount: number;
+  contextCount: number;
+  independentSupportSourceCount: number;
+  coverageStatus: PruneDecisionCoverageStatus;
+  algorithmVersion: string;
+  createdAt: Date;
+}
+
+export type ClaimPublicationDecisionRecord = ClaimPublicationDecisionRecordInput;
+
+/** The adapter rejects missing, extra, or duplicate candidate decisions atomically. */
+export interface ClaimPublicationDecisionBatchInput {
+  expectedCandidates: ClaimPublicationDecisionCandidateKey[];
+  decisions: ClaimPublicationDecisionRecordInput[];
+}
+
 export const ANALYSIS_STAGES = [
   "REPORT_PROFILE",
   "REPORT_SCORING",
@@ -200,6 +308,7 @@ export interface BeginAnalysisRepairAttemptInput {
 }
 
 export interface AnalysisCheckpointRecord {
+  id: string;
   diagnosisId: string;
   stage: string;
   inputHash: string;
@@ -246,6 +355,18 @@ export interface StorageAdapter {
   // valid without implementing them; the state machine calls them only if present.
   saveClaimEvidenceRelations?(items: ClaimEvidenceRelationRecordInput[]): Promise<void>;
   getClaimEvidenceRelations?(diagnosisId: string): Promise<ClaimEvidenceRelationRecord[]>;
+
+  // -- prune_decisions (Round-6, internal append-only ledger) ----------------
+  appendPruneDecisions?(items: PruneDecisionRecordInput[]): Promise<void>;
+  getPruneDecisions?(diagnosisId: string): Promise<PruneDecisionRecord[]>;
+
+  // -- claim_publication_decisions (Round-6A, complete final ledger) ----------
+  appendClaimPublicationDecisionBatch?(
+    batch: ClaimPublicationDecisionBatchInput,
+  ): Promise<void>;
+  getClaimPublicationDecisions?(
+    diagnosisId: string,
+  ): Promise<ClaimPublicationDecisionRecord[]>;
 
   // -- analysis_checkpoints ---------------------------------------------------
   saveCheckpoint(checkpoint: {

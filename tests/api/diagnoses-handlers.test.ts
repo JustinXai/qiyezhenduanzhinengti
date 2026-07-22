@@ -113,6 +113,50 @@ describe("GET /api/diagnoses/[id] (handleGetDiagnosis)", () => {
     expect(view.report!.publicToken).toBe("tok_fixed");
   });
 
+  it("never exposes internal publication Decisions or Candidate Source provenance", async () => {
+    const deps = makeDeps();
+    await handleCreateDiagnosis(deps, VALID_BODY);
+    await deps.storage.appendClaimPublicationDecisionBatch?.({
+      expectedCandidates: [{ claimKind: "strength", candidateRef: "str_internal" }],
+      decisions: [
+        {
+          id: "decision_internal",
+          diagnosisId: "diag_fixed",
+          reportId: "report_internal",
+          revisionId: null,
+          stageRunId: null,
+          legacyCheckpointId: "legacy_internal",
+          candidateSourceProvenance: "LEGACY_ANALYSIS_CHECKPOINT",
+          candidateSourcePayloadHash: "a".repeat(64),
+          candidateRef: "str_internal",
+          claimKind: "strength",
+          publicationStatus: "PUBLISHED",
+          reasonCode: "PUBLISHED_BY_CURRENT_TRUTH_POLICY",
+          guardRule: "truth-policy.v1",
+          evidenceIds: [],
+          directCount: 1,
+          partialCount: 0,
+          contextCount: 0,
+          independentSupportSourceCount: 0,
+          coverageStatus: "NOT_REQUIRED",
+          algorithmVersion: "truth-policy.v1",
+          createdAt: NOW,
+        },
+      ],
+    });
+    const response = await handleGetDiagnosis(deps, { id: "diag_fixed" });
+    const serialized = JSON.stringify(response.body);
+    for (const internal of [
+      "decision_internal",
+      "legacy_internal",
+      "candidateSourceProvenance",
+      "candidateSourcePayloadHash",
+      "publicationStatus",
+    ]) {
+      expect(serialized).not.toContain(internal);
+    }
+  });
+
   it("returns 404 for an unknown public token", async () => {
     const deps = makeDeps();
     await handleCreateDiagnosis(deps, VALID_BODY);

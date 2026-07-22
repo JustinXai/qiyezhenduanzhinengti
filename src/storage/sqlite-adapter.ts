@@ -11,6 +11,10 @@ import { createSchema, openDatabase } from "./migrate";
 import type {
   ClaimEvidenceRelationRecord,
   ClaimEvidenceRelationRecordInput,
+  ClaimPublicationDecisionBatchInput,
+  ClaimPublicationDecisionRecord,
+  ClaimPublicationStatus,
+  ClaimPublicationCandidateSourceProvenance,
   AnalysisCheckpointRecord,
   AnalysisRepairAttemptRecord,
   AnalysisRepairStatus,
@@ -25,11 +29,19 @@ import type {
   EvidenceRecordInput,
   ProviderUsageInput,
   ProviderUsageRecord,
+  PruneDecisionRecord,
+  PruneDecisionRecordInput,
+  PruneDecisionReasonCode,
+  PruneDecisionCoverageStatus,
   SaveReportInput,
   StartAnalysisStageRunInput,
   StorageAdapter,
   StoredReport,
 } from "./adapter";
+import {
+  insertClaimPublicationDecisionBatch,
+  validateClaimPublicationDecisionBatch,
+} from "./claim-publication-decisions";
 
 function toDbTime(date: Date): number {
   return Math.floor(date.getTime() / 1000);
@@ -37,6 +49,44 @@ function toDbTime(date: Date): number {
 
 function fromDbTime(seconds: number): Date {
   return new Date(seconds * 1000);
+}
+
+function validatePruneDecision(item: PruneDecisionRecordInput): void {
+  if ((item.reportId === null) === (item.revisionId === null)) {
+    throw new Error("PRUNE_DECISION_EXACTLY_ONE_PUBLICATION_ID_REQUIRED");
+  }
+  for (const [field, value] of [
+    ["diagnosisId", item.diagnosisId],
+    ["stageRunId", item.stageRunId],
+    ["claimKind", item.claimKind],
+    ["candidateRef", item.candidateRef],
+    ["guardRule", item.guardRule],
+    ["algorithmVersion", item.algorithmVersion],
+  ] as const) {
+    if (value.trim().length === 0) throw new Error(`PRUNE_DECISION_${field.toUpperCase()}_REQUIRED`);
+  }
+  for (const [field, value] of [
+    ["independentSupportSourceCount", item.independentSupportSourceCount],
+    ["directCount", item.directCount],
+    ["partialCount", item.partialCount],
+    ["contextCount", item.contextCount],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`PRUNE_DECISION_${field.toUpperCase()}_INVALID`);
+    }
+  }
+  if (new Set(item.evidenceIds).size !== item.evidenceIds.length) {
+    throw new Error("PRUNE_DECISION_EVIDENCE_IDS_DUPLICATED");
+  }
+  if (Number.isNaN(item.createdAt.getTime())) throw new Error("PRUNE_DECISION_CREATED_AT_INVALID");
+}
+
+function parseEvidenceIds(serialized: string): string[] {
+  const parsed: unknown = JSON.parse(serialized);
+  if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string")) {
+    throw new Error("PRUNE_DECISION_EVIDENCE_IDS_CORRUPT");
+  }
+  return parsed;
 }
 
 interface DiagnosisRow {
@@ -58,7 +108,6 @@ interface EvidenceRow {
   snippet: string | null;
   authority_level: string | null;
   support_level: string | null;
-  acquisition_level?: string | null;
   fetched_at: number;
 }
 
@@ -89,6 +138,7 @@ interface ProviderUsageRow {
 }
 
 interface CheckpointRow {
+  id?: string;
   diagnosis_id?: string;
   stage?: string;
   input_hash?: string;
@@ -113,6 +163,51 @@ interface ClaimEvidenceRelationRow {
   basis: string;
   verifier_mode: string;
   verifier_version: string;
+  created_at: number;
+}
+
+interface PruneDecisionRow {
+  id: string;
+  diagnosis_id: string;
+  report_id: string | null;
+  revision_id: string | null;
+  stage_run_id: string;
+  claim_kind: string;
+  candidate_ref: string;
+  source_issue_id: string | null;
+  reason_code: string;
+  guard_rule: string;
+  evidence_ids_json: string;
+  independent_support_source_count: number;
+  direct_count: number;
+  partial_count: number;
+  context_count: number;
+  coverage_status: string;
+  created_at: number;
+  algorithm_version: string;
+}
+
+interface ClaimPublicationDecisionRow {
+  id: string;
+  diagnosis_id: string;
+  report_id: string | null;
+  revision_id: string | null;
+  stage_run_id: string | null;
+  legacy_checkpoint_id: string | null;
+  candidate_source_provenance: string;
+  candidate_source_payload_hash: string;
+  candidate_ref: string;
+  claim_kind: string;
+  publication_status: string;
+  reason_code: string;
+  guard_rule: string;
+  evidence_ids_json: string;
+  direct_count: number;
+  partial_count: number;
+  context_count: number;
+  independent_support_source_count: number;
+  coverage_status: string;
+  algorithm_version: string;
   created_at: number;
 }
 
@@ -282,10 +377,10 @@ export class SqliteStorageAdapter implements StorageAdapter {
     const stmt = this.db.prepare(
       `INSERT INTO evidence
          (id, diagnosis_id, source_type, source_domain, url, title, snippet,
-          authority_level, support_level, acquisition_level, fetched_at)
+          authority_level, support_level, fetched_at)
        VALUES
          (@id, @diagnosis_id, @source_type, @source_domain, @url, @title, @snippet,
-          @authority_level, @support_level, @acquisition_level, @fetched_at)
+          @authority_level, @support_level, @fetched_at)
        ON CONFLICT(id) DO UPDATE SET
          diagnosis_id = excluded.diagnosis_id,
          source_type = excluded.source_type,
@@ -295,7 +390,6 @@ export class SqliteStorageAdapter implements StorageAdapter {
          snippet = excluded.snippet,
          authority_level = excluded.authority_level,
          support_level = excluded.support_level,
-         acquisition_level = excluded.acquisition_level,
          fetched_at = excluded.fetched_at`,
     );
     const insertAll = this.db.transaction((rows: EvidenceRecordInput[]) => {
@@ -310,7 +404,6 @@ export class SqliteStorageAdapter implements StorageAdapter {
           snippet: it.snippet,
           authority_level: it.authorityLevel,
           support_level: it.supportLevel,
-          acquisition_level: it.acquisitionLevel ?? "SEARCH_SNIPPET",
           fetched_at: toDbTime(it.fetchedAt),
         });
       }
@@ -332,7 +425,6 @@ export class SqliteStorageAdapter implements StorageAdapter {
       snippet: row.snippet,
       authorityLevel: row.authority_level,
       supportLevel: row.support_level,
-      acquisitionLevel: row.acquisition_level ?? "SEARCH_SNIPPET",
       fetchedAt: fromDbTime(row.fetched_at),
     }));
   }
@@ -368,7 +460,10 @@ export class SqliteStorageAdapter implements StorageAdapter {
   async getReport(diagnosisId: string): Promise<StoredReport | null> {
     const row = this.db
       .prepare(
-        `SELECT * FROM reports WHERE diagnosis_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+        `SELECT * FROM reports
+         WHERE diagnosis_id = ?
+         ORDER BY rowid DESC
+         LIMIT 1`,
       )
       .get(diagnosisId) as ReportRow | undefined;
     if (!row) return null;
@@ -388,13 +483,11 @@ export class SqliteStorageAdapter implements StorageAdapter {
     this.db
       .prepare(
         `INSERT INTO provider_usage
-           (id, diagnosis_id, execution_profile, provider, stage, call_count,
-            hard_limit, retry_count, status, error_code, cost_estimate,
-            started_at, completed_at, created_at)
+           (id, diagnosis_id, execution_profile, provider, stage, call_count, hard_limit, retry_count,
+            status, error_code, cost_estimate, started_at, completed_at, created_at)
          VALUES
-           (@id, @diagnosis_id, @execution_profile, @provider, @stage, @call_count,
-            @hard_limit, @retry_count, @status, @error_code, @cost_estimate,
-            @started_at, @completed_at, @created_at)`,
+           (@id, @diagnosis_id, @execution_profile, @provider, @stage, @call_count, @hard_limit, @retry_count,
+            @status, @error_code, @cost_estimate, @started_at, @completed_at, @created_at)`,
       )
       .run({
         id: input.id,
@@ -405,7 +498,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
         call_count: input.callCount ?? 0,
         hard_limit: input.hardLimit ?? null,
         retry_count: input.retryCount ?? 0,
-        status: input.status ?? null,
+        status: input.status ?? (input.errorCode ? "FAILED" : "COMPLETED"),
         error_code: input.errorCode ?? null,
         cost_estimate: input.costEstimate ?? null,
         started_at: input.startedAt ? toDbTime(input.startedAt) : null,
@@ -423,20 +516,17 @@ export class SqliteStorageAdapter implements StorageAdapter {
     return rows.map((row) => ({
       id: row.id,
       diagnosisId: row.diagnosis_id,
-      executionProfile: row.execution_profile ?? null,
+      executionProfile: row.execution_profile ?? "LEGACY",
       provider: row.provider,
       stage: row.stage,
       callCount: row.call_count,
       hardLimit: row.hard_limit ?? null,
       retryCount: row.retry_count,
-      status: row.status ?? null,
+      status: row.status ?? (row.error_code ? "FAILED" : "COMPLETED"),
       errorCode: row.error_code,
       costEstimate: row.cost_estimate,
-      startedAt: row.started_at === null || row.started_at === undefined ? null : fromDbTime(row.started_at),
-      completedAt:
-        row.completed_at === null || row.completed_at === undefined
-          ? null
-          : fromDbTime(row.completed_at),
+      startedAt: row.started_at == null ? null : fromDbTime(row.started_at),
+      completedAt: row.completed_at == null ? null : fromDbTime(row.completed_at),
       createdAt: fromDbTime(row.created_at),
     }));
   }
@@ -509,6 +599,128 @@ export class SqliteStorageAdapter implements StorageAdapter {
       basis: row.basis,
       verifierMode: row.verifier_mode,
       verifierVersion: row.verifier_version,
+      createdAt: fromDbTime(row.created_at),
+    }));
+  }
+
+  // -- prune_decisions -------------------------------------------------------
+
+  async appendPruneDecisions(items: PruneDecisionRecordInput[]): Promise<void> {
+    if (items.length === 0) return;
+    for (const item of items) validatePruneDecision(item);
+    const insert = this.db.prepare(
+      `INSERT INTO prune_decisions
+         (id, diagnosis_id, report_id, revision_id, stage_run_id, claim_kind,
+          candidate_ref, source_issue_id, reason_code, guard_rule,
+          evidence_ids_json, independent_support_source_count, direct_count,
+          partial_count, context_count, coverage_status, created_at,
+          algorithm_version)
+       VALUES
+         (@id, @diagnosis_id, @report_id, @revision_id, @stage_run_id, @claim_kind,
+          @candidate_ref, @source_issue_id, @reason_code, @guard_rule,
+          @evidence_ids_json, @independent_support_source_count, @direct_count,
+          @partial_count, @context_count, @coverage_status, @created_at,
+          @algorithm_version)`,
+    );
+    const append = this.db.transaction((records: PruneDecisionRecordInput[]) => {
+      for (const item of records) {
+        insert.run({
+          id: item.id,
+          diagnosis_id: item.diagnosisId,
+          report_id: item.reportId,
+          revision_id: item.revisionId,
+          stage_run_id: item.stageRunId,
+          claim_kind: item.claimKind,
+          candidate_ref: item.candidateRef,
+          source_issue_id: item.sourceIssueId,
+          reason_code: item.reasonCode,
+          guard_rule: item.guardRule,
+          evidence_ids_json: JSON.stringify(item.evidenceIds),
+          independent_support_source_count: item.independentSupportSourceCount,
+          direct_count: item.directCount,
+          partial_count: item.partialCount,
+          context_count: item.contextCount,
+          coverage_status: item.coverageStatus,
+          created_at: toDbTime(item.createdAt),
+          algorithm_version: item.algorithmVersion,
+        });
+      }
+    });
+    append(items);
+  }
+
+  async getPruneDecisions(diagnosisId: string): Promise<PruneDecisionRecord[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM prune_decisions
+         WHERE diagnosis_id = ? ORDER BY created_at, rowid`,
+      )
+      .all(diagnosisId) as PruneDecisionRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      diagnosisId: row.diagnosis_id,
+      reportId: row.report_id,
+      revisionId: row.revision_id,
+      stageRunId: row.stage_run_id,
+      claimKind: row.claim_kind,
+      candidateRef: row.candidate_ref,
+      sourceIssueId: row.source_issue_id,
+      reasonCode: row.reason_code as PruneDecisionReasonCode,
+      guardRule: row.guard_rule,
+      evidenceIds: parseEvidenceIds(row.evidence_ids_json),
+      independentSupportSourceCount: row.independent_support_source_count,
+      directCount: row.direct_count,
+      partialCount: row.partial_count,
+      contextCount: row.context_count,
+      coverageStatus: row.coverage_status as PruneDecisionCoverageStatus,
+      createdAt: fromDbTime(row.created_at),
+      algorithmVersion: row.algorithm_version,
+    }));
+  }
+
+  // -- claim_publication_decisions ------------------------------------------
+
+  async appendClaimPublicationDecisionBatch(
+    batch: ClaimPublicationDecisionBatchInput,
+  ): Promise<void> {
+    validateClaimPublicationDecisionBatch(batch);
+    const append = this.db.transaction((input: ClaimPublicationDecisionBatchInput) => {
+      insertClaimPublicationDecisionBatch(this.db, input);
+    });
+    append(batch);
+  }
+
+  async getClaimPublicationDecisions(
+    diagnosisId: string,
+  ): Promise<ClaimPublicationDecisionRecord[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM claim_publication_decisions
+         WHERE diagnosis_id = ? ORDER BY created_at, rowid`,
+      )
+      .all(diagnosisId) as ClaimPublicationDecisionRow[];
+    return rows.map((row) => ({
+      id: row.id,
+      diagnosisId: row.diagnosis_id,
+      reportId: row.report_id,
+      revisionId: row.revision_id,
+      stageRunId: row.stage_run_id,
+      legacyCheckpointId: row.legacy_checkpoint_id,
+      candidateSourceProvenance:
+        row.candidate_source_provenance as ClaimPublicationCandidateSourceProvenance,
+      candidateSourcePayloadHash: row.candidate_source_payload_hash,
+      candidateRef: row.candidate_ref,
+      claimKind: row.claim_kind,
+      publicationStatus: row.publication_status as ClaimPublicationStatus,
+      reasonCode: row.reason_code,
+      guardRule: row.guard_rule,
+      evidenceIds: parseEvidenceIds(row.evidence_ids_json),
+      directCount: row.direct_count,
+      partialCount: row.partial_count,
+      contextCount: row.context_count,
+      independentSupportSourceCount: row.independent_support_source_count,
+      coverageStatus: row.coverage_status as PruneDecisionCoverageStatus,
+      algorithmVersion: row.algorithm_version,
       createdAt: fromDbTime(row.created_at),
     }));
   }
@@ -595,7 +807,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
   ): Promise<AnalysisCheckpointRecord | null> {
     const row = this.db
       .prepare(
-        `SELECT diagnosis_id, stage, input_hash, output_json,
+        `SELECT id, diagnosis_id, stage, input_hash, output_json,
                 report_contract_version, score_contract_version, provider_model,
                 prompt_version, trust_guard_version, completed_at
          FROM analysis_checkpoints
@@ -605,6 +817,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
       .get(diagnosisId, stage) as CheckpointRow | undefined;
     if (
       !row ||
+      row.id === undefined ||
       row.diagnosis_id === undefined ||
       row.stage === undefined ||
       row.input_hash === undefined ||
@@ -618,6 +831,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
       return null;
     }
     return {
+      id: row.id,
       diagnosisId: row.diagnosis_id,
       stage: row.stage,
       inputHash: row.input_hash,

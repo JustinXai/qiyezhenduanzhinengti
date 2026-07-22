@@ -117,6 +117,64 @@ describe("append-only report revisions", () => {
     ]);
   });
 
+  it("appends full prune decisions in the same revision transaction", async () => {
+    await repository.append({
+      diagnosisId: original.diagnosisId,
+      expectedParentReportId: "report_original",
+      revisionReason: "audited prune",
+      algorithmVersion: "round6-prune-audit.v1",
+      canonicalJson: canonicalReportJson(buildSampleReport({ coreIssues: [] })),
+      prunedClaims: [
+        { kind: "coreIssue", ref: "iss_1", reasonCode: "INSUFFICIENT_DIRECT_SUPPORT" },
+      ],
+      pruneDecisions: [
+        {
+          diagnosisId: original.diagnosisId,
+          stageRunId: "REPORT_CLAIMS:hash",
+          claimKind: "coreIssue",
+          candidateRef: "iss_1",
+          sourceIssueId: null,
+          reasonCode: "INSUFFICIENT_DIRECT_SUPPORT",
+          guardRule: "INSUFFICIENT_DIRECT_SUPPORT",
+          evidenceIds: ["ev_first_product"],
+          independentSupportSourceCount: 0,
+          directCount: 0,
+          partialCount: 1,
+          contextCount: 0,
+          coverageStatus: "ESTABLISHED_AND_BOUNDED",
+          createdAt: new Date("2026-07-19T12:00:00.000Z"),
+          algorithmVersion: "round6-prune-audit.v1",
+        },
+      ],
+    });
+    expect(
+      db
+        .prepare("SELECT revision_id, reason_code FROM prune_decisions")
+        .all(),
+    ).toEqual([
+      { revision_id: "revision_1", reason_code: "INSUFFICIENT_DIRECT_SUPPORT" },
+    ]);
+  });
+
+  it("deterministically reads the newest append even when its supplied timestamp is older", async () => {
+    const revised = buildSampleReport({ coreIssues: [] });
+    const revision = await repository.append({
+      diagnosisId: original.diagnosisId,
+      expectedParentReportId: "report_original",
+      revisionReason: "same-second append",
+      algorithmVersion: "round6-prune-audit.v1",
+      canonicalJson: canonicalReportJson(revised),
+      prunedClaims: [],
+    });
+
+    const rows = db
+      .prepare("SELECT id, created_at FROM reports ORDER BY rowid")
+      .all() as Array<{ id: string; created_at: number }>;
+    expect(rows).toHaveLength(2);
+    expect(rows[1]?.created_at).toBeLessThan(rows[0]?.created_at ?? 0);
+    expect((await storage.getReport(original.diagnosisId))?.id).toBe(revision.id);
+  });
+
   it("fails stale-parent and no-change attempts without modifying history", async () => {
     await expect(
       repository.append({

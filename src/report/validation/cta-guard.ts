@@ -148,6 +148,19 @@ function collectQuickTexts(quick: QuickReportViewModel): Field[] {
   if (!quick.competitorGapSummary.available) {
     fields.push({ where: "quick.competitorGapSummary.reason", value: quick.competitorGapSummary.reason });
   }
+
+  // Round-8 FINAL: 检查 PriorityDirection 禁用词（从 PublicInformationOpportunity 迁移）
+  quick.priorityDirections.forEach((dir, i) => {
+    fields.push({ where: `quick.priorityDirections[${i}].title`, value: dir.title });
+    dir.linkedQuestions.forEach((q) => fields.push({ where: `quick.priorityDirections[${i}].linkedQuestions`, value: q }));
+    fields.push({ where: `quick.priorityDirections[${i}].suggestedAsset`, value: dir.suggestedAsset });
+    fields.push({ where: `quick.priorityDirections[${i}].businessValue`, value: dir.businessValue });
+  });
+
+  // Round-8 FINAL: QuestionCoverageStats — 检查统计标签
+  const { total, supported, partial, unanswered } = quick.questionCoverageStats;
+  // Stats are numbers, not text — no banned-phrase scan needed on numeric fields.
+
   return fields;
 }
 
@@ -169,9 +182,6 @@ export function countQuickVisibleChars(quick: QuickReportViewModel): number {
   if (quick.topStrength) parts.push(...claimTexts(quick.topStrength));
   if (quick.topIssue) parts.push(...claimTexts(quick.topIssue));
   if (quick.topOpportunity) parts.push(...claimTexts(quick.topOpportunity));
-  quick.coreIssues.forEach((c) => parts.push(...claimTexts(c)));
-  quick.geoOpportunities.forEach((c) => parts.push(...claimTexts(c)));
-  quick.aiVisibilitySamples.forEach((t) => parts.push(t.question));
 
   if (quick.competitorGapSummary.available) {
     quick.competitorGapSummary.gaps.forEach((g) => parts.push(g.gapStatement));
@@ -192,6 +202,14 @@ export function countQuickVisibleChars(quick: QuickReportViewModel): number {
       demo.disclaimer,
     );
   }
+
+  // Round-8 FINAL: PriorityDirection 字符统计
+  quick.priorityDirections.forEach((dir) => {
+    parts.push(dir.title);
+    dir.linkedQuestions.forEach((q) => parts.push(q));
+    parts.push(dir.suggestedAsset);
+    parts.push(dir.businessValue);
+  });
 
   return parts.reduce((sum, s) => sum + [...stripWhitespace(s)].length, 0);
 }

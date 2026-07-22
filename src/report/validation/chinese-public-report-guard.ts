@@ -64,6 +64,17 @@ const TECH_ERROR_MARKERS = [
   "stack trace", "Traceback", "undefined is not",
 ];
 
+// Round-7.1: coverage-related internal terms that must not appear in public copy
+const COVERAGE_LEAK_PATTERNS = [
+  "coverageStatus",
+  "scoreCoverage",
+  "COVERAGE_NOT_ESTABLISHED",
+  "MISSING_COVERAGE_PREFIX",
+  "COVERAGE_CONTEXT",
+  "Coverage Context",
+  "coverage context",
+];
+
 /**
  * A "full English sentence": ≥5 consecutive latin words followed by another
  * latin word or sentence punctuation — i.e. real prose, not a brand, model
@@ -116,6 +127,12 @@ function check(fields: ProseField[], opts: { ctaFields?: string[] } = {}): Chine
         violations.push({ rule: "ZH_TECH_ERROR_LEAK", field, detail: marker });
       }
     }
+    // Round-7.1: no coverage-related internal terms in public copy
+    for (const pattern of COVERAGE_LEAK_PATTERNS) {
+      if (text.includes(pattern)) {
+        violations.push({ rule: "ZH_INTERNAL_ENUM_LEAK", field, detail: pattern });
+      }
+    }
     // Unified punctuation: half-width !, ? and ; are not used in zh-CN prose.
     if (/[!?]/.test(stripped) || /;(?!\))/.test(stripped.replace(/&[a-z]+;/g, " "))) {
       violations.push({ rule: "ZH_PUNCTUATION", field, detail: "half-width !, ? or ; in prose" });
@@ -158,8 +175,6 @@ export function chinesePublicReportGuard(views: {
     { field: "quick.headlineConclusion", text: quick.headlineConclusion },
     { field: "quick.measurementStatusSummary", text: quick.measurementStatusSummary },
     { field: "quick.estimationNotice", text: quick.estimationNotice ?? "" },
-    ...claimFields("quick.coreIssues", quick.coreIssues),
-    ...claimFields("quick.geoOpportunities", quick.geoOpportunities),
     ...(quick.competitorGapSummary.available
       ? quick.competitorGapSummary.gaps.map((g, i) => ({
           field: `quick.competitorGaps[${i}].gapStatement`,
@@ -167,6 +182,19 @@ export function chinesePublicReportGuard(views: {
         }))
       : [{ field: "quick.competitorGapSummary.reason", text: quick.competitorGapSummary.reason }]),
   ];
+
+  // Round-8 FINAL: 检查 PriorityDirection 字段（替代 PublicInformationOpportunities/Actions）
+  quick.priorityDirections.forEach((dir, i) => {
+    quickFields.push(
+      { field: `quick.priorityDirections[${i}].title`, text: dir.title },
+      ...dir.linkedQuestions.map((q, qi) => ({
+        field: `quick.priorityDirections[${i}].linkedQuestions[${qi}]`,
+        text: q,
+      })),
+      { field: `quick.priorityDirections[${i}].suggestedAsset`, text: dir.suggestedAsset },
+      { field: `quick.priorityDirections[${i}].businessValue`, text: dir.businessValue },
+    );
+  });
 
   const deepFields: ProseField[] = [
     ...deep.measurementNotes.map((n, i) => ({ field: `deep.measurementNotes[${i}]`, text: n })),

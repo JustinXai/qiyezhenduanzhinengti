@@ -29,25 +29,41 @@ import {
   type ClaimEvidenceRelation,
   type EvidenceCoverage,
 } from "../../contracts/claim-evidence";
+import type { ClaimPublicationSourceContext } from "../../contracts/independent-support-source";
 import type {
+  ClaimPublicationDecisionRecordInput,
   DiagnosisStatus,
+  AnalysisStage,
+  AnalysisStageRunRecord,
   EvidenceRecordInput,
+  PruneDecisionRecordInput,
   StorageAdapter,
 } from "../../storage/adapter";
+import type { AnalysisPruneCandidate } from "../analysis/claims";
 import {
   parseDiagnosisInput,
   type DiagnosisInput,
 } from "../../runtime/diagnosis-input";
-import { publishGuard, pruneUnsupportedClaims } from "../../report/validation";
+import { publishGuard } from "../../report/validation";
 import {
-  applyCompletionProfileToReport,
-  evaluateCompletionProfile,
-} from "./control-plane";
+  evaluateClaimPublication,
+  negativeScopeTextFromReport,
+  publicationSourceContextFromReport,
+} from "../../report/validation/claim-publication-policy";
+import { independentSupportSourceKeys } from "../../report/validation/independent-support-source";
+import { applyClaimPublicationPolicyToReport } from "../../runtime/claim-publication";
+import {
+  auditAnalysisPrune,
+  auditPublicationPrune,
+  auditStructuralPrune,
+} from "../../runtime/prune-audit";
 import {
   createDeterministicVerifier,
   verifyReport,
   type VerifierStrategy,
 } from "../verification";
+import { applyCompletionProfileToReport, evaluateCompletionProfile } from "./control-plane";
+import { buildLimitedCanonicalReport } from "../limited-report/universal-limited-report";
 
 // ---------------------------------------------------------------------------
 // Checkpoint identity — fixed for the mock analysis so a repeated run with the
@@ -56,12 +72,21 @@ import {
 // ---------------------------------------------------------------------------
 
 export const ANALYSIS_PROVIDER_MODEL = "deepseek-v4-flash";
-export const ANALYSIS_PROMPT_VERSION = "analysis.v1";
+export const ANALYSIS_PROMPT_VERSION = "analysis.v2-prune-audit";
 export const ANALYSIS_TRUST_GUARD_VERSION = "trust-guard.v1";
+export const CLAIM_PUBLICATION_DECISION_ALGORITHM_VERSION =
+  "claim-publication-decision.v1";
 
 // Version of the deterministic Claim–Evidence publish-gate logic. Bumping it
 // (or the verifier version) invalidates a stored verification checkpoint.
 export const CLAIM_EVIDENCE_GATE_VERSION = "claim-evidence-gate.v1";
+
+function hardLimitForProvider(provider: string): number | null {
+  if (provider === "bocha") return 12;
+  if (provider === "deepseek") return 8;
+  if (provider === "crawler") return 12;
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -106,6 +131,12 @@ export interface NormalizedEvidenceResult {
    * evidence + the request website. Required to publish negative/missing claims.
    */
   coverage?: EvidenceCoverage;
+  /** Current-run provenance hashes; required by REAL analysis stage persistence. */
+  analysisProvenance?: {
+    evidenceRegistryHash: string;
+    competitorResolutionHash: string;
+    queryPlanHash: string;
+  };
 }
 
 export interface EvidencePipeline {
@@ -128,13 +159,31 @@ export interface ReportProducerContext {
   publicToken: string;
   input: DiagnosisInput;
   evidence: EvidenceItem[];
+  coverage?: EvidenceCoverage;
+  persistValidatedAnalysisStage?: (
+    stage: ValidatedNormalAnalysisStage,
+  ) => Promise<void>;
+}
+
+export interface ValidatedNormalAnalysisStage {
+  stage: AnalysisStage;
+  output: unknown;
+  schemaVersion: string;
+  promptVersion: string;
+  providerModel: string;
 }
 
 export type ReportProducerResult =
-  | { ok: true; report: DiagnosisReportType; usage?: ProviderUsageSample[] }
+  | {
+      ok: true;
+      report: DiagnosisReportType;
+      usage?: ProviderUsageSample[];
+      prunedCandidates?: AnalysisPruneCandidate[];
+    }
   | { ok: false; error: PipelineError };
 
 export interface ReportProducer {
+  analysisStageRunPersistence?: "REQUIRED" | "NOT_REQUIRED";
   produce(ctx: ReportProducerContext): Promise<ReportProducerResult>;
 }
 
@@ -151,6 +200,7 @@ export interface OrchestratorDeps {
    * provider call) verifier; a DeepSeek-backed strategy can be injected here.
    */
   verifier?: VerifierStrategy;
+  publicationSourceContext?: ClaimPublicationSourceContext;
   clock?: () => Date;
   idFactory?: () => string;
 }
@@ -163,7 +213,8 @@ export interface RunPipelineArgs {
 }
 
 export type PipelineResult =
-  | { ok: true; status: "READY" | "READY_LIMITED"; report: DiagnosisReportType }
+  | { ok: true; status: "READY"; report: DiagnosisReportType }
+  | { ok: true; status: "READY_LIMITED"; report: DiagnosisReportType }
   | {
       ok: false;
       status: "FAILED";
@@ -181,7 +232,6 @@ export const PIPELINE_STAGES: readonly DiagnosisStatus[] = [
   "CLAIM_EVIDENCE_VERIFICATION",
   "VALIDATING_REPORT",
   "READY",
-  "READY_LIMITED",
 ] as const;
 
 /** Host(s) the request website belongs to (for coverage first-party scope). */
@@ -192,6 +242,199 @@ function firstPartyDomainsOf(website: string): string[] {
   } catch {
     return [];
   }
+}
+
+type PublicationDecisionForStorage = Omit<
+  ClaimPublicationDecisionRecordInput,
+  "id" | "diagnosisId" | "reportId" | "revisionId"
+>;
+
+function reportCandidateItems(
+  report: DiagnosisReportType,
+  prunedCandidates: readonly AnalysisPruneCandidate[],
+): Array<{
+  candidateRef: string;
+  claimKind: string;
+  sourceIssueId: string | null;
+  evidenceIds: string[];
+}> {
+  return [
+    ...report.strengths.map((item) => ({
+      candidateRef: item.id,
+      claimKind: "strength",
+      sourceIssueId: null,
+      evidenceIds: [...item.evidenceIds],
+    })),
+    ...report.coreIssues.map((item) => ({
+      candidateRef: item.id,
+      claimKind: "coreIssue",
+      sourceIssueId: null,
+      evidenceIds: [...item.evidenceIds],
+    })),
+    ...report.competitorGaps.map((item) => ({
+      candidateRef: item.id,
+      claimKind: "competitorGap",
+      sourceIssueId: null,
+      evidenceIds: [...item.evidenceIds],
+    })),
+    ...report.geoOpportunities.map((item) => ({
+      candidateRef: item.id,
+      claimKind: "geoOpportunity",
+      sourceIssueId: item.sourceIssueId ?? null,
+      evidenceIds: [...item.evidenceIds],
+    })),
+    ...(report.demonstrationFix
+      ? [
+          {
+            candidateRef: report.demonstrationFix.id,
+            claimKind: "demonstrationFix",
+            sourceIssueId:
+              report.coreIssues.find(
+                (issue) => issue.statement === report.demonstrationFix?.currentIssue,
+              )?.id ?? null,
+            evidenceIds: [...report.demonstrationFix.evidenceIds],
+          },
+        ]
+      : []),
+    ...prunedCandidates.map((item) => ({
+      candidateRef: item.candidateRef,
+      claimKind: item.claimKind,
+      sourceIssueId: item.sourceIssueId,
+      evidenceIds: [...item.evidenceIds],
+    })),
+  ];
+}
+
+function publishedCandidateRefs(report: DiagnosisReportType): Set<string> {
+  return new Set([
+    ...report.strengths.map((item) => item.id),
+    ...report.coreIssues.map((item) => item.id),
+    ...report.competitorGaps.map((item) => item.id),
+    ...report.geoOpportunities.map((item) => item.id),
+    ...(report.demonstrationFix ? [report.demonstrationFix.id] : []),
+  ]);
+}
+
+function latestReportClaimsStageRun(
+  runs: readonly AnalysisStageRunRecord[],
+): AnalysisStageRunRecord | null {
+  return (
+    runs
+      .filter(
+        (run) =>
+          run.stage === "REPORT_CLAIMS" &&
+          run.status === "SUCCEEDED" &&
+          run.outputHash !== null,
+      )
+      .sort(
+        (a, b) =>
+          (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0) ||
+          b.attempt - a.attempt,
+      )[0] ?? null
+  );
+}
+
+function coverageStatusForStorage(
+  value: string,
+): PublicationDecisionForStorage["coverageStatus"] {
+  return value === "ESTABLISHED"
+    ? "ESTABLISHED_AND_BOUNDED"
+    : value as PublicationDecisionForStorage["coverageStatus"];
+}
+
+function publishedDecisionForCandidate(input: {
+  report: DiagnosisReportType;
+  candidate: ReturnType<typeof reportCandidateItems>[number];
+  relations: readonly ClaimEvidenceRelation[];
+  coverage: EvidenceCoverage;
+  sourceContext: ClaimPublicationSourceContext;
+}): Omit<
+  PublicationDecisionForStorage,
+  | "stageRunId"
+  | "legacyCheckpointId"
+  | "candidateSourceProvenance"
+  | "candidateSourcePayloadHash"
+  | "candidateRef"
+  | "claimKind"
+  | "evidenceIds"
+  | "algorithmVersion"
+  | "createdAt"
+> {
+  if (input.candidate.claimKind === "demonstrationFix") {
+    return {
+      publicationStatus: "PUBLISHED",
+      reasonCode: "PUBLISHED",
+      guardRule: "PUBLICATION_DEMONSTRATION_FIX_SOURCE_ISSUE_INTEGRITY",
+      directCount: 0,
+      partialCount: 0,
+      contextCount: 0,
+      independentSupportSourceCount: 0,
+      coverageStatus: "NOT_REQUIRED",
+    };
+  }
+  const claim = [
+    ...input.report.strengths.map((item) => ({
+      id: item.id,
+      kind: "strength" as const,
+      text: `${item.statement} ${item.businessImpact}`,
+      evidenceIds: item.evidenceIds,
+    })),
+    ...input.report.coreIssues.map((item) => ({
+      id: item.id,
+      kind: "coreIssue" as const,
+      text: `${item.statement} ${item.businessImpact} ${item.fixDirection}`,
+      evidenceIds: item.evidenceIds,
+    })),
+    ...input.report.geoOpportunities.map((item) => ({
+      id: item.id,
+      kind: "geoOpportunity" as const,
+      text: `${item.statement} ${item.businessImpact} ${item.customerQuestion} ${item.contentGap}`,
+      evidenceIds: item.evidenceIds,
+    })),
+  ].find(
+    (item) =>
+      item.id === input.candidate.candidateRef &&
+      item.kind === input.candidate.claimKind,
+  );
+  if (!claim) {
+    return {
+      publicationStatus: "PUBLISHED",
+      reasonCode: "PUBLISHED",
+      guardRule: "COMPETITOR_GAP_PUBLISHED",
+      directCount: 0,
+      partialCount: 0,
+      contextCount: 0,
+      independentSupportSourceCount: 0,
+      coverageStatus: "NOT_REQUIRED",
+    };
+  }
+  const decision = evaluateClaimPublication({
+    claim: {
+      id: claim.id,
+      kind: claim.kind,
+      text: claim.text,
+      negativeScopeText: negativeScopeTextFromReport(
+        input.report,
+        claim.kind,
+        claim.id,
+      ),
+      evidenceIds: claim.evidenceIds,
+    },
+    relations: input.relations.filter((relation) => relation.claimId === claim.id),
+    evidence: input.report.evidence,
+    coverage: input.coverage,
+    sourceContext: input.sourceContext,
+  });
+  return {
+    publicationStatus: "PUBLISHED",
+    reasonCode: "PUBLISHED",
+    guardRule: decision.policyVersion,
+    directCount: decision.directCount,
+    partialCount: decision.partialCount,
+    contextCount: decision.contextCount,
+    independentSupportSourceCount: decision.independentPartialSourceCount,
+    coverageStatus: decision.coverageStatus,
+  };
 }
 
 function stableStringify(value: unknown): string {
@@ -226,23 +469,8 @@ function toEvidenceRows(
     snippet: e.snippet,
     authorityLevel: e.authorityLevel,
     supportLevel: e.supportLevel,
-    acquisitionLevel: e.acquisitionLevel,
     fetchedAt: new Date(e.fetchedAt),
   }));
-}
-
-function executionProfileName(): string {
-  if (process.env.PROVIDER_MODE === "REAL") {
-    return process.env.PRODUCTION_DIAGNOSIS_PROFILE ?? "PRODUCTION_DIAGNOSIS_PROFILE";
-  }
-  return process.env.MOCK_PROFILE ?? "MOCK_PROFILE";
-}
-
-function hardLimitForProvider(provider: string): number | null {
-  if (provider === "bocha") return 12;
-  if (provider === "crawler") return 12;
-  if (provider === "deepseek") return 8;
-  return null;
 }
 
 /**
@@ -268,7 +496,7 @@ export async function runDiagnosisPipeline(
       await storage.recordProviderUsage({
         id: idFactory(),
         diagnosisId,
-        executionProfile: executionProfileName(),
+        executionProfile: "PRODUCTION_DIAGNOSIS_PROFILE",
         provider: s.provider,
         stage: s.stage,
         callCount: s.callCount,
@@ -349,6 +577,42 @@ export async function runDiagnosisPipeline(
     trustGuardVersion: "n/a",
   });
 
+  const coverage: EvidenceCoverage =
+    normalized.coverage ??
+    deriveCoverage({
+      evidence: normalized.evidence,
+      firstPartyDomains: firstPartyDomainsOf(input.website),
+    });
+
+  // LIMITED has a separate deterministic product path. It never invokes the
+  // four-stage analysis chain when source coverage cannot admit a FULL report.
+  const hasCrawledEvidence = normalized.evidence.some((item) =>
+    ["CRAWLED_PAGE", "OFFICIAL_PAGE", "OFFICIAL_REGISTRY"].includes(item.acquisitionLevel ?? "SEARCH_SNIPPET"),
+  );
+  const onlySearchSnippets = normalized.evidence.length > 0 && normalized.evidence.every(
+    (item) => (item.acquisitionLevel ?? "SEARCH_SNIPPET") === "SEARCH_SNIPPET",
+  );
+  if (!input.website || !hasCrawledEvidence || onlySearchSnippets) {
+    const limitedBase = buildLimitedCanonicalReport({
+      diagnosisId, publicToken, input, evidence: normalized.evidence,
+      searchCompleted: allUsage.some((usage) => usage.stage === "SEARCHING" && (usage.callCount ?? 0) > 0),
+      generatedAt: (deps.clock ?? (() => new Date()))().toISOString(),
+    });
+    const profile = evaluateCompletionProfile({
+      diagnosisId, input, evidence: limitedBase.evidence, coverage, usage: allUsage,
+      report: limitedBase, truthGuardPassed: false,
+      evaluatedAt: (deps.clock ?? (() => new Date()))().toISOString(),
+    });
+    const limited = DiagnosisReport.parse(applyCompletionProfileToReport(limitedBase, profile));
+    await setStatus("VALIDATING_REPORT");
+    await storage.saveReport({
+      id: idFactory(), diagnosisId, reportContractVersion: limited.reportContractVersion,
+      scoreContractVersion: limited.scoreContractVersion, canonicalJson: JSON.stringify(limited),
+    });
+    await setStatus("READY_LIMITED");
+    return { ok: true, status: "READY_LIMITED", report: limited };
+  }
+
   // -- ANALYZING --------------------------------------------------------------
   await setStatus("ANALYZING");
   const analysisKey = {
@@ -363,14 +627,88 @@ export async function runDiagnosisPipeline(
   };
 
   let report: DiagnosisReportType;
+  let analysisPrunedCandidates: AnalysisPruneCandidate[] = [];
   const reusable = await storage.findReusableCheckpoint(analysisKey);
   if (reusable) {
     try {
-      report = JSON.parse(reusable.outputJson) as DiagnosisReportType;
+      const checkpoint = JSON.parse(reusable.outputJson) as {
+        report: DiagnosisReportType;
+        prunedCandidates?: AnalysisPruneCandidate[];
+      };
+      report = checkpoint.report;
+      analysisPrunedCandidates = checkpoint.prunedCandidates ?? [];
     } catch (e) {
       return fail("ANALYZING", toPipelineError("CHECKPOINT_CORRUPT", e));
     }
   } else {
+    let persistValidatedAnalysisStage:
+      | ReportProducerContext["persistValidatedAnalysisStage"]
+      | undefined;
+    if (deps.producer.analysisStageRunPersistence === "REQUIRED") {
+      if (
+        !normalized.analysisProvenance ||
+        !storage.startAnalysisStageRun ||
+        !storage.completeAnalysisStageRun ||
+        !storage.getAnalysisStageRuns
+      ) {
+        return fail("ANALYZING", {
+          code: "NORMAL_ANALYSIS_STAGE_PERSISTENCE_UNAVAILABLE",
+          message:
+            "REAL analysis requires current provenance and append-only analysis_stage_runs storage",
+        });
+      }
+      const existingRuns = await storage.getAnalysisStageRuns(diagnosisId);
+      const attempts = new Map<AnalysisStage, number>();
+      for (const run of existingRuns) {
+        attempts.set(run.stage, Math.max(attempts.get(run.stage) ?? 0, run.attempt));
+      }
+      persistValidatedAnalysisStage = async (stage) => {
+        const runId = idFactory();
+        const usageId = idFactory();
+        const attempt = (attempts.get(stage.stage) ?? 0) + 1;
+        attempts.set(stage.stage, attempt);
+        const outputJson = JSON.stringify(stage.output);
+        const outputHash = createHash("sha256").update(outputJson).digest("hex");
+        await storage.recordProviderUsage({
+          id: usageId,
+          diagnosisId,
+          provider: "deepseek",
+          stage: stage.stage,
+          callCount: 1,
+          retryCount: 0,
+          errorCode: null,
+          costEstimate: null,
+        });
+        await storage.startAnalysisStageRun!({
+          id: runId,
+          diagnosisId,
+          stage: stage.stage,
+          attempt,
+          inputHash: hashInput({
+            input,
+            evidenceIds,
+            stage: stage.stage,
+            schemaVersion: stage.schemaVersion,
+            promptVersion: stage.promptVersion,
+            providerModel: stage.providerModel,
+          }),
+          evidenceRegistryHash: normalized.analysisProvenance!.evidenceRegistryHash,
+          competitorResolutionHash:
+            normalized.analysisProvenance!.competitorResolutionHash,
+          queryPlanHash: normalized.analysisProvenance!.queryPlanHash,
+          frozenEvidenceSnapshotHash: null,
+          schemaVersion: stage.schemaVersion,
+          promptVersion: stage.promptVersion,
+          providerModel: stage.providerModel,
+        });
+        await storage.completeAnalysisStageRun!({
+          id: runId,
+          outputJson,
+          outputHash,
+          providerUsageId: usageId,
+        });
+      };
+    }
     let produced: ReportProducerResult;
     try {
       produced = await deps.producer.produce({
@@ -378,16 +716,21 @@ export async function runDiagnosisPipeline(
         publicToken,
         input,
         evidence: normalized.evidence,
+        coverage,
+        persistValidatedAnalysisStage,
       });
     } catch (e) {
       return fail("ANALYZING", toPipelineError("ANALYSIS_FAILED", e));
     }
     if (!produced.ok) return fail("ANALYZING", produced.error);
-    await recordUsage(produced.usage);
+    if (deps.producer.analysisStageRunPersistence !== "REQUIRED") {
+      await recordUsage(produced.usage);
+    }
     report = produced.report;
+    analysisPrunedCandidates = produced.prunedCandidates ?? [];
     await storage.saveCheckpoint({
       ...analysisKey,
-      outputJson: JSON.stringify(report),
+      outputJson: JSON.stringify({ report, prunedCandidates: analysisPrunedCandidates }),
     });
   }
 
@@ -398,13 +741,6 @@ export async function runDiagnosisPipeline(
   // deterministic publish guard uses as the sole basis for the §4 decision.
   await setStatus("CLAIM_EVIDENCE_VERIFICATION");
   const verifier = deps.verifier ?? createDeterministicVerifier();
-  const coverage: EvidenceCoverage =
-    normalized.coverage ??
-    deriveCoverage({
-      evidence: normalized.evidence,
-      firstPartyDomains: firstPartyDomainsOf(input.website),
-    });
-
   let relations: ClaimEvidenceRelation[];
   // Checkpoint keyed on the verifier mode+version + gate version; a version bump
   // invalidates the stored relations so they are re-verified (职责 8, test 11).
@@ -492,54 +828,273 @@ export async function runDiagnosisPipeline(
     });
   }
 
-  // Round-3 §六: on the VALIDATED report, drop claims whose verified support is
-  // insufficient (e.g. a negative/missing claim with no measurement boundary) so
-  // an otherwise-valid report still reaches READY without them. Integrity /
-  // UNSUPPORTED / duplicate violations are NOT pruned — they remain hard blocks.
-  const published = pruneUnsupportedClaims(canonical, relations, coverage).report;
+  const sourceContext = publicationSourceContextFromReport(
+    canonical,
+    coverage,
+    deps.publicationSourceContext,
+  );
+  const publication = applyClaimPublicationPolicyToReport({
+    report: canonical,
+    relations,
+    coverage,
+    sourceContext,
+  });
+  const published = publication.report;
+  const reportId = idFactory();
+  const stageRunId = `ANALYZING:${analysisKey.inputHash}`;
+  const auditCreatedAt = deps.clock?.() ?? new Date();
+  const pruneDecisions: PruneDecisionRecordInput[] = [
+    ...analysisPrunedCandidates.map((candidate) =>
+      auditAnalysisPrune({
+        context: {
+          id: idFactory(),
+          diagnosisId,
+          reportId,
+          revisionId: null,
+          stageRunId,
+          createdAt: auditCreatedAt,
+        },
+        candidate,
+      }),
+    ),
+    ...publication.prunes.map((prune) => {
+      const context = {
+        id: idFactory(),
+        diagnosisId,
+        reportId,
+        revisionId: null,
+        stageRunId,
+        createdAt: auditCreatedAt,
+      };
+      return prune.type === "POLICY"
+        ? auditPublicationPrune({ context, candidate: prune.candidate, decision: prune.decision })
+        : auditStructuralPrune({
+            context,
+            candidate: prune.candidate,
+            reasonCode: prune.reasonCode,
+            guardRule: prune.guardRule,
+            coverageStatus: prune.coverageStatus,
+          });
+    }),
+  ];
+
+  if (pruneDecisions.length > 0) {
+    if (!storage.appendPruneDecisions) {
+      return fail("VALIDATING_REPORT", {
+        code: "PRUNE_AUDIT_STORAGE_UNAVAILABLE",
+        message: "candidate pruning requires the append-only prune decision ledger",
+      });
+    }
+    try {
+      await storage.appendPruneDecisions(pruneDecisions);
+    } catch (error) {
+      return fail(
+        "VALIDATING_REPORT",
+        toPipelineError("PRUNE_AUDIT_PERSISTENCE_FAILED", error),
+      );
+    }
+  }
+
+  if (!storage.appendClaimPublicationDecisionBatch) {
+    return fail("VALIDATING_REPORT", {
+      code: "CLAIM_PUBLICATION_DECISION_STORAGE_UNAVAILABLE",
+      message: "normal publication requires the complete candidate decision ledger",
+    });
+  }
+  const reportClaimsStageRun = storage.getAnalysisStageRuns
+    ? latestReportClaimsStageRun(await storage.getAnalysisStageRuns(diagnosisId))
+    : null;
+  const legacyAnalysisCheckpoint =
+    reportClaimsStageRun || !storage.getLatestCheckpoint
+      ? null
+      : await storage.getLatestCheckpoint(diagnosisId, "ANALYZING");
+  const candidateSource = reportClaimsStageRun
+    ? {
+        stageRunId: reportClaimsStageRun.id,
+        legacyCheckpointId: null,
+        provenance: "ANALYSIS_STAGE_RUN" as const,
+        payloadHash: reportClaimsStageRun.outputHash!,
+      }
+    : legacyAnalysisCheckpoint
+      ? {
+          stageRunId: null,
+          legacyCheckpointId: legacyAnalysisCheckpoint.id,
+          provenance: "LEGACY_ANALYSIS_CHECKPOINT" as const,
+          payloadHash: createHash("sha256")
+            .update(legacyAnalysisCheckpoint.outputJson)
+            .digest("hex"),
+        }
+      : null;
+  if (!candidateSource) {
+    return fail("VALIDATING_REPORT", {
+      code: "CLAIM_PUBLICATION_DECISION_SOURCE_UNAVAILABLE",
+      message: "normal publication requires a persisted candidate source",
+    });
+  }
+  const candidateItems = reportCandidateItems(canonical, analysisPrunedCandidates);
+  const publishedRefs = publishedCandidateRefs(published);
+  const publicationPrunes = new Map(
+    publication.prunes.map((item) => [item.candidate.candidateRef, item]),
+  );
+  const analysisPrunes = new Map(
+    analysisPrunedCandidates.map((item) => [item.candidateRef, item]),
+  );
+  const claimPublicationDecisions: ClaimPublicationDecisionRecordInput[] =
+    candidateItems.map((candidate) => {
+      const common = {
+        id: idFactory(),
+        diagnosisId,
+        reportId,
+        revisionId: null,
+        stageRunId: candidateSource.stageRunId,
+        legacyCheckpointId: candidateSource.legacyCheckpointId,
+        candidateSourceProvenance: candidateSource.provenance,
+        candidateSourcePayloadHash: candidateSource.payloadHash,
+        candidateRef: candidate.candidateRef,
+        claimKind: candidate.claimKind,
+        evidenceIds: [...candidate.evidenceIds],
+        algorithmVersion: CLAIM_PUBLICATION_DECISION_ALGORITHM_VERSION,
+        createdAt: auditCreatedAt,
+      };
+      if (publishedRefs.has(candidate.candidateRef)) {
+        return {
+          ...common,
+          ...publishedDecisionForCandidate({
+            report: published,
+            candidate,
+            relations,
+            coverage,
+            sourceContext,
+          }),
+        };
+      }
+      const publicationPrune = publicationPrunes.get(candidate.candidateRef);
+      if (publicationPrune) {
+        if (publicationPrune.type === "POLICY") {
+          return {
+            ...common,
+            publicationStatus: "PRUNED" as const,
+            reasonCode: publicationPrune.decision.rule,
+            guardRule: publicationPrune.decision.rule,
+            directCount: publicationPrune.decision.directCount,
+            partialCount: publicationPrune.decision.partialCount,
+            contextCount: publicationPrune.decision.contextCount,
+            independentSupportSourceCount:
+              publicationPrune.decision.independentPartialSourceCount,
+            coverageStatus: publicationPrune.decision.coverageStatus,
+          };
+        }
+        const competitorEvidenceIds = publicationPrune.competitorGapDecision
+          ? [
+              ...publicationPrune.competitorGapDecision.currentCompanyRelationEvidenceIds,
+              ...publicationPrune.competitorGapDecision.competitorOfficialRelationEvidenceIds,
+            ]
+          : [];
+        return {
+          ...common,
+          publicationStatus:
+            publicationPrune.competitorGapDecision?.outcome === "DEEP_NEEDS_CONFIRMATION"
+              ? "DEEP_NEEDS_CONFIRMATION" as const
+              : "PRUNED" as const,
+          reasonCode: publicationPrune.reasonCode,
+          guardRule: publicationPrune.guardRule,
+          directCount: publicationPrune.competitorGapDecision?.directCount ?? 0,
+          partialCount: publicationPrune.competitorGapDecision?.partialCount ?? 0,
+          contextCount: publicationPrune.competitorGapDecision?.contextCount ?? 0,
+          independentSupportSourceCount: independentSupportSourceKeys(
+            competitorEvidenceIds,
+            published.evidence,
+            sourceContext,
+          ).length,
+          coverageStatus: coverageStatusForStorage(publicationPrune.coverageStatus),
+        };
+      }
+      const analysisPrune = analysisPrunes.get(candidate.candidateRef);
+      if (!analysisPrune) {
+        return {
+          ...common,
+          publicationStatus: "PRUNED" as const,
+          reasonCode: "SYSTEM_FAILURE_NOT_BUSINESS_ISSUE",
+          guardRule: "CLAIM_PUBLICATION_DECISION_UNRESOLVED",
+          directCount: 0,
+          partialCount: 0,
+          contextCount: 0,
+          independentSupportSourceCount: 0,
+          coverageStatus: "NOT_REQUIRED" as const,
+        };
+      }
+      return {
+        ...common,
+        publicationStatus: "PRUNED" as const,
+        reasonCode: analysisPrune.reasonCode,
+        guardRule: analysisPrune.guardRule,
+        directCount: 0,
+        partialCount: 0,
+        contextCount: 0,
+        independentSupportSourceCount: 0,
+        coverageStatus: analysisPrune.coverageStatus ?? "NOT_REQUIRED",
+      };
+    });
+  try {
+    await storage.appendClaimPublicationDecisionBatch({
+      expectedCandidates: candidateItems.map((candidate) => ({
+        claimKind: candidate.claimKind,
+        candidateRef: candidate.candidateRef,
+      })),
+      decisions: claimPublicationDecisions,
+    });
+  } catch (error) {
+    return fail(
+      "VALIDATING_REPORT",
+      toPipelineError("CLAIM_PUBLICATION_DECISION_PERSISTENCE_FAILED", error),
+    );
+  }
 
   // Agent B publish guard (PRODUCT_TRUTH_RULES §4 evidence support, score
   // cross-field consistency, banned CTA copy). §4 is decided from the verified
   // ClaimEvidenceRelations + coverage, NOT from EvidenceItem.supportLevel. A
   // non-ok result blocks READY — the model output never decides publish.
-  const guard = publishGuard({ report: published, relations, coverage });
-  const normalizedEvidenceById = new Map(normalized.evidence.map((item) => [item.id, item]));
-  const reportForControl = DiagnosisReport.parse({
-    ...published,
-    evidence: published.evidence.map((item) => ({
-      ...item,
-      acquisitionLevel:
-        normalizedEvidenceById.get(item.id)?.acquisitionLevel ?? item.acquisitionLevel,
-    })),
+  const guard = publishGuard({
+    report: published,
+    relations,
+    coverage,
+    sourceContext,
   });
-  const analysisStageRuns = storage.getAnalysisStageRuns
-    ? await storage.getAnalysisStageRuns(diagnosisId)
-    : undefined;
-  const profile = evaluateCompletionProfile({
+  if (!guard.ok) {
+    return fail("VALIDATING_REPORT", {
+      code: "PUBLISH_GUARD_BLOCKED",
+      message: guard.violations
+        .map((v) => `${v.rule}${v.claimId ? `(${v.claimId})` : ""}: ${v.message}`)
+        .join("; "),
+    });
+  }
+
+  const completionProfile = evaluateCompletionProfile({
     diagnosisId,
     input,
-    evidence: reportForControl.evidence,
+    evidence: published.evidence,
     coverage,
     usage: allUsage,
-    analysisStageRuns,
-    report: reportForControl,
-    truthGuardPassed: guard.ok,
+    analysisStageRuns: storage.getAnalysisStageRuns
+      ? await storage.getAnalysisStageRuns(diagnosisId)
+      : undefined,
+    report: published,
+    truthGuardPassed: true,
     evaluatedAt: (deps.clock ?? (() => new Date()))().toISOString(),
   });
   const controlledReport = DiagnosisReport.parse(
-    applyCompletionProfileToReport(reportForControl, profile),
+    applyCompletionProfileToReport(published, completionProfile),
   );
 
   await storage.saveReport({
-    id: idFactory(),
+    id: reportId,
     diagnosisId,
     reportContractVersion: controlledReport.reportContractVersion,
     scoreContractVersion: controlledReport.scoreContractVersion,
     canonicalJson: JSON.stringify(controlledReport),
   });
 
-  // -- READY / READY_LIMITED --------------------------------------------------
-  if (profile.executionMode === "FULL_DIAGNOSIS") {
+  if (completionProfile.executionMode === "FULL_DIAGNOSIS") {
     await setStatus("READY");
     return { ok: true, status: "READY", report: controlledReport };
   }

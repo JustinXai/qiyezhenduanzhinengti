@@ -1,0 +1,115 @@
+# Boss Demo Screenshots - Metadata Reference
+# Note: Screenshots should be taken manually during demo
+# This file documents what screenshots to capture and where to save them
+
+# ============================================================
+# SCREENSHOT LIST
+# ============================================================
+
+# Screenshot 1: Homepage - Enterprise Info Form
+# ---------------------------------------------
+# name: 01_homepage_full
+# URL: http://localhost:36120/
+# dimensions: 1920x1080 (or browser viewport)
+# description: Full homepage showing enterprise diagnosis form
+# save_path: project-private/screenshots/01_homepage_full.png
+# talking_point: "Clean entry point for the enterprise diagnosis tool"
+
+# Screenshot 2: Homepage Form Detail
+# ---------------------------------------------
+# name: 02_homepage_form_detail
+# URL: http://localhost:36120/
+# dimensions: 800x600 (form area crop)
+# description: Close-up of company info input form
+# save_path: project-private/screenshots/02_homepage_form_detail.png
+# talking_point: "Simple 3-field form collects company name, industry, website"
+
+# Screenshot 3: Lejinji Quick Report - Overview
+# ---------------------------------------------
+# name: 03_lejinji_report_overview
+# URL: http://localhost:36120/report/tok_1e28531d23774261af449977b88d9319
+# dimensions: 1920x1080
+# description: Full quick report showing scores and summary for 安徽乐锦记食品有限公司
+# save_path: project-private/screenshots/03_lejinji_report_overview.png
+# talking_point: "Completed report for 安徽乐锦记 with overall score and category breakdown"
+
+# Screenshot 4: Lejinji Score Breakdown
+# ---------------------------------------------
+# name: 04_lejinji_score_breakdown
+# URL: http://localhost:36120/report/tok_1e28531d23774261af449977b88d9319
+# dimensions: 1200x800
+# description: Score section showing individual dimension scores
+# save_path: project-private/screenshots/04_lejinji_score_breakdown.png
+# talking_point: "Multiple diagnostic dimensions each contribute to the overall score"
+
+# Screenshot 5: Opportunities Section
+# ---------------------------------------------
+# name: 05_opportunities_section
+# URL: http://localhost:36120/report/tok_1e28531d23774261af449977b88d9319
+# dimensions: 1200x800
+# description: Marketing channel opportunities list
+# save_path: project-private/screenshots/05_opportunities_section.png
+# talking_point: "Specific improvement opportunities based on public data analysis"
+
+# Screenshot 6: Evidence Panel Expanded
+# ---------------------------------------------
+# name: 06_evidence_panel_expanded
+# URL: http://localhost:36120/report/tok_1e28531d23774261af449977b88d9319
+# dimensions: 1200x800
+# description: Expanded evidence section showing source citations
+# save_path: project-private/screenshots/06_evidence_panel_expanded.png
+# talking_point: "Every finding backed by verifiable evidence from public sources"
+
+# Screenshot 7: Deep Report Header
+# ---------------------------------------------
+# name: 07_deep_report_header
+# URL: http://localhost:36120/report/tok_1e28531d23774261af449977b88d9319
+# dimensions: 1920x600
+# description: Deep report section header and intro
+# save_path: project-private/screenshots/07_deep_report_header.png
+# talking_point: "Comprehensive deep dive for clients wanting detailed analysis"
+
+# Screenshot 8: CTA Section
+# ---------------------------------------------
+# name: 08_cta_section
+# URL: http://localhost:36120/report/tok_1e28531d23774261af449977b88d9319
+# dimensions: 1200x400
+# description: Call-to-action section with contact options
+# save_path: project-private/screenshots/08_cta_section.png
+# talking_point: "Clear next steps for companies ready to engage"
+
+# Screenshot 9: Print Version Preview
+# ---------------------------------------------
+# name: 09_print_version
+# URL: http://localhost:36120/report/tok_1e28531d23774261af449977b88d9319
+# dimensions: 1000x1400 (A4 proportions)
+# description: Print-optimized layout for PDF export
+# save_path: project-private/screenshots/09_print_version.png
+# talking_point: "Professional print format for stakeholder distribution"
+
+# ============================================================
+# SCREENSHOT CAPTURE INSTRUCTIONS
+# ============================================================
+
+# Using Chrome/Edge DevTools:
+# 1. Open the URL in browser
+# 2. Press F12 to open DevTools
+# 3. Press Ctrl+Shift+P (Cmd+Shift+P on Mac)
+# 4. Type "screenshot" and select "Capture full size screenshot"
+# 5. Save to the specified save_path
+
+# Using PowerShell + Puppeteer (if available):
+# node -e "const p=require('puppeteer'); (async()=>{const b=await p.launch();const p=await b.newPage();await p.setViewport({width:1920,height:1080});await p.goto('URL');await p.screenshot({path:'path.png'});await b.close();})()"
+
+# ============================================================
+# DEMO STATE REFERENCE
+# ============================================================
+
+Company: 安徽乐锦记食品有限公司
+Diagnosis ID: diag_577375be226c4c2f862af6e5bc6c8580
+Report ID: 369855b3-5273-44e5-b8ca-f717b5fadb41
+Report Token: tok_1e28531d23774261af449977b88d9319
+Branch: release/quick-first-mvp-v1
+Commit: 594aea1e709f1695b948b9003aba41f32538e717
+Port: 36120
+DB: ./data/lejinji-canary.db

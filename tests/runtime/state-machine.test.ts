@@ -73,7 +73,7 @@ describe("diagnosis pipeline state machine", () => {
 
   afterEach(() => db.close());
 
-  it("walks CREATED → READY and persists evidence, usage, checkpoints, report", async () => {
+  it("walks CREATED → READY_LIMITED when the mock has no persisted full-analysis stages", async () => {
     const { id, token } = await createRequest();
     const result = await runDiagnosisPipeline(deps(), {
       diagnosisId: id,
@@ -82,10 +82,10 @@ describe("diagnosis pipeline state machine", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.status).toBe("READY");
+    expect(result.status).toBe("READY_LIMITED");
 
     const rec = await adapter.getDiagnosisRequest(id);
-    expect(rec!.status).toBe("READY");
+    expect(rec!.status).toBe("READY_LIMITED");
 
     // evidence persisted
     const evidence = await adapter.getEvidence(id);
@@ -137,7 +137,7 @@ describe("diagnosis pipeline state machine", () => {
       "ANALYZING",
       "CLAIM_EVIDENCE_VERIFICATION",
       "VALIDATING_REPORT",
-      "READY",
+      "READY_LIMITED",
     ]);
   });
 
@@ -246,14 +246,13 @@ describe("diagnosis pipeline state machine", () => {
         return { evidence: snippetReport.evidence };
       },
     };
+    const produce = vi.fn(async () => ({
+      ok: true as const,
+      report: snippetReport,
+      usage: [{ provider: "deepseek", stage: "ANALYZING", callCount: 1 }],
+    }));
     const producer: ReportProducer = {
-      async produce() {
-        return {
-          ok: true,
-          report: snippetReport,
-          usage: [{ provider: "deepseek", stage: "ANALYZING", callCount: 1 }],
-        };
-      },
+      produce,
     };
 
     const result = await runDiagnosisPipeline(deps({ evidence, producer }), {
@@ -268,6 +267,8 @@ describe("diagnosis pipeline state machine", () => {
     expect(result.report.scores.overallScore).toBeNull();
     expect(result.report.coreIssues).toEqual([]);
     expect(result.report.geoOpportunities).toEqual([]);
+    expect(result.report.limitedReport?.contentAssetPlans.length).toBeGreaterThanOrEqual(2);
+    expect(produce).not.toHaveBeenCalled();
   });
 
   it("fails at VALIDATING_REPORT when the produced report is not canonical", async () => {

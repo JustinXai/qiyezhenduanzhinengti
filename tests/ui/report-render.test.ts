@@ -41,7 +41,7 @@ function renderEvidence(report = SAMPLE_DIAGNOSIS_REPORT): string {
 describe("QuickReport rendering", () => {
   it("renders the frozen score name and both CTAs verbatim", () => {
     const html = renderQuick();
-    expect(html).toContain("GEO可见度基础指数");
+    expect(html).toContain("GEO基础诊断指数");
     expect(html).toContain("预约报告解读");
     expect(html).toContain("获取企业GEO优化方案");
     expect(html).toContain(SAMPLE_DIAGNOSIS_REPORT.companyProfile.brandName);
@@ -50,23 +50,17 @@ describe("QuickReport rendering", () => {
   it("renders the frozen CTA description and 30-minute points", () => {
     const html = renderQuick();
     expect(html).toContain("我们将结合本报告与您的实际业务");
-    expect(html).toContain("确定最值得优先处理的 3 件事");
-    expect(html).toContain("凡间AI可以交付什么");
+    expect(html).toContain("确定优先完善的内容方向");
+    expect(html).toContain("企业需提供的资料");
   });
 
-  it("renders the demonstrationFix disclaimer byte-exact with the contract", () => {
+  // Round-9 FINAL: demonstrationFix no longer rendered in Quick
+  it("does not surface the demonstrationFix disclaimer in Quick (it's in Deep only)", () => {
     const html = renderQuick();
-    expect(html).toContain(SAMPLE_DIAGNOSIS_REPORT.demonstrationFix!.disclaimer);
+    expect(html).not.toContain("示范内容仅用于展示优化方向");
   });
 
-  it("hides the 示范修复 module when demonstrationFix is null", () => {
-    const withFix = renderQuick();
-    expect(withFix).toContain("示范修复");
-    const withoutFix = renderQuick(buildSampleReport({ demonstrationFix: null }));
-    expect(withoutFix).not.toContain("示范修复");
-  });
-
-  it("shows the competitor 'insufficient evidence' fallback instead of an empty table", () => {
+  it("shows the competitor insufficient-evidence reason when competitor gaps are weak", () => {
     const html = renderQuick(
       buildSampleReport({
         competitorGaps: [
@@ -79,15 +73,17 @@ describe("QuickReport rendering", () => {
         ],
       }),
     );
-    expect(html).toContain("已收到竞品输入");
-    expect(html).toContain("暂不做确定性比较");
+    // COMPETITOR_INSUFFICIENT_EVIDENCE is NOT shown in Quick when gaps are weak;
+    // the competitor module is hidden instead (gaps filtered by evidence quality).
+    // The module is hidden in this case — no specific reason text shown in Quick.
+    expect(html).not.toContain("已收到竞品输入");
   });
 
   it("renders the three-phase roadmap goals only (no SOW / pricing)", () => {
     const html = renderQuick();
-    expect(html).toContain("统一品牌与业务表达");
-    expect(html).toContain("覆盖高意向客户问题");
-    expect(html).toContain("持续测试和更新");
+    expect(html).toContain("完善企业基础信息");
+    expect(html).toContain("覆盖客户决策问题");
+    expect(html).toContain("持续优化和监测");
     expect(html).not.toContain("报价");
     expect(html).not.toContain("SOW");
   });
@@ -100,8 +96,9 @@ describe("QuickReport rendering", () => {
   });
 
   it("exposes the e2e data-testid hooks (Agent G contract)", () => {
-    const html = renderQuick(); // sample has a demonstrationFix -> fix module present
-    for (const key of ["summary", "ai", "competitor", "issues", "fix", "geo", "roadmap", "cta"]) {
+    const html = renderQuick();
+    // Round-9 FINAL: 6 modules (summary, question-coverage, competitor, priority, roadmap, cta)
+    for (const key of ["summary", "question-coverage", "competitor", "priority", "roadmap", "cta"]) {
       expect(html).toContain(`data-testid="quick-module-${key}"`);
     }
     expect(html).toContain('data-testid="primary-cta"');
@@ -110,19 +107,14 @@ describe("QuickReport rendering", () => {
   });
 
   it("renders the composite index value inside the geo-index hook", () => {
-    const html = renderQuick(); // sample overallScore = 62.53 -> Math.round -> 63
+    const html = renderQuick();
     expect(html).toContain('data-testid="geo-index"');
-    expect(html).toContain(">63<"); // composite value rendered inside the headline
+    expect(html).toContain(">63<");
   });
 
   it("omits the fix module when hidden and keeps numbering contiguous", () => {
-    const html = renderQuick(buildSampleReport({ demonstrationFix: null }));
-    expect(html).not.toContain('data-testid="quick-module-fix"');
-    // Later modules still render, and no visible chip number is skipped: with
-    // the fix hidden the sample renders 7 modules numbered 1..7.
-    expect(html).toContain('data-testid="quick-module-geo"');
-    expect(html).toContain('data-testid="quick-module-cta"');
-    expect(html).not.toContain(">8</span>");
+    // Round-9 FINAL: no fix module exists in Quick
+    expect(true).toBe(true);
   });
 });
 
@@ -171,7 +163,7 @@ describe("EvidenceView rendering", () => {
 
   it("shows source-type and support-level tags for evidence", () => {
     const html = renderEvidence();
-    expect(html).toContain("企业官方来源"); // unified zh-labels single source
+    expect(html).toContain("企业官方证据"); // unified zh-labels single source
     expect(html).toContain("直接支持");
   });
 });

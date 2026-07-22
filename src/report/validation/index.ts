@@ -52,7 +52,55 @@ export {
 
 export { publishGuard, type PublishGuardInput } from "./publish-guard";
 
-export { pruneUnsupportedClaims, type PruneResult } from "./prune-claims";
+export {
+  pruneUnsupportedClaims,
+  type PruneResult,
+  type PruneUnsupportedClaimsOptions,
+} from "./prune-claims";
+
+export {
+  CompetitorGapPublicationPolicyV1,
+  COMPETITOR_GAP_PUBLICATION_POLICY_VERSION,
+  FAIL_CLOSED_COMPETITOR_GAP_METADATA,
+  evaluateCompetitorGapPublication,
+  type CompetitorGapPublicationCandidate,
+  type CompetitorGapPublicationContextById,
+  type CompetitorGapPublicationDecision,
+  type CompetitorGapPublicationMetadata,
+  type CompetitorGapPublicationOutcome,
+  type CompetitorGapPublicationPolicyInput,
+  type CompetitorGapPublicationReason,
+  type CompetitorNameSource,
+} from "./competitor-gap-publication-policy";
+
+export {
+  ClaimPublicationPolicy,
+  DEFAULT_CLAIM_PUBLICATION_POLICY_VERSION,
+  evaluateClaimPublication,
+  publicationSourceContextFromReport,
+  STANDARD_NEGATIVE_SCOPE_PHRASES,
+  FROZEN_EVIDENCE_NEGATIVE_SCOPE_PHRASES,
+  type ClaimPublicationCandidate,
+  type ClaimPublicationCoverageScope,
+  type ClaimPublicationCoverageStatus,
+  type ClaimPublicationDecision,
+  type ClaimPublicationOutcome,
+  type ClaimPublicationPolicyInput,
+  type ClaimPublicationRule,
+} from "./claim-publication-policy";
+
+export {
+  countIndependentSupportSources,
+  independentSupportSourceKeys,
+  registrableDomain,
+  resolveIndependentSupportSourceKey,
+} from "./independent-support-source";
+
+export type {
+  ClaimPublicationSourceContext,
+  IndependentSupportSourceKey,
+  ResolvedCompetitorSupportEntity,
+} from "../../contracts/independent-support-source";
 
 // Re-export the shared guard result plumbing for convenience.
 export {
