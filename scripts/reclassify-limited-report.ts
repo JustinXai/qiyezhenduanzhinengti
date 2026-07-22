@@ -1,9 +1,4 @@
 import { DiagnosisReport } from "../src/contracts";
-import { deriveCoverage } from "../src/contracts/claim-evidence";
-import {
-  applyCompletionProfileToReport,
-  evaluateCompletionProfile,
-} from "../src/diagnosis/orchestration/control-plane";
 import { parseDiagnosisInput, type DiagnosisInput } from "../src/runtime/diagnosis-input";
 import { buildUniversalLimitedReport } from "../src/diagnosis/limited-report/universal-limited-report";
 import { openMigratedDatabase } from "../src/storage/migrate";
@@ -69,44 +64,54 @@ async function main(): Promise<void> {
     errorCode: u.errorCode,
     costEstimate: u.costEstimate,
   }));
-  const stageRuns = storage.getAnalysisStageRuns
-    ? await storage.getAnalysisStageRuns(diagnosisId)
-    : undefined;
-  const firstPartyDomains = input.website
-    ? [new URL(input.website).hostname.replace(/^www\./, "")]
-    : [];
-  const coverage = deriveCoverage({
-    evidence: canonical.evidence,
-    firstPartyDomains,
-    executedQueries: usage.some((u) => u.provider === "bocha" && (u.callCount ?? 0) > 0)
-      ? ["stored-production-search"]
-      : [],
-  });
-  const profile = evaluateCompletionProfile({
-    diagnosisId,
-    input,
-    evidence: canonical.evidence,
-    coverage,
-    usage,
-    analysisStageRuns: stageRuns,
-    report: canonical,
-    truthGuardPassed: false,
-    evaluatedAt: new Date().toISOString(),
-  });
+  const searchCompleted = usage.some((u) => u.provider === "bocha" && (u.callCount ?? 0) > 0);
   const limited = DiagnosisReport.parse({
-    ...applyCompletionProfileToReport(canonical, profile),
+    ...canonical,
+    generatedAt: new Date().toISOString(),
+    executionMode: "LIMITED_PUBLIC_SCAN",
+    publicReportEligible: true,
+    publicReportStatus: "LIMITED_READY",
+    reportProvenance: "FAST_MVP_GEO_DIAGNOSTIC_REPORT_V1",
+    scores: {
+      ...canonical.scores,
+      overallScore: null,
+      scoreCoverage: searchCompleted ? 1 : 0,
+    },
     limitedReport: buildUniversalLimitedReport(
       input,
       canonical.evidence,
-      usage.some((u) => u.provider === "bocha" && (u.callCount ?? 0) > 0),
+      searchCompleted,
+      new Date().toISOString(),
     ),
   });
+  const mvp = limited.limitedReport?.mvpReport;
+  if (mvp) {
+    const scoreById = new Map(mvp.score.dimensions.map((dimension) => [dimension.id, dimension]));
+    const toCanonicalScore = (id: string, maxScore: number) => {
+      const dimension = scoreById.get(id);
+      return {
+        score: dimension?.score === null || dimension?.score === undefined ? null : Math.round((dimension.score / maxScore) * 100),
+        measurementStatus: dimension?.score === null || dimension?.score === undefined ? "INSUFFICIENT_EVIDENCE" as const : "MEASURED" as const,
+        confidence: dimension?.score === null || dimension?.score === undefined ? 0 : 0.6,
+        evidenceIds: canonical.evidence.map((item) => item.id),
+      };
+    };
+    limited.scores = {
+      companyClarity: toCanonicalScore("sourceFoundation", 25),
+      websiteCompleteness: toCanonicalScore("contentAssets", 25),
+      customerQuestionCoverage: toCanonicalScore("customerScenarios", 20),
+      trustEvidence: toCanonicalScore("trustInformation", 20),
+      aiVisibility: toCanonicalScore("conversionPath", 10),
+      overallScore: mvp.score.overall,
+      scoreCoverage: mvp.score.completionRate / 100,
+    };
+  }
 
   const appended = await revisions.append({
     diagnosisId,
     expectedParentReportId: current.reportId,
-    revisionReason: "UNIVERSAL_LIMITED_REPORT_ENRICHMENT",
-    algorithmVersion: "universal-limited-report.v1",
+    revisionReason: "FAST_MVP_GEO_DIAGNOSTIC_REPORT_V1",
+    algorithmVersion: "fast-mvp-geo-diagnostic-report.v1",
     canonicalJson: JSON.stringify(limited),
     prunedClaims: [],
   });
@@ -121,7 +126,21 @@ async function main(): Promise<void> {
         newStatus: "READY_LIMITED",
         executionMode: limited.executionMode,
         publicReportEligible: limited.publicReportEligible,
-        reasons: profile.completionReasons,
+        overallScore: mvp?.score.overall ?? null,
+        level: mvp?.score.level ?? null,
+        dimensions: mvp?.score.dimensions.map((dimension) => ({
+          id: dimension.id,
+          title: dimension.title,
+          score: dimension.score,
+          maxScore: dimension.maxScore,
+        })) ?? [],
+        coreIssues: mvp?.coreIssues.map((issue) => ({
+          title: issue.title,
+          severity: issue.severity,
+          priority: issue.priority,
+        })) ?? [],
+        contentPlans: mvp?.contentPlans.map((plan) => plan.title) ?? [],
+        reportLength: mvp?.visibleCharacterCount ?? 0,
       },
       null,
       2,

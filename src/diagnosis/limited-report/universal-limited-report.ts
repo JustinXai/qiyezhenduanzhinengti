@@ -2,38 +2,224 @@ import type {
   DiagnosisReport,
   EvidenceItem,
   LimitedReportDataV1,
+  MvpGeoDiagnosticReportV1,
+  MvpGeoReportPackId,
+  MvpGeoScoreFindingStatus,
   SourceCoverageSlotV1,
   PublicInformationSlotStatus,
-  VerticalPolicyPackId,
 } from "../../contracts";
 import { REPORT_CONTRACT_VERSION, SCORE_CONTRACT_VERSION } from "../../contracts";
 import type { DiagnosisInput } from "../../runtime/diagnosis-input";
 
-type Policy = {
-  id: VerticalPolicyPackId;
-  slots: readonly string[];
+type CheckItem = {
+  title: string;
+  keywords: readonly string[];
+  impact: string;
+  recommendation: string;
+};
+
+type DimensionDefinition = {
+  id: string;
+  title: string;
+  maxScore: number;
+  category: string;
+  items: readonly CheckItem[];
+};
+
+type PolicyDefinition = {
+  id: MvpGeoReportPackId;
+  label: string;
   prohibitedClaims: readonly string[];
-  assets: readonly string[];
+  dimensions: readonly DimensionDefinition[];
+  industryAnalysis: readonly string[];
+  plans: readonly Omit<MvpGeoDiagnosticReportV1["contentPlans"][number], "priority">[];
+  requestedMaterials: readonly string[];
 };
 
-const COMMON_SLOTS = ["企业主体与官方入口", "产品或服务信息", "信任与证明信息", "客户决策内容", "咨询、预约或合作路径"];
-const POLICIES: Record<VerticalPolicyPackId, Policy> = {
-  GENERAL_BUSINESS: { id: "GENERAL_BUSINESS", slots: COMMON_SLOTS, prohibitedClaims: ["企业没有公开信息", "全网没有相关信息"], assets: ["企业与服务说明页", "客户常见问题页", "信任与案例资料页"] },
-  CONSUMER_BRAND: { id: "CONSUMER_BRAND", slots: [...COMMON_SLOTS, "产品规格与购买说明"], prohibitedClaims: ["市场份额低", "AI不会推荐"], assets: ["品牌与产品说明页", "选购指南与FAQ", "售后与评价说明页"] },
-  LOCAL_SERVICE: { id: "LOCAL_SERVICE", slots: [...COMMON_SLOTS, "地址、营业时间和本地入口"], prohibitedClaims: ["本地排名低", "客户无法找到企业"], assets: ["门店或服务地点页", "服务流程与预约页", "常见问题与售后页"] },
-  LOCAL_LIFESTYLE_BEAUTY: { id: "LOCAL_LIFESTYLE_BEAUTY", slots: ["门店主体", "地址、营业时间和联系方式", "服务项目", "价格或收费边界", "服务人员和技能信息", "卫生与服务流程", "预约及到店流程", "售后及投诉处理", "案例和用户评价", "地图POI、本地生活及社交账号", "常见问题", "转化入口"], prohibitedClaims: ["没有医疗资质", "服务不安全", "服务人员不专业"], assets: ["门店与服务项目页", "项目和价格说明", "卫生、人员与服务流程说明", "预约、到店及售后说明", "案例与评价内容"] },
-  LOCAL_REGULATED_MEDICAL: { id: "LOCAL_REGULATED_MEDICAL", slots: ["企业工商主体", "医疗机构执业许可或官方备案", "医生和专业人员公开信息", "服务项目和适用范围", "风险、注意事项及流程说明", "设备、耗材和品牌信息", "咨询、预约、收费和随访", "案例展示规范", "售后、投诉和纠纷处理", "地图POI及本地平台入口", "官方网站或官方账号", "用户决策内容"], prohibitedClaims: ["不正规", "不安全", "医生不专业", "没有资质", "处罚会影响排名", "AI不会推荐"], assets: ["机构与资质信息页", "医生团队信息页", "项目流程与风险说明", "设备耗材与品牌说明", "预约面诊及收费说明", "随访、售后和投诉渠道"] },
-  B2B_INDUSTRIAL: { id: "B2B_INDUSTRIAL", slots: [...COMMON_SLOTS, "交付、采购与合作信息"], prohibitedClaims: ["市场份额低", "竞争对手明显领先"], assets: ["企业与能力说明页", "产品选型与技术FAQ", "交付、采购与合作页", "案例与证明材料页"] },
+const DISCLAIMER =
+  "以下判断基于本次公开检索范围；未发现表示当前公开渠道中未检索到清晰信息，不代表企业实际业务或资质一定不存在。该指数用于判断企业当前公开信息是否容易被客户和AI检索、理解与引用，不代表企业实际服务质量、市场份额或AI平台官方排名。";
+
+const MEDICAL_DIMENSIONS: readonly DimensionDefinition[] = [
+  {
+    id: "sourceFoundation",
+    title: "基础信源与企业身份",
+    maxScore: 25,
+    category: "基础信源",
+    items: [
+      { title: "工商或企业主体信息", keywords: ["工商", "企业主体", "统一社会信用", "公司", "企查查", "天眼查", "爱企查"], impact: "客户需要先确认企业主体是否清晰可识别。", recommendation: "集中发布企业主体、品牌主体和可核验入口。" },
+      { title: "官方网站或官方账号", keywords: ["官网", "官方网站", "官方账号", "公众号", "抖音", "小红书"], impact: "缺少官方入口会让客户难以判断哪一处信息可信。", recommendation: "建立官网或统一官方账号矩阵，并在各入口互相指向。" },
+      { title: "地图POI或门店入口", keywords: ["地图", "高德", "百度地图", "门店", "地址", "导航"], impact: "本地客户搜索时依赖地图和门店入口确认距离、地址和营业状态。", recommendation: "补齐地图POI、门店名称、地址、营业时间和联系电话。" },
+      { title: "本地生活平台入口", keywords: ["大众点评", "美团", "本地生活", "团购", "评价"], impact: "本地消费决策常从本地生活平台开始。", recommendation: "整理本地生活平台基础页和服务项目页。" },
+      { title: "医疗机构或相关官方信息入口", keywords: ["医疗机构", "执业许可", "卫健委", "卫生健康", "备案", "许可证"], impact: "受监管服务的公开说明需要让客户能找到权威来源。", recommendation: "有明确来源时展示医疗机构或相关官方信息入口，没有时先集中说明可公开事实。" },
+    ],
+  },
+  {
+    id: "contentAssets",
+    title: "服务或产品内容资产",
+    maxScore: 25,
+    category: "内容资产",
+    items: [
+      { title: "机构或品牌介绍", keywords: ["介绍", "品牌", "机构", "简介"], impact: "品牌介绍决定客户是否能快速理解企业定位。", recommendation: "建设机构介绍页，说明服务范围、对象和基础定位。" },
+      { title: "服务项目介绍", keywords: ["项目", "服务项目", "医美", "美容", "治疗", "护理"], impact: "服务项目不清晰会让客户无法判断是否匹配需求。", recommendation: "按项目建立介绍页，说明适用人群、流程和边界。" },
+      { title: "医生或专业人员介绍", keywords: ["医生", "医师", "专家", "团队", "专业人员"], impact: "专业人员信息影响客户信任和咨询意愿。", recommendation: "建设医生或服务团队页，只写可核验的专业背景。" },
+      { title: "项目流程及注意事项", keywords: ["流程", "注意事项", "术前", "术后", "风险", "恢复"], impact: "缺少流程和注意事项会增加客户顾虑。", recommendation: "补齐项目流程、风险提示和服务前后注意事项。" },
+      { title: "设备、耗材或相关品牌说明", keywords: ["设备", "耗材", "仪器", "材料", "品牌"], impact: "设备和耗材说明能帮助客户理解服务依据。", recommendation: "整理设备、耗材和品牌说明，避免夸大功效。" },
+    ],
+  },
+  {
+    id: "customerScenarios",
+    title: "客户搜索场景覆盖",
+    maxScore: 20,
+    category: "客户场景",
+    items: [
+      { title: "品牌名称搜索", keywords: [], impact: "客户会先搜索品牌名称确认企业是否真实存在。", recommendation: "围绕品牌名建设统一简介、地图和官方入口。" },
+      { title: "地区+服务项目搜索", keywords: ["赣州", "地区", "附近", "项目", "医美", "医疗美容"], impact: "地区和服务项目组合决定本地客户能否发现企业。", recommendation: "建设地区化项目页和本地服务说明。" },
+      { title: "机构资质或正规性查询", keywords: ["资质", "正规", "医疗机构", "执业", "许可"], impact: "资质相关信息不集中会降低客户信任。", recommendation: "有明确来源时集中展示主体和资质入口；未找到时避免下结论。" },
+      { title: "服务项目、流程和风险查询", keywords: ["项目", "流程", "风险", "注意事项", "恢复"], impact: "客户在决策前需要理解项目过程和风险边界。", recommendation: "建立项目FAQ、流程说明和风险注意事项页。" },
+      { title: "预约、收费、随访和售后查询", keywords: ["预约", "收费", "价格", "随访", "售后", "投诉"], impact: "转化路径不清晰会让客户停留在咨询前。", recommendation: "明确预约、收费边界、随访和售后处理路径。" },
+    ],
+  },
+  {
+    id: "trustInformation",
+    title: "信任与决策信息",
+    maxScore: 20,
+    category: "信任信息",
+    items: [
+      { title: "主体或资质说明", keywords: ["主体", "资质", "许可", "备案"], impact: "客户需要确认企业和服务的公开依据。", recommendation: "将主体、资质或官方入口集中成可阅读页面。" },
+      { title: "团队及专业背景", keywords: ["团队", "医生", "医师", "专业背景"], impact: "团队信息不足会削弱客户对专业服务的判断。", recommendation: "补齐团队介绍、专业背景和服务分工。" },
+      { title: "风险和注意事项", keywords: ["风险", "注意事项", "禁忌", "术后"], impact: "风险边界缺失会让客户感觉信息不透明。", recommendation: "用中性语言说明风险、禁忌和服务前后注意事项。" },
+      { title: "案例、评价或第三方信息", keywords: ["案例", "评价", "口碑", "第三方"], impact: "缺少评价和案例会降低客户信任凭据。", recommendation: "整理合规案例、客户评价入口和第三方公开信息。" },
+      { title: "售后、投诉和纠纷处理", keywords: ["售后", "投诉", "纠纷", "处理"], impact: "售后与投诉路径不清晰会增加客户决策阻力。", recommendation: "建立售后、投诉和纠纷处理说明。" },
+    ],
+  },
+  {
+    id: "conversionPath",
+    title: "咨询与转化路径",
+    maxScore: 10,
+    category: "转化路径",
+    items: [
+      { title: "联系方式", keywords: ["电话", "联系", "客服", "咨询"], impact: "联系方式不清晰会直接影响咨询转化。", recommendation: "统一展示电话、在线咨询和官方联系方式。" },
+      { title: "地址和营业信息", keywords: ["地址", "营业时间", "门店", "导航"], impact: "地址和营业信息影响到店决策。", recommendation: "补齐地址、营业时间、交通和到店说明。" },
+      { title: "预约流程", keywords: ["预约", "挂号", "面诊"], impact: "预约流程不清晰会导致客户不知道下一步怎么做。", recommendation: "建立预约流程和面诊说明。" },
+      { title: "收费或价格说明边界", keywords: ["收费", "价格", "费用"], impact: "价格边界缺失会增加客户咨询顾虑。", recommendation: "给出收费说明边界，不承诺具体治疗效果。" },
+      { title: "面诊、服务及随访路径", keywords: ["面诊", "服务流程", "随访", "复诊"], impact: "后续路径不清晰会削弱服务信任。", recommendation: "补齐面诊、服务、随访和复查流程。" },
+    ],
+  },
+];
+
+function cloneDimensionWithOverrides(
+  dimensions: readonly DimensionDefinition[],
+  overrides: Partial<Record<string, readonly CheckItem[]>>,
+): DimensionDefinition[] {
+  return dimensions.map((dimension) => ({
+    ...dimension,
+    items: overrides[dimension.id] ?? dimension.items,
+  }));
+}
+
+const LIFESTYLE_DIMENSIONS = cloneDimensionWithOverrides(MEDICAL_DIMENSIONS, {
+  sourceFoundation: [
+    { title: "门店名称、地址和营业时间", keywords: ["门店", "地址", "营业时间", "导航", "电话"], impact: "本地消费客户需要快速确认能否到店。", recommendation: "补齐门店页、地图POI、营业时间和联系方式。" },
+    { title: "地图入口", keywords: ["地图", "高德", "百度地图", "POI", "导航"], impact: "地图入口影响附近客户发现和到店路径。", recommendation: "规范地图POI名称、地址、图片和服务标签。" },
+    { title: "小红书、抖音及官方账号", keywords: ["小红书", "抖音", "官方账号", "公众号"], impact: "生活服务客户常从社交内容判断风格和信任。", recommendation: "建立官方账号内容矩阵并统一品牌口径。" },
+    { title: "本地生活平台入口", keywords: ["大众点评", "美团", "团购", "本地生活"], impact: "价格、评价和套餐入口影响客户到店决策。", recommendation: "完善本地生活平台项目、价格和评价维护。" },
+    { title: "预约和到店入口", keywords: ["预约", "到店", "客服", "联系"], impact: "预约入口缺失会降低即时转化。", recommendation: "建立清晰预约和到店流程。" },
+  ],
+  contentAssets: [
+    { title: "服务项目", keywords: ["项目", "服务", "护理", "美发", "美甲", "SPA", "健身"], impact: "服务项目不清晰会让客户无法判断是否匹配需求。", recommendation: "按项目建立服务说明。" },
+    { title: "价格或收费区间", keywords: ["价格", "收费", "团购", "套餐"], impact: "本地消费客户对价格边界高度敏感。", recommendation: "补齐价格区间、套餐边界和预约说明。" },
+    { title: "服务人员和技能介绍", keywords: ["老师", "技师", "团队", "服务人员"], impact: "人员介绍影响体验型服务信任。", recommendation: "展示人员技能、擅长项目和服务风格。" },
+    { title: "卫生及服务流程", keywords: ["卫生", "消毒", "流程", "环境"], impact: "卫生与流程影响客户安全感。", recommendation: "建设卫生标准和服务流程内容。" },
+    { title: "案例和客户评价", keywords: ["案例", "评价", "口碑", "作品"], impact: "案例和评价是体验型消费的重要证明。", recommendation: "整理作品、案例和评价入口。" },
+  ],
+});
+
+const GENERAL_DIMENSIONS = cloneDimensionWithOverrides(MEDICAL_DIMENSIONS, {
+  sourceFoundation: [
+    { title: "企业和品牌身份", keywords: ["公司", "品牌", "企业", "主体"], impact: "客户和合作方需要确认企业身份和品牌定位。", recommendation: "建立企业介绍和品牌主体说明。" },
+    { title: "官网及官方账号", keywords: ["官网", "官方网站", "官方账号", "公众号"], impact: "官方入口影响客户对信息真实性的判断。", recommendation: "统一官网、公众号和其他官方入口。" },
+    { title: "地区、渠道和服务范围", keywords: ["地区", "服务范围", "渠道", "全国", "本地"], impact: "服务范围不清晰会影响咨询和合作判断。", recommendation: "补齐服务地区、渠道和适用客户说明。" },
+    { title: "购买、咨询或商务合作入口", keywords: ["购买", "咨询", "合作", "招商", "联系方式"], impact: "入口不清晰会减少潜在线索转化。", recommendation: "建立咨询、购买和合作入口。" },
+    { title: "第三方公开收录", keywords: ["百科", "媒体", "平台", "收录"], impact: "第三方公开信息能帮助客户交叉验证。", recommendation: "补齐合规的公开收录和资料一致性。" },
+  ],
+  contentAssets: [
+    { title: "产品或服务体系", keywords: ["产品", "服务", "体系", "方案"], impact: "客户需要理解企业到底提供什么。", recommendation: "建设产品或服务体系页。" },
+    { title: "规格、用途和使用场景", keywords: ["规格", "用途", "场景", "选购"], impact: "客户会按使用场景寻找匹配方案。", recommendation: "补齐规格、用途和选购指南。" },
+    { title: "品质、工艺、认证或案例", keywords: ["品质", "工艺", "认证", "案例"], impact: "品质和案例影响购买或合作信任。", recommendation: "整理品质、工艺、认证和案例内容。" },
+    { title: "客户常见问题", keywords: ["FAQ", "常见问题", "问题", "怎么"], impact: "FAQ 能覆盖客户反复咨询的问题。", recommendation: "建立客户问题库和回答页。" },
+    { title: "售后与合作流程", keywords: ["售后", "流程", "合作", "服务"], impact: "流程不清晰会增加沟通成本。", recommendation: "补齐售后、合作和交付流程。" },
+  ],
+});
+
+const POLICIES: Record<MvpGeoReportPackId, PolicyDefinition> = {
+  REGULATED_MEDICAL: {
+    id: "REGULATED_MEDICAL",
+    label: "医疗及医美等受监管服务",
+    prohibitedClaims: ["没有资质", "机构不正规", "医生不专业", "不安全"],
+    dimensions: MEDICAL_DIMENSIONS,
+    industryAnalysis: [
+      "医疗和医美服务的客户通常会先搜索品牌名称、地区和服务项目，再进一步确认机构主体、专业人员、项目流程、风险边界和预约路径。公开信息如果分散，客户就很难在一次搜索中形成完整判断。",
+      "这类行业的信息建设重点不是夸大效果，而是让客户能清楚找到企业是谁、在哪里、提供什么服务、由谁服务、流程如何、有哪些注意事项以及如何咨询。公开资料越结构化，客户和AI系统越容易理解并引用企业的基本事实。",
+      "GEO建设在本场景中的价值，是把企业真实、可公开、可核验的信息组织成稳定内容资产，覆盖品牌搜索、地区服务搜索、资质查询、项目风险查询和预约售后查询，减少客户在多个平台之间反复确认的成本。",
+    ],
+    plans: [
+      { title: "机构与主体信息页", buildContent: "整理企业名称、品牌名称、主体信息、门店地址和统一联系方式。", solvesProblem: "基础信源体系薄弱", recommendedCarrier: "官网基础页、公众号资料页、地图POI资料", requiredMaterials: ["营业主体信息", "品牌标准名称", "门店地址和联系方式"], deliverables: ["主体信息结构化文案", "公开入口一致性清单", "页面信息架构"] },
+      { title: "资质和官方信息页", buildContent: "有明确来源时集中展示医疗机构或相关官方入口，未找到时只说明本次公开检索边界。", solvesProblem: "信任信息不完整", recommendedCarrier: "官网说明页、咨询前说明页", requiredMaterials: ["可公开资质材料", "官方查询入口", "更新时间"], deliverables: ["资质说明页文案", "来源标注规则", "风险措辞校验"] },
+      { title: "医生团队页", buildContent: "按人员整理姓名、分工、专业背景和可公开介绍。", solvesProblem: "专业团队信息不足", recommendedCarrier: "官网团队页、公众号专题", requiredMaterials: ["医生或专业人员名单", "可公开履历", "服务分工"], deliverables: ["团队页结构", "人员介绍文案", "问答素材"] },
+      { title: "服务项目页", buildContent: "按项目说明适用场景、服务流程、注意事项和咨询入口。", solvesProblem: "服务内容资产不足", recommendedCarrier: "官网栏目页、项目FAQ、小程序服务页", requiredMaterials: ["服务项目清单", "项目流程", "禁忌和注意事项"], deliverables: ["项目页模板", "项目FAQ", "客户搜索问题覆盖表"] },
+      { title: "流程、风险和注意事项页", buildContent: "用中性语言说明服务前、中、后的流程和风险提示。", solvesProblem: "客户问题覆盖不足", recommendedCarrier: "官网说明页、预约前须知", requiredMaterials: ["流程节点", "注意事项", "售后随访规则"], deliverables: ["流程图文案", "风险说明模板", "预约前问答"] },
+      { title: "预约面诊和收费说明", buildContent: "明确预约方式、面诊流程、价格说明边界和后续沟通路径。", solvesProblem: "咨询转化路径不清晰", recommendedCarrier: "转化页、咨询页、地图和本地生活资料", requiredMaterials: ["预约规则", "收费边界", "客服入口"], deliverables: ["转化路径文案", "咨询话术结构", "页面CTA配置"] },
+      { title: "随访、售后和投诉说明", buildContent: "说明服务后联系、随访、投诉和纠纷处理路径。", solvesProblem: "售后信任信息不足", recommendedCarrier: "官网售后页、服务协议摘要", requiredMaterials: ["售后流程", "投诉渠道", "响应规则"], deliverables: ["售后说明页", "投诉处理FAQ", "信任信息检查表"] },
+    ],
+    requestedMaterials: ["主体材料", "官方或可公开资质入口", "医生团队信息", "服务项目清单", "流程和注意事项", "预约与收费边界", "售后投诉规则"],
+  },
+  LOCAL_LIFESTYLE_SERVICE: {
+    id: "LOCAL_LIFESTYLE_SERVICE",
+    label: "本地生活服务",
+    prohibitedClaims: ["没有资质", "服务不安全", "人员不专业"],
+    dimensions: LIFESTYLE_DIMENSIONS,
+    industryAnalysis: [
+      "本地生活服务客户通常会围绕门店名称、地区、项目、价格、案例和评价做决策。客户不是只看一条结果，而是会在地图、本地生活平台、社交平台和官方账号之间来回确认。",
+      "公开信息越完整，客户越容易理解门店位置、服务项目、价格边界、服务流程、人员风格和预约方式。对AI问答来说，这些结构化信息也更容易被检索、归纳和引用。",
+      "GEO建设应优先把门店入口、项目说明、价格边界、案例评价、卫生流程和预约售后整理成可持续更新的内容资产，服务本地搜索和客户咨询。",
+    ],
+    plans: [
+      { title: "门店和项目页", buildContent: "建设门店基础资料和核心服务项目说明。", solvesProblem: "门店入口与服务信息分散", recommendedCarrier: "官网门店页、地图POI、本地生活平台", requiredMaterials: ["门店信息", "项目清单", "服务照片"], deliverables: ["门店页文案", "项目页模板", "平台资料清单"] },
+      { title: "价格与服务说明", buildContent: "说明价格区间、套餐边界和预约条件。", solvesProblem: "价格边界不清晰", recommendedCarrier: "项目页、团购页、FAQ", requiredMaterials: ["价格区间", "套餐规则", "适用条件"], deliverables: ["价格说明模板", "FAQ问答", "页面结构"] },
+      { title: "人员与服务流程", buildContent: "展示服务人员、擅长项目、服务流程和体验边界。", solvesProblem: "服务信任信息不足", recommendedCarrier: "团队页、项目页、短内容账号", requiredMaterials: ["人员介绍", "服务流程", "环境照片"], deliverables: ["人员介绍文案", "流程说明", "内容发布清单"] },
+      { title: "卫生标准", buildContent: "公开说明消毒、卫生和服务前后注意事项。", solvesProblem: "卫生和流程信息不完整", recommendedCarrier: "官网说明页、本地生活详情", requiredMaterials: ["卫生流程", "用品说明", "注意事项"], deliverables: ["卫生标准页", "问答素材", "平台同步建议"] },
+      { title: "案例评价", buildContent: "整理作品、案例、客户评价和第三方入口。", solvesProblem: "案例和口碑信号不足", recommendedCarrier: "案例页、小红书、抖音、本地生活平台", requiredMaterials: ["作品素材", "评价链接", "授权范围"], deliverables: ["案例内容结构", "评价引用规则", "内容日历"] },
+      { title: "预约到店和售后", buildContent: "说明预约方式、到店路径、售后和投诉处理。", solvesProblem: "转化路径不清晰", recommendedCarrier: "预约页、地图资料、客服话术", requiredMaterials: ["预约规则", "到店说明", "售后流程"], deliverables: ["转化页文案", "咨询话术", "售后FAQ"] },
+    ],
+    requestedMaterials: ["门店资料", "项目清单", "价格区间", "人员介绍", "卫生流程", "案例评价", "预约售后规则"],
+  },
+  GENERAL_BRAND_BUSINESS: {
+    id: "GENERAL_BRAND_BUSINESS",
+    label: "普通品牌和企业",
+    prohibitedClaims: ["市场份额低", "AI不会推荐", "竞争对手明显领先"],
+    dimensions: GENERAL_DIMENSIONS,
+    industryAnalysis: [
+      "普通品牌和企业客户通常会先确认企业是谁、产品或服务是什么、适合什么场景、品质依据是什么、如何购买或合作。公开信息越分散，客户越难建立稳定认知。",
+      "公开内容需要同时服务搜索引擎、AI问答和真实客户决策。品牌介绍、产品体系、规格用途、认证案例、FAQ、购买咨询和售后合作流程，都是客户和AI理解企业的基础素材。",
+      "GEO建设的重点，是把企业真实资料整理成可检索、可引用、可持续更新的内容资产，让客户在不同入口都能得到一致、清晰、可行动的答案。",
+    ],
+    plans: [
+      { title: "品牌介绍", buildContent: "整理企业定位、品牌故事、服务对象和核心能力。", solvesProblem: "企业身份表达不集中", recommendedCarrier: "官网关于页、品牌介绍页", requiredMaterials: ["企业简介", "品牌定位", "服务对象"], deliverables: ["品牌介绍文案", "结构化信息表", "页面信息架构"] },
+      { title: "产品体系", buildContent: "梳理产品或服务分类、核心卖点和适用对象。", solvesProblem: "产品或服务体系不清晰", recommendedCarrier: "官网产品页、目录页", requiredMaterials: ["产品清单", "服务范围", "核心卖点"], deliverables: ["产品体系页", "栏目规划", "FAQ初稿"] },
+      { title: "规格和选购指南", buildContent: "说明规格、用途、使用场景和选购建议。", solvesProblem: "客户问题覆盖不足", recommendedCarrier: "选购指南、FAQ、图文内容", requiredMaterials: ["规格参数", "使用场景", "客户问题"], deliverables: ["选购指南", "问答库", "内容发布计划"] },
+      { title: "品质和工艺", buildContent: "展示工艺、认证、品质控制和可公开证明。", solvesProblem: "信任信息不完整", recommendedCarrier: "品质页、认证页、案例页", requiredMaterials: ["工艺说明", "认证资料", "检测或案例"], deliverables: ["品质说明页", "证明材料索引", "风险措辞校验"] },
+      { title: "购买和合作入口", buildContent: "明确购买、咨询、招商、商务合作和售后路径。", solvesProblem: "转化路径不清晰", recommendedCarrier: "联系页、合作页、客服话术", requiredMaterials: ["联系方式", "合作流程", "售后规则"], deliverables: ["合作页文案", "CTA设计", "咨询路径建议"] },
+      { title: "案例和售后", buildContent: "整理案例、客户评价、交付流程和售后说明。", solvesProblem: "决策证明不足", recommendedCarrier: "案例页、售后页、行业专题", requiredMaterials: ["案例素材", "评价材料", "售后流程"], deliverables: ["案例结构", "售后FAQ", "内容资产清单"] },
+    ],
+    requestedMaterials: ["企业简介", "产品或服务清单", "规格和场景资料", "认证或案例", "客户问题", "购买合作流程", "售后规则"],
+  },
 };
 
-function selectPolicy(industry = "", product = ""): { policy: Policy; resolutionStatus: "RESOLVED" | "NEEDS_CONFIRMATION" } {
+function selectPolicy(industry = "", product = ""): PolicyDefinition {
   const text = `${industry} ${product}`.toLowerCase();
-  if (/医疗|医美|口腔|体检|诊所/.test(text)) return { policy: POLICIES.LOCAL_REGULATED_MEDICAL, resolutionStatus: "RESOLVED" };
-  if (/美容|美发|美甲|spa|皮肤护理/.test(text)) return { policy: POLICIES.LOCAL_LIFESTYLE_BEAUTY, resolutionStatus: "NEEDS_CONFIRMATION" };
-  if (/工业|制造|设备|软件|供应链|工程/.test(text)) return { policy: POLICIES.B2B_INDUSTRIAL, resolutionStatus: "RESOLVED" };
-  if (/品牌|零售|消费|食品|服装/.test(text)) return { policy: POLICIES.CONSUMER_BRAND, resolutionStatus: "RESOLVED" };
-  if (/门店|本地|服务/.test(text)) return { policy: POLICIES.LOCAL_SERVICE, resolutionStatus: "RESOLVED" };
-  return { policy: POLICIES.GENERAL_BUSINESS, resolutionStatus: "RESOLVED" };
+  if (/医疗|医美|口腔|体检|诊所/.test(text)) return POLICIES.REGULATED_MEDICAL;
+  if (/美容|美发|美甲|spa|摄影|健身|皮肤护理|本地生活/.test(text)) return POLICIES.LOCAL_LIFESTYLE_SERVICE;
+  return POLICIES.GENERAL_BRAND_BUSINESS;
 }
 
 function sourceCounts(evidence: readonly EvidenceItem[]) {
@@ -41,92 +227,385 @@ function sourceCounts(evidence: readonly EvidenceItem[]) {
   return { total: evidence.length, searchSnippet: count("SEARCH_SNIPPET"), crawledPage: count("CRAWLED_PAGE"), officialPage: count("OFFICIAL_PAGE"), officialRegistry: count("OFFICIAL_REGISTRY") };
 }
 
-function slotKeywords(slot: string): string[] {
-  const matched = [
-    [/主体|企业工商|门店主体/, ["工商", "主体", "公司", "统一社会信用"]],
-    [/许可|备案/, ["许可", "备案", "执业"]],
-    [/医生|专业人员|服务人员/, ["医生", "医师", "专业人员", "服务人员", "团队"]],
-    [/服务项目|服务项目和适用范围|服务项目$/, ["项目", "服务项目", "适用范围"]],
-    [/风险|注意事项|流程|卫生/, ["风险", "注意事项", "流程", "卫生"]],
-    [/设备|耗材/, ["设备", "耗材", "仪器", "品牌"]],
-    [/咨询|预约|收费|随访|到店|转化/, ["咨询", "预约", "收费", "随访", "到店", "联系"]],
-    [/案例|评价/, ["案例", "评价", "口碑"]],
-    [/投诉|纠纷|售后/, ["投诉", "纠纷", "售后"]],
-    [/地图|POI|地址|营业时间/, ["地图", "poi", "地址", "营业时间"]],
-    [/官网|官方账号|官方入口/, ["官网", "官方网站", "官方账号", "官方"]],
-    [/用户决策|常见问题|客户决策/, ["常见问题", "faq", "决策", "选择"]],
-    [/产品或服务|服务项目/, ["产品", "服务", "项目"]],
-    [/信任|资质|证明/, ["资质", "认证", "证明", "证书"]],
-  ].find(([pattern]) => (pattern as RegExp).test(slot));
-  return (matched?.[1] as string[] | undefined) ?? [];
+function normalizedEvidenceText(item: EvidenceItem): string {
+  return `${item.title} ${item.snippet} ${item.sourceDomain}`.toLowerCase();
 }
 
-function hasEvidenceFor(slot: string, evidence: readonly EvidenceItem[]) {
-  const keywords = slotKeywords(slot);
+function evidenceIdsFor(item: CheckItem, evidence: readonly EvidenceItem[], brandName = ""): string[] {
+  const keywords = item.keywords.length > 0 ? item.keywords : [brandName].filter(Boolean);
   if (keywords.length === 0) return [];
   return evidence
-    .filter((item) => {
-      const text = `${item.title} ${item.snippet}`.toLowerCase();
-      return keywords.some((keyword) => text.includes(keyword.toLowerCase()));
+    .filter((candidate) => {
+      const text = normalizedEvidenceText(candidate);
+      return keywords.some((keyword) => keyword && text.includes(keyword.toLowerCase()));
     })
-    .map((item) => item.id);
+    .map((candidate) => candidate.id);
 }
 
-function matrix(policy: Policy, evidence: readonly EvidenceItem[], searchCompleted: boolean): SourceCoverageSlotV1[] {
-  return policy.slots.map((title, index) => {
-    const evidenceIds = hasEvidenceFor(title, evidence);
-    const official = evidenceIds.some((id) => {
-      const item = evidence.find((candidate) => candidate.id === id);
-      return item?.acquisitionLevel === "OFFICIAL_PAGE" || item?.acquisitionLevel === "OFFICIAL_REGISTRY";
+function hasOfficialEvidence(ids: readonly string[], evidence: readonly EvidenceItem[]): boolean {
+  return ids.some((id) => {
+    const item = evidence.find((candidate) => candidate.id === id);
+    return item?.acquisitionLevel === "OFFICIAL_PAGE" || item?.acquisitionLevel === "OFFICIAL_REGISTRY" || item?.sourceType === "FIRST_PARTY_EVIDENCE";
+  });
+}
+
+function statusScore(status: MvpGeoScoreFindingStatus): number | null {
+  if (status === "CLEARLY_FOUND") return 100;
+  if (status === "PARTIALLY_FOUND") return 50;
+  if (status === "NOT_FOUND_IN_CHECKED_SCOPE") return 0;
+  return null;
+}
+
+function scoreLevel(score: number | null): string {
+  if (score === null) return "检查完成度不足";
+  if (score <= 29) return "公开信息基础较弱";
+  if (score <= 49) return "存在明显缺口";
+  if (score <= 69) return "初步具备基础";
+  if (score <= 84) return "公开信息较完整";
+  return "公开信息成熟";
+}
+
+function statusCopy(status: MvpGeoScoreFindingStatus): string {
+  if (status === "CLEARLY_FOUND") return "已清晰发现";
+  if (status === "PARTIALLY_FOUND") return "部分发现";
+  if (status === "NOT_FOUND_IN_CHECKED_SCOPE") return "本次检索未发现";
+  return "尚未执行检查";
+}
+
+function currentCopy(status: MvpGeoScoreFindingStatus, title: string): string {
+  if (status === "CLEARLY_FOUND") return `本次检索已发现较清晰的${title}公开信息。`;
+  if (status === "PARTIALLY_FOUND") return `本次检索发现了与${title}相关的公开线索，但信息仍较分散或缺少集中入口。`;
+  if (status === "NOT_FOUND_IN_CHECKED_SCOPE") return `本次公开检索未发现集中、清晰的${title}公开入口。`;
+  return `本次尚未执行${title}检查。`;
+}
+
+function scoreDimensions(policy: PolicyDefinition, input: DiagnosisInput, evidence: readonly EvidenceItem[], searchCompleted: boolean): MvpGeoDiagnosticReportV1["score"]["dimensions"] {
+  return policy.dimensions.map((dimension) => {
+    const itemMax = dimension.maxScore / dimension.items.length;
+    let earned = 0;
+    let checkedMax = 0;
+    const findings = dimension.items.map((item) => {
+      const evidenceIds = evidenceIdsFor(item, evidence, input.brandName ?? "");
+      const status: MvpGeoScoreFindingStatus = !searchCompleted
+        ? "NOT_CHECKED"
+        : evidenceIds.length === 0
+          ? "NOT_FOUND_IN_CHECKED_SCOPE"
+          : hasOfficialEvidence(evidenceIds, evidence)
+            ? "CLEARLY_FOUND"
+            : "PARTIALLY_FOUND";
+      const score = statusScore(status);
+      if (score !== null) {
+        checkedMax += itemMax;
+        earned += (score / 100) * itemMax;
+      }
+      return {
+        title: item.title,
+        status,
+        score,
+        evidenceIds,
+        currentStatus: currentCopy(status, item.title),
+        impact: item.impact,
+        recommendation: item.recommendation,
+      };
     });
-    const status = evidenceIds.length === 0
-      ? (searchCompleted ? "NOT_FOUND_IN_CHECKED_SCOPE" : "NOT_CHECKED")
-      : (official ? "FOUND" : "PARTIAL");
+    const checkedItemCount = findings.filter((finding) => finding.score !== null).length;
+    const score = checkedMax > 0 ? Math.round((earned / checkedMax) * dimension.maxScore) : null;
     return {
-      slotId: `slot_${index + 1}`, title, category: index < 2 ? "企业基础" : "客户决策与信任", status,
-      evidenceIds, checkedQueries: searchCompleted ? ["本次公开网络检索"] : [],
-      sourceTypes: [...new Set(evidence.filter((item) => evidenceIds.includes(item.id)).map((item) => item.sourceType))],
-      findingSummary: status === "FOUND" ? "已发现可核验的公开信息。" : status === "PARTIAL" ? "已发现部分公开信息，仍需结合正式材料确认。" : status === "NOT_FOUND_IN_CHECKED_SCOPE" ? "在本次已检查范围中暂未发现。" : "本次尚未完成核验。",
-      missingInformation: status === "FOUND" ? "" : `建议补充可公开核验的${title}材料。`,
-      recommendedAction: `整理并发布${title}的正式说明或官方入口。`, confidence: official ? 0.8 : evidenceIds.length ? 0.45 : 0.2,
-      requiredForFullDiagnosis: true,
+      id: dimension.id,
+      title: dimension.title,
+      maxScore: dimension.maxScore,
+      score,
+      checkedItemCount,
+      totalItemCount: dimension.items.length,
+      findings,
     };
   });
 }
 
-const READINESS_DIMENSIONS = [
-  ["identity", "企业身份与官方入口", 0.15], ["discovery", "本地与公开可发现性", 0.15],
-  ["service", "产品或服务信息清晰度", 0.2], ["trust", "信任、资质与证明信息", 0.2],
-  ["questions", "客户决策问题覆盖", 0.2], ["conversion", "咨询、预约或合作路径", 0.1],
-] as const;
+function completionRate(dimensions: MvpGeoDiagnosticReportV1["score"]["dimensions"]): number {
+  const checked = dimensions.reduce((total, dimension) => total + dimension.checkedItemCount, 0);
+  const total = dimensions.reduce((sum, dimension) => sum + dimension.totalItemCount, 0);
+  return total > 0 ? Math.round((checked / total) * 100) : 0;
+}
 
-export function buildUniversalLimitedReport(input: DiagnosisInput, evidence: readonly EvidenceItem[], searchCompleted: boolean): LimitedReportDataV1 {
-  const selected = selectPolicy(input.industry, input.productOrService);
-  const coverage = matrix(selected.policy, evidence, searchCompleted);
-  const evidenceCount = sourceCounts(evidence);
-  const dimensions = READINESS_DIMENSIONS.map(([id, title, weight], index) => {
-    const relevant = coverage[index % coverage.length];
-    const status: PublicInformationSlotStatus = relevant?.status === "FOUND" ? "VERIFIED_PRESENT" : relevant?.status === "PARTIAL" ? "PARTIALLY_PRESENT" : relevant?.status === "NOT_FOUND_IN_CHECKED_SCOPE" ? "VERIFIED_MISSING" : "NOT_CHECKED";
-    const score = status === "VERIFIED_PRESENT" ? 100 : status === "PARTIALLY_PRESENT" ? 60 : status === "VERIFIED_MISSING" ? 0 : null;
-    return { id, title, weight, status, score };
-  });
-  const checkedWeight = dimensions.filter((dimension) => dimension.score !== null).reduce((total, dimension) => total + dimension.weight, 0);
-  const weighted = dimensions.reduce((total, dimension) => total + (dimension.score ?? 0) * dimension.weight, 0);
-  const questions = (input.customerQuestions ?? []).map((item) => item.question).filter((question): question is string => typeof question === "string");
-  const assets = selected.policy.assets.slice(0, 6).map((title, index) => ({
-    title, linkedQuestion: questions[index] ?? "帮助客户快速确认企业服务与决策信息", suggestedContent: ["明确适用对象和服务边界", "标注资料来源与更新时间", "提供下一步咨询或确认入口"],
-    businessValue: "降低客户在公开信息中确认关键事实的成本。", evidenceBoundary: "本建议基于本次公开信息覆盖范围，不构成对企业现状的确定性判断。",
+function overallScore(dimensions: MvpGeoDiagnosticReportV1["score"]["dimensions"], completion: number): number | null {
+  if (completion < 80) return null;
+  return Math.round(dimensions.reduce((total, dimension) => total + (dimension.score ?? 0), 0));
+}
+
+function topMissingFindings(dimensions: MvpGeoDiagnosticReportV1["score"]["dimensions"], limit: number) {
+  return dimensions
+    .flatMap((dimension) => dimension.findings.map((finding) => ({ dimension, finding })))
+    .filter((entry) => entry.finding.status !== "CLEARLY_FOUND")
+    .sort((a, b) => (a.finding.score ?? -1) - (b.finding.score ?? -1))
+    .slice(0, limit);
+}
+
+function buildSourceCoverageMatrix(dimensions: MvpGeoDiagnosticReportV1["score"]["dimensions"], searchCompleted: boolean): SourceCoverageSlotV1[] {
+  return dimensions.flatMap((dimension) => dimension.findings.map((finding, index) => ({
+    slotId: `${dimension.id}_${index + 1}`,
+    title: finding.title,
+    category: dimension.title,
+    status: finding.status === "CLEARLY_FOUND" ? "FOUND" : finding.status === "PARTIALLY_FOUND" ? "PARTIAL" : finding.status === "NOT_CHECKED" ? "NOT_CHECKED" : "NOT_FOUND_IN_CHECKED_SCOPE",
+    evidenceIds: finding.evidenceIds,
+    checkedQueries: searchCompleted ? ["本次公开网络检索"] : [],
+    sourceTypes: [],
+    findingSummary: finding.currentStatus,
+    missingInformation: finding.status === "CLEARLY_FOUND" ? "" : `缺少集中、清晰的${finding.title}。`,
+    recommendedAction: finding.recommendation,
+    confidence: finding.status === "CLEARLY_FOUND" ? 0.8 : finding.status === "PARTIALLY_FOUND" ? 0.5 : 0.3,
+    requiredForFullDiagnosis: true,
+  })));
+}
+
+function dimensionRows(report: MvpGeoDiagnosticReportV1, dimensionId: string) {
+  const dimension = report.score.dimensions.find((item) => item.id === dimensionId);
+  return dimension?.findings ?? [];
+}
+
+function industryQuestions(policy: PolicyDefinition, input: DiagnosisInput): string[] {
+  const submitted = (input.customerQuestions ?? [])
+    .map((item) => item.question)
+    .filter((question): question is string => typeof question === "string" && question.trim().length > 0);
+  const typical = policy.id === "REGULATED_MEDICAL"
+    ? ["这家机构是否正规？", "有哪些服务项目和流程？", "怎么预约，收费和随访如何安排？"]
+    : policy.id === "LOCAL_LIFESTYLE_SERVICE"
+      ? ["门店在哪里，营业时间是什么？", "服务项目和价格区间是什么？", "如何预约到店，售后怎么处理？"]
+      : ["企业主要产品或服务是什么？", "产品适合什么场景？", "如何购买、咨询或商务合作？"];
+  return [...submitted, ...typical].slice(0, 8);
+}
+
+function buildCoreIssues(report: MvpGeoDiagnosticReportV1): MvpGeoDiagnosticReportV1["coreIssues"] {
+  type CoreIssue = MvpGeoDiagnosticReportV1["coreIssues"][number];
+  const definitions = [
+    ["基础信源体系薄弱", "企业身份、官方入口、地图或平台入口没有形成稳定的公开信源体系。", "sourceFoundation"],
+    ["服务内容资产不足", "客户搜索到企业后，还需要进一步理解项目、流程、边界和适用场景。", "contentAssets"],
+    ["客户问题覆盖不足", "用户提交问题和行业典型问题缺少可直接引用的公开答案。", "customerScenarios"],
+    ["信任信息不完整", "主体、团队、流程、风险、案例和售后信息没有形成完整决策链路。", "trustInformation"],
+    ["咨询转化路径不清晰", "联系方式、预约、收费边界和售后路径没有被组织成低摩擦转化入口。", "conversionPath"],
+    ["本地语义关联不足", "地区、服务项目和客户搜索语言之间的内容连接仍不够集中。", "customerScenarios"],
+  ] as const;
+  const dimensionMap = new Map(report.score.dimensions.map((dimension) => [dimension.id, dimension]));
+  return definitions
+    .map(([title, essence, dimensionId], index) => {
+      const dimension = dimensionMap.get(dimensionId);
+      const score = dimension?.score ?? 0;
+      const missing = dimension?.findings.filter((finding) => finding.status !== "CLEARLY_FOUND").slice(0, 2).map((finding) => finding.title).join("、") || "相关公开入口";
+      const severity: CoreIssue["severity"] = score <= 25 ? "★★★★★" : score <= 50 ? "★★★★☆" : "★★★☆☆";
+      const priority: CoreIssue["priority"] = index < 2 || score <= 25 ? "P0" : index < 4 || score <= 50 ? "P1" : "P2";
+      return {
+        title,
+        essence,
+        currentPerformance: `本次检索中，${missing}仍未形成集中、清晰的公开信息。`,
+        impacts: [
+          "客户理解：客户需要跨多个入口拼接信息，容易中途流失。",
+          "信任判断：缺少集中说明时，客户难以判断信息来源和更新状态。",
+          "搜索咨询：搜索和AI问答难以稳定引用企业自己的完整答案。",
+        ],
+        severity,
+        priority,
+        direction: dimension?.findings.find((finding) => finding.status !== "CLEARLY_FOUND")?.recommendation ?? "整理真实资料，形成可检索、可引用、可持续更新的公开内容资产。",
+      };
+    })
+    .sort((a, b) => {
+      const priorityRank: Record<CoreIssue["priority"], number> = { P0: 0, P1: 1, P2: 2 };
+      return priorityRank[a.priority] - priorityRank[b.priority];
+    })
+    .slice(0, 6);
+}
+
+function withPriorities(policy: PolicyDefinition): MvpGeoDiagnosticReportV1["contentPlans"] {
+  return policy.plans.slice(0, 8).map((plan, index) => ({
+    ...plan,
+    priority: index < 3 ? "P0" : index < 6 ? "P1" : "P2",
   }));
+}
+
+function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[], searchCompleted: boolean, generatedAt = new Date().toISOString()): MvpGeoDiagnosticReportV1 {
+  const policy = selectPolicy(input.industry, input.productOrService);
+  const dimensions = scoreDimensions(policy, input, evidence, searchCompleted);
+  const completion = completionRate(dimensions);
+  const overall = overallScore(dimensions, completion);
+  const level = scoreLevel(overall);
+  const topMissing = topMissingFindings(dimensions, 3);
+  const companyName = input.brandName ?? "待确认企业";
+  const industry = input.industry ?? policy.label;
+  const region = input.targetRegion ?? "待确认地区";
+  const reportDate = generatedAt;
+  const questions = industryQuestions(policy, input);
+
+  const report: MvpGeoDiagnosticReportV1 = {
+    strategyPack: policy.id,
+    score: {
+      overall,
+      level,
+      completionRate: completion,
+      dimensions,
+      explanation: "GEO公开信息基础指数采用五个一级维度，检查项按已清晰发现、部分发现、本次检索未发现、尚未执行检查四类处理；前三类分别按100%、50%、0%计分，未执行检查不参与评分并降低检查完成度。",
+    },
+    overview: {
+      companyName,
+      industry,
+      region,
+      reportDate,
+      overallEvaluation: overall === null
+        ? `${companyName}本次检查完成度为${completion}%，暂不输出总分。`
+        : `${companyName}当前GEO公开信息基础指数为${overall}分，属于“${level}”。公开信息可以开始作为诊断依据，但仍存在明显建设空间。`,
+      topProblems: topMissing.map((entry) => entry.finding.title).slice(0, 3),
+      topOpportunities: [
+        "先补齐企业身份、官方入口和本地信源，让客户能确认企业基本事实。",
+        "围绕服务项目和客户问题建设结构化内容，让搜索和AI问答有可引用答案。",
+        "把咨询、预约、收费边界和售后路径做成清晰转化链路。",
+      ],
+    },
+    industryAnalysis: [...policy.industryAnalysis],
+    sourceFoundationRows: [],
+    contentAssetRows: [],
+    customerScenarioRows: [],
+    trustRiskRows: [],
+    coreIssues: [],
+    contentPlans: withPriorities(policy),
+    roadmap: [
+      { stage: "0-30天", companyActions: ["确认企业主体、品牌名称、地址、联系方式和可公开资料。", "提供核心服务项目、团队和预约规则。"], xingmeiDeliverables: ["完成公开信源清单和页面结构。", "输出企业身份、基础项目和转化入口文案。"], acceptanceCriteria: ["客户搜索品牌名能看到统一基础信息。", "官网、地图或官方账号至少形成一个清晰入口。"] },
+      { stage: "31-60天", companyActions: ["补充客户高频问题、服务流程、注意事项和案例评价材料。", "确认可公开的价格边界、售后和投诉处理规则。"], xingmeiDeliverables: ["建设客户决策FAQ、项目页和信任信息页。", "完成行业典型搜索场景内容覆盖。"], acceptanceCriteria: ["客户搜索地区和项目时能找到结构化说明。", "用户提交问题至少有集中公开内容可回答。"] },
+      { stage: "61-90天", companyActions: ["按月提供新增服务、案例和客户问题。", "配合复测公开信息表现并校正内容。"], xingmeiDeliverables: ["持续发布、测试、更新和优化内容资产。", "输出阶段复盘和下一轮建设建议。"], acceptanceCriteria: ["核心内容持续更新。", "重点问题和转化入口完成复测，不承诺排名或流量结果。"] },
+    ],
+    conclusion: [
+      overall === null ? `本次检查完成度为${completion}%，需要先补齐检查范围。` : `${companyName}当前分数为${overall}分，最大问题是公开信息入口和客户决策内容仍不够集中。`,
+      "最大机会在于把企业真实资料整理成可检索、可理解、可引用的GEO内容资产，先解决客户能不能找到、看懂、信任并咨询的问题。",
+      "第一阶段应优先补齐企业身份、官方入口、服务项目、预约咨询和信任信息，再进入持续内容发布和复测。",
+    ],
+    disclaimer: DISCLAIMER,
+    visibleCharacterCount: 0,
+    algorithmVersion: "fast-mvp-geo-diagnostic-report.v1",
+  };
+
+  report.sourceFoundationRows = dimensionRows(report, "sourceFoundation").map((finding) => ({
+    sourceType: finding.title,
+    finding: finding.currentStatus,
+    status: statusCopy(finding.status),
+    score: finding.score,
+    decisionImpact: finding.impact,
+    optimization: finding.recommendation,
+  }));
+  report.contentAssetRows = dimensionRows(report, "contentAssets").map((finding) => ({
+    item: finding.title,
+    currentStatus: finding.currentStatus,
+    score: finding.score,
+    gap: finding.status === "CLEARLY_FOUND" ? "已具备基础公开信息。" : `缺少集中、清晰的${finding.title}。`,
+    impact: finding.impact,
+    recommendation: finding.recommendation,
+  }));
+  report.customerScenarioRows = questions.map((question, index) => {
+    const finding = dimensionRows(report, "customerScenarios")[index % 5]!;
+    return {
+      scenario: finding.title,
+      question,
+      answerability: finding.status === "CLEARLY_FOUND" ? "公开信息可清晰回答" : finding.status === "PARTIALLY_FOUND" ? "只能部分回答" : "基本无法回答",
+      performance: finding.currentStatus,
+      score: finding.score,
+      impact: finding.impact,
+      recommendedContent: finding.recommendation,
+    };
+  });
+  report.trustRiskRows = [...dimensionRows(report, "trustInformation"), ...dimensionRows(report, "conversionPath")].map((finding) => ({
+    item: finding.title,
+    currentStatus: finding.currentStatus,
+    score: finding.score,
+    impact: finding.impact,
+    recommendation: finding.recommendation,
+  }));
+  report.coreIssues = buildCoreIssues(report);
+  report.visibleCharacterCount = countVisibleChars(report);
+  return report;
+}
+
+function countVisibleChars(report: MvpGeoDiagnosticReportV1): number {
+  const texts: string[] = [
+    report.overview.overallEvaluation,
+    ...report.overview.topProblems,
+    ...report.overview.topOpportunities,
+    ...report.industryAnalysis,
+    ...report.sourceFoundationRows.flatMap((row) => [row.sourceType, row.finding, row.status, row.decisionImpact, row.optimization]),
+    ...report.contentAssetRows.flatMap((row) => [row.item, row.currentStatus, row.gap, row.impact, row.recommendation]),
+    ...report.customerScenarioRows.flatMap((row) => [row.scenario, row.question, row.answerability, row.performance, row.impact, row.recommendedContent]),
+    ...report.trustRiskRows.flatMap((row) => [row.item, row.currentStatus, row.impact, row.recommendation]),
+    ...report.coreIssues.flatMap((issue) => [issue.title, issue.essence, issue.currentPerformance, ...issue.impacts, issue.severity, issue.priority, issue.direction]),
+    ...report.contentPlans.flatMap((plan) => [plan.title, plan.buildContent, plan.solvesProblem, plan.recommendedCarrier, plan.priority, ...plan.requiredMaterials, ...plan.deliverables]),
+    ...report.roadmap.flatMap((stage) => [stage.stage, ...stage.companyActions, ...stage.xingmeiDeliverables, ...stage.acceptanceCriteria]),
+    ...report.conclusion,
+    report.disclaimer,
+  ];
+  return texts.join("").replace(/\s+/g, "").length;
+}
+
+export function buildUniversalLimitedReport(input: DiagnosisInput, evidence: readonly EvidenceItem[], searchCompleted: boolean, generatedAt = new Date().toISOString()): LimitedReportDataV1 {
+  const mvpReport = buildMvpReport(input, evidence, searchCompleted, generatedAt);
+  const policy = selectPolicy(input.industry, input.productOrService);
+  const sourceCoverageMatrix = buildSourceCoverageMatrix(mvpReport.score.dimensions, searchCompleted);
+  const evidenceCount = sourceCounts(evidence);
+  const dimensions = mvpReport.score.dimensions.map((dimension) => {
+    const status: PublicInformationSlotStatus = dimension.checkedItemCount === 0
+      ? "NOT_CHECKED"
+      : (dimension.score ?? 0) >= dimension.maxScore * 0.8
+        ? "VERIFIED_PRESENT"
+        : (dimension.score ?? 0) > 0
+          ? "PARTIALLY_PRESENT"
+          : "VERIFIED_MISSING";
+    return {
+      id: dimension.id,
+      title: dimension.title,
+      weight: dimension.maxScore / 100,
+      status,
+      score: dimension.score === null ? null : Math.round((dimension.score / dimension.maxScore) * 100),
+    };
+  });
+  const questions = (input.customerQuestions ?? []).map((item) => item.question).filter((question): question is string => typeof question === "string");
   return {
-    readinessScore: { score: checkedWeight >= 0.4 ? Math.round(weighted / checkedWeight) : null, scoreCoverage: checkedWeight, checkedWeight,
-      summary: checkedWeight >= 0.4 ? "该指数用于反映本次公开信息建设基础，不代表AI排名、市场份额或经营表现。" : "扫描范围不足，暂不显示准备度分。", // security-check:allow required public boundary copy
-      dimensions, algorithmVersion: "public-information-readiness-score.v1" },
-    sourceCoverageMatrix: coverage,
-    verticalPolicy: { selectedPack: selected.policy.id, resolutionStatus: selected.resolutionStatus, requiredSlots: [...selected.policy.slots], prohibitedClaims: [...selected.policy.prohibitedClaims] },
-    questionCoverage: questions.map((question) => ({ question, answerStatus: "当前公开信息可回答程度有限", missingInformation: "缺少可公开核验的集中说明。", recommendedContent: "建立对应问题的结构化说明与咨询入口。" })),
-    contentAssetPlans: assets.length >= 2 ? assets : [...assets, ...POLICIES.GENERAL_BUSINESS.assets.slice(assets.length, 2).map((title) => ({ title, linkedQuestion: "帮助客户快速确认企业服务与决策信息", suggestedContent: ["明确适用对象和服务边界", "标注资料来源与更新时间", "提供下一步咨询或确认入口"], businessValue: "降低客户在公开信息中确认关键事实的成本。", evidenceBoundary: "本建议基于本次公开信息覆盖范围，不构成对企业现状的确定性判断。" }))],
-    requestedMaterials: ["官网或官方账号", "资质或主体材料", "产品/服务清单", "团队信息", "流程与价格说明", "案例、评价或售后资料"],
-    evidenceCounts: evidenceCount, algorithmVersion: "universal-limited-report.v1",
+    readinessScore: {
+      score: mvpReport.score.overall,
+      scoreCoverage: mvpReport.score.completionRate / 100,
+      checkedWeight: mvpReport.score.completionRate / 100,
+      summary: mvpReport.score.explanation,
+      dimensions,
+      algorithmVersion: "public-information-readiness-score.v1",
+    },
+    sourceCoverageMatrix,
+    verticalPolicy: {
+      selectedPack: policy.id,
+      resolutionStatus: "RESOLVED",
+      requiredSlots: policy.dimensions.flatMap((dimension) => dimension.items.map((item) => item.title)),
+      prohibitedClaims: [...policy.prohibitedClaims],
+    },
+    questionCoverage: (questions.length > 0 ? questions : industryQuestions(policy, input).slice(0, 5)).map((question, index) => {
+      const row = mvpReport.customerScenarioRows[index % mvpReport.customerScenarioRows.length]!;
+      return {
+        question,
+        answerStatus: row.answerability,
+        missingInformation: row.performance,
+        recommendedContent: row.recommendedContent,
+      };
+    }),
+    contentAssetPlans: mvpReport.contentPlans.map((plan) => ({
+      title: plan.title,
+      linkedQuestion: plan.solvesProblem,
+      suggestedContent: [plan.buildContent, `建议载体：${plan.recommendedCarrier}`, `星媄数据可交付：${plan.deliverables.join("、")}`],
+      businessValue: `解决${plan.solvesProblem}，降低客户理解和咨询成本。`,
+      evidenceBoundary: DISCLAIMER,
+    })),
+    requestedMaterials: [...policy.requestedMaterials].slice(0, 8),
+    evidenceCounts: evidenceCount,
+    mvpReport,
+    algorithmVersion: "fast-mvp-geo-diagnostic-report.v1",
+  };
+}
+
+function canonicalScoreDimension(score: number | null, maxScore: number, evidenceIds: string[]) {
+  return {
+    score: score === null ? null : Math.round((score / maxScore) * 100),
+    measurementStatus: score === null ? "INSUFFICIENT_EVIDENCE" as const : "MEASURED" as const,
+    confidence: score === null ? 0 : 0.6,
+    evidenceIds,
   };
 }
 
@@ -138,8 +617,10 @@ export function buildLimitedCanonicalReport(args: {
   searchCompleted: boolean;
   generatedAt: string;
 }): DiagnosisReport {
-  const limitedReport = buildUniversalLimitedReport(args.input, args.evidence, args.searchCompleted);
-  const insufficient = { score: null, measurementStatus: "INSUFFICIENT_EVIDENCE" as const, confidence: 0, evidenceIds: [] };
+  const limitedReport = buildUniversalLimitedReport(args.input, args.evidence, args.searchCompleted, args.generatedAt);
+  const dimensions = limitedReport.mvpReport!.score.dimensions;
+  const byId = new Map(dimensions.map((dimension) => [dimension.id, dimension]));
+  const evidenceIds = args.evidence.map((item) => item.id);
   return {
     reportContractVersion: REPORT_CONTRACT_VERSION,
     scoreContractVersion: SCORE_CONTRACT_VERSION,
@@ -154,10 +635,30 @@ export function buildLimitedCanonicalReport(args: {
       productOrService: args.input.productOrService ?? "待确认服务",
       targetRegion: args.input.targetRegion ?? "待确认地区",
       competitors: [],
-      unresolvedQuestions: ["本次仅完成公开信息基础扫描，需补充官方材料后开展完整诊断。"],
+      unresolvedQuestions: [],
     },
-    scores: { companyClarity: insufficient, websiteCompleteness: insufficient, customerQuestionCoverage: insufficient, trustEvidence: insufficient, aiVisibility: insufficient, overallScore: null, scoreCoverage: 0 },
-    aiVisibilityTests: [], strengths: [], coreIssues: [], competitorGaps: [], geoOpportunities: [], demonstrationFix: null,
-    questionCoverageAssessments: [], questionCoverageGaps: [], evidence: args.evidence, limitedReport,
+    scores: {
+      companyClarity: canonicalScoreDimension(byId.get("sourceFoundation")?.score ?? null, 25, evidenceIds),
+      websiteCompleteness: canonicalScoreDimension(byId.get("contentAssets")?.score ?? null, 25, evidenceIds),
+      customerQuestionCoverage: canonicalScoreDimension(byId.get("customerScenarios")?.score ?? null, 20, evidenceIds),
+      trustEvidence: canonicalScoreDimension(byId.get("trustInformation")?.score ?? null, 20, evidenceIds),
+      aiVisibility: canonicalScoreDimension(byId.get("conversionPath")?.score ?? null, 10, evidenceIds),
+      overallScore: limitedReport.mvpReport!.score.overall,
+      scoreCoverage: limitedReport.mvpReport!.score.completionRate / 100,
+    },
+    aiVisibilityTests: [],
+    strengths: [],
+    coreIssues: [],
+    competitorGaps: [],
+    geoOpportunities: [],
+    demonstrationFix: null,
+    questionCoverageAssessments: [],
+    questionCoverageGaps: [],
+    evidence: args.evidence,
+    executionMode: "LIMITED_PUBLIC_SCAN",
+    publicReportEligible: true,
+    publicReportStatus: "LIMITED_READY",
+    reportProvenance: "FAST_MVP_GEO_DIAGNOSTIC_REPORT_V1",
+    limitedReport,
   };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { EnterpriseReportViewModel } from "../../src/contracts";
+import type { EnterpriseReportViewModel, LimitedReportDataV1 } from "../../src/contracts";
 import { ScoreHeadline } from "./score-card";
 import { formatDate } from "./labels";
 import { PRIMARY_CTA_LABEL, SECONDARY_CTA_LABEL, SERVICE_BRAND_NAME } from "../../src/product/customer-copy";
@@ -363,32 +363,238 @@ const SERVICE_COLLAB_ITEMS = [
 
 function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
   const limited = vm.limitedReport!;
-  const readiness = limited.readinessScore;
-  const statusLabel: Record<string, string> = {
-    FOUND: "已发现公开信息", PARTIAL: "已发现部分信息",
-    NOT_FOUND_IN_CHECKED_SCOPE: "在本次已检查范围中暂未发现", NOT_CHECKED: "本次尚未完成核验",
-    CONFLICTED: "信息存在冲突", PROVIDER_FAILED: "本次核验未完成",
-  };
+  const report = limited.mvpReport;
+  if (!report) {
+    return <LegacyLimitedEnterpriseReport vm={vm} />;
+  }
   return (
     <div className="min-h-screen bg-neutral-100">
       <div className="mx-auto max-w-[1000px] px-4 py-6 sm:px-6 lg:px-8">
         <header className="mb-4 flex items-center justify-between border-b border-neutral-200 pb-4">
-          <div><p className="text-xs text-neutral-400">{SERVICE_BRAND_NAME}</p><h1 className="mt-0.5 text-base font-semibold text-neutral-900">企业公开信息基础扫描</h1></div>
+          <div><p className="text-xs text-neutral-400">{SERVICE_BRAND_NAME}</p><h1 className="mt-0.5 text-base font-semibold text-neutral-900">企业GEO诊断报告</h1></div>
           <div className="text-right text-xs text-neutral-400"><div className="break-words">{vm.brandName}</div><div className="mt-0.5">{formatDate(vm.reportDate)}</div></div>
         </header>
-        <Section index={1} title="扫描结论" className="mb-4">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2"><div className="space-y-3"><h2 className="text-xl font-bold text-neutral-900 break-words">{vm.brandName}</h2><p className="text-sm leading-[1.65] text-neutral-700">当前仅完成基础公开信息扫描。由于官方入口、正文证据或完整分析阶段尚不完整，本结果不构成正式企业诊断报告。</p><p className="rounded-lg bg-amber-50 p-3 text-xs leading-[1.65] text-amber-900">{readiness.summary}</p></div><div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4"><p className="text-xs text-neutral-500">公开信息准备度指数</p><p className="mt-1 text-3xl font-semibold text-neutral-900">{readiness.score === null ? "扫描范围不足" : `${readiness.score} 分`}</p><p className="mt-2 text-xs text-neutral-500">本次检查覆盖度 {Math.round(readiness.scoreCoverage * 100)}%</p></div></div>
-          <button type="button" className="mt-4 w-full rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white">补充企业信息并完善诊断</button>
+
+        <Section index={1} title="GEO诊断总览" className="mb-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-bold text-neutral-900 break-words">{report.overview.companyName}</h2>
+                <span className="rounded bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-500">LIMITED_PUBLIC_SCAN</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 text-xs text-neutral-600 sm:grid-cols-3">
+                <MetaItem label="行业" value={report.overview.industry} />
+                <MetaItem label="地区" value={report.overview.region} />
+                <MetaItem label="报告日期" value={formatDate(report.overview.reportDate)} />
+              </div>
+              <p className="text-sm leading-[1.75] text-neutral-700">{report.overview.overallEvaluation}</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <MiniList title="三个最严重问题" items={report.overview.topProblems} />
+                <MiniList title="三个最重要建设机会" items={report.overview.topOpportunities} />
+              </div>
+            </div>
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+              <p className="text-xs text-neutral-500">GEO公开信息基础指数</p>
+              <p className="mt-1 text-4xl font-semibold text-neutral-900">{report.score.overall === null ? "未评分" : `${report.score.overall}`}</p>
+              <p className="mt-1 text-sm font-medium text-neutral-700">{report.score.level}</p>
+              <p className="mt-2 text-xs text-neutral-500">检查完成度 {report.score.completionRate}%</p>
+              <div className="mt-3 space-y-2">
+                {report.score.dimensions.map((dimension) => (
+                  <ScoreBar key={dimension.id} label={dimension.title} score={dimension.score} max={dimension.maxScore} />
+                ))}
+              </div>
+            </div>
+          </div>
         </Section>
-        <Section index={2} title="已发现的公开基础" className="mb-4"><p className="text-sm leading-[1.65] text-neutral-700">本次共保留 {limited.evidenceCounts.total} 条公开证据。其中搜索摘要 {limited.evidenceCounts.searchSnippet} 条、抓取页面 {limited.evidenceCounts.crawledPage} 条、官方页面 {limited.evidenceCounts.officialPage} 条、官方登记 {limited.evidenceCounts.officialRegistry} 条。以下内容仅反映本次已检查来源。</p></Section>
-        <Section index={3} title="公开来源覆盖矩阵" className="mb-4"><div className="space-y-2">{limited.sourceCoverageMatrix.map((slot) => <div key={slot.slotId} className="rounded-lg border border-neutral-200 p-3"><div className="flex flex-col justify-between gap-1 sm:flex-row"><p className="text-sm font-semibold text-neutral-900">{slot.title}</p><p className="text-xs text-neutral-500">{statusLabel[slot.status]}</p></div><p className="mt-1 text-xs leading-[1.65] text-neutral-600">{slot.findingSummary}</p>{slot.missingInformation && <p className="mt-1 text-xs text-neutral-500">建议：{slot.recommendedAction}</p>}</div>)}</div></Section>
-        <Section index={4} title="客户决策问题与可回答程度" className="mb-4"><div className="space-y-2">{limited.questionCoverage.length > 0 ? limited.questionCoverage.map((item, index) => <div key={`${item.question}-${index}`} className="rounded-lg border border-neutral-200 p-3"><p className="text-sm font-semibold text-neutral-900">{item.question}</p><p className="mt-1 text-xs text-neutral-600">{item.answerStatus}</p><p className="mt-1 text-xs text-neutral-500">建议建设：{item.recommendedContent}</p></div>) : <p className="text-sm text-neutral-600">本次未提交客户决策问题，建议补充常见咨询、预约或合作问题后继续诊断。</p>}</div></Section>
-        <Section index={5} title="行业信任与信息建设地图" className="mb-4"><p className="text-sm leading-[1.65] text-neutral-700">已采用 {limited.verticalPolicy.selectedPack} 策略包。{limited.verticalPolicy.resolutionStatus === "NEEDS_CONFIRMATION" ? "当前行业属性仍需企业确认，暂不套用受监管医疗结论。" : "以下为通用建设方向，不是对企业现状的确定性判断。"}</p><div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">{limited.verticalPolicy.requiredSlots.map((slot) => <div key={slot} className="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-700">{slot}</div>)}</div></Section>
-        <Section index={6} title="重点内容资产方案" className="mb-4"><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{limited.contentAssetPlans.map((plan) => <div key={plan.title} className="rounded-lg border border-neutral-200 p-3"><h3 className="text-sm font-semibold text-neutral-900">{plan.title}</h3><p className="mt-2 text-xs text-neutral-600">对应问题：{plan.linkedQuestion}</p><p className="mt-2 text-xs text-neutral-600">{plan.suggestedContent.join("；")}</p><p className="mt-2 text-xs text-neutral-500">{plan.evidenceBoundary}</p></div>)}</div></Section>
-        <Section index={7} title="优先推进路线" className="mb-4"><div className="grid grid-cols-1 gap-3 sm:grid-cols-3">{[["阶段一", "确认企业身份和官方信息。"], ["阶段二", "补齐客户决策内容及转化入口。"], ["阶段三", "开展正式评估和持续优化。"]].map(([title, content]) => <div key={title} className="rounded-lg border border-neutral-200 p-3"><p className="text-xs font-semibold text-neutral-700">{title}</p><p className="mt-1 text-xs text-neutral-600">{content}</p></div>)}</div></Section>
-        <Section index={8} title="需要企业补充的材料" className="mb-4"><ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">{limited.requestedMaterials.map((item) => <li key={item} className="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-700">{item}</li>)}</ul></Section>
-        <Section index={9} title="证据附件" className="mb-4"><EvidenceSection evidence={vm.evidence} /></Section>
-        <footer className="mt-6 border-t border-neutral-200 pt-4 text-center text-xs text-neutral-400">{SERVICE_BRAND_NAME} · 企业公开信息基础扫描 · {formatDate(vm.reportDate)}</footer>
+
+        <Section index={2} title="GEO与行业适配分析" className="mb-4">
+          <div className="space-y-3 text-sm leading-[1.75] text-neutral-700">{report.industryAnalysis.map((item, index) => <p key={index}>{item}</p>)}</div>
+        </Section>
+
+        <Section index={3} title="基础信源收录诊断" className="mb-4">
+          <ResponsiveTable headers={["信源类型", "本次检索结果", "状态", "得分", "影响", "优化方向"]} rows={report.sourceFoundationRows.map((row) => [row.sourceType, row.finding, row.status, formatFindingScore(row.score), row.decisionImpact, row.optimization])} />
+        </Section>
+
+        <Section index={4} title="内容资产盘点" className="mb-4">
+          <ResponsiveTable headers={["内容项", "当前现状", "得分", "具体缺口", "影响", "建议"]} rows={report.contentAssetRows.map((row) => [row.item, row.currentStatus, formatFindingScore(row.score), row.gap, row.impact, row.recommendation])} />
+        </Section>
+
+        <Section index={5} title="客户搜索与AI问答准备度测试" className="mb-4">
+          <ResponsiveTable headers={["搜索场景", "用户会怎么问", "能否回答", "当前表现", "得分", "影响", "建议建设内容"]} rows={report.customerScenarioRows.map((row) => [row.scenario, row.question, row.answerability, row.performance, formatFindingScore(row.score), row.impact, row.recommendedContent])} />
+        </Section>
+
+        <Section index={6} title="信任与风险信息诊断" className="mb-4">
+          <ResponsiveTable headers={["诊断项", "当前现状", "得分", "影响", "建议"]} rows={report.trustRiskRows.map((row) => [row.item, row.currentStatus, formatFindingScore(row.score), row.impact, row.recommendation])} />
+        </Section>
+
+        <Section index={7} title="核心GEO问题深度诊断" className="mb-4">
+          <div className="space-y-3">{report.coreIssues.map((issue) => <IssueBlock key={issue.title} issue={issue} />)}</div>
+        </Section>
+
+        <Section index={8} title="GEO建设方案" className="mb-4">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{report.contentPlans.map((plan) => <PlanBlock key={plan.title} plan={plan} />)}</div>
+        </Section>
+
+        <Section index={9} title="30/60/90天执行路线" className="mb-4">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">{report.roadmap.map((stage) => <RoadmapStage key={stage.stage} stage={stage} />)}</div>
+        </Section>
+
+        <Section index={10} title="结论和下一步" className="mb-4">
+          <div className="space-y-3 text-sm leading-[1.75] text-neutral-700">{report.conclusion.map((item, index) => <p key={index}>{item}</p>)}</div>
+          <p className="mt-4 rounded-lg bg-neutral-50 p-3 text-xs leading-[1.7] text-neutral-500">{report.disclaimer}</p>
+        </Section>
+
+        <div className="mb-4 rounded-lg border border-neutral-200 bg-white p-4">
+          <EvidenceSection evidence={vm.evidence} />
+        </div>
+
+        <footer className="mt-6 border-t border-neutral-200 pt-4 text-center text-xs text-neutral-400">{SERVICE_BRAND_NAME} · 企业GEO诊断报告 · {formatDate(vm.reportDate)}</footer>
+      </div>
+    </div>
+  );
+}
+
+function formatFindingScore(score: number | null) {
+  return score === null ? "未检查" : `${score}`;
+}
+
+function MetaItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-neutral-50 px-3 py-2">
+      <p className="text-[11px] text-neutral-400">{label}</p>
+      <p className="mt-0.5 break-words text-xs font-medium text-neutral-700">{value}</p>
+    </div>
+  );
+}
+
+function MiniList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="rounded-lg border border-neutral-200 p-3">
+      <p className="mb-2 text-xs font-semibold text-neutral-700">{title}</p>
+      <ul className="space-y-1.5">
+        {items.map((item) => <li key={item} className="text-xs leading-[1.65] text-neutral-600">{item}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function ScoreBar({ label, score, max }: { label: string; score: number | null; max: number }) {
+  const pct = score === null ? 0 : Math.max(0, Math.min(100, Math.round((score / max) * 100)));
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="text-neutral-600">{label}</span>
+        <span className="font-medium text-neutral-800">{score === null ? "未检查" : `${score}/${max}`}</span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded bg-neutral-200">
+        <div className="h-full rounded bg-neutral-900" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function ResponsiveTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-neutral-200">
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full border-collapse text-left text-xs">
+          <thead className="bg-neutral-50 text-neutral-500">
+            <tr>{headers.map((header) => <th key={header} className="px-3 py-2 font-medium">{header}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-100">
+            {rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={`${rowIndex}-${cellIndex}`} className="px-3 py-2 align-top leading-[1.6] text-neutral-700">{cell}</td>)}</tr>)}
+          </tbody>
+        </table>
+      </div>
+      <div className="divide-y divide-neutral-100 md:hidden">
+        {rows.map((row, rowIndex) => (
+          <div key={rowIndex} className="space-y-1.5 p-3">
+            {row.map((cell, cellIndex) => (
+              <div key={`${rowIndex}-${cellIndex}`} className="grid grid-cols-[88px_1fr] gap-2 text-xs leading-[1.6]">
+                <span className="text-neutral-400">{headers[cellIndex]}</span>
+                <span className="break-words text-neutral-700">{cell}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function IssueBlock({ issue }: { issue: NonNullable<LimitedReportDataV1["mvpReport"]>["coreIssues"][number] }) {
+  return (
+    <article className="rounded-lg border border-neutral-200 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-neutral-900">{issue.title}</h3>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="font-medium text-red-700">{issue.severity}</span>
+          <span className="rounded bg-neutral-100 px-2 py-1 font-medium text-neutral-700">{issue.priority}</span>
+        </div>
+      </div>
+      <dl className="mt-3 space-y-2 text-xs leading-[1.65]">
+        <DetailRow label="问题本质" value={issue.essence} />
+        <DetailRow label="当前表现" value={issue.currentPerformance} />
+        <DetailRow label="具体影响" value={issue.impacts.join(" ")} />
+        <DetailRow label="建设方向" value={issue.direction} />
+      </dl>
+    </article>
+  );
+}
+
+function PlanBlock({ plan }: { plan: NonNullable<LimitedReportDataV1["mvpReport"]>["contentPlans"][number] }) {
+  return (
+    <article className="rounded-lg border border-neutral-200 p-4">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-sm font-semibold text-neutral-900">{plan.title}</h3>
+        <span className="rounded bg-neutral-100 px-2 py-1 text-xs font-medium text-neutral-700">{plan.priority}</span>
+      </div>
+      <dl className="mt-3 space-y-2 text-xs leading-[1.65]">
+        <DetailRow label="建设内容" value={plan.buildContent} />
+        <DetailRow label="解决问题" value={plan.solvesProblem} />
+        <DetailRow label="建议载体" value={plan.recommendedCarrier} />
+        <DetailRow label="企业材料" value={plan.requiredMaterials.join("、")} />
+        <DetailRow label="星媄交付" value={plan.deliverables.join("、")} />
+      </dl>
+    </article>
+  );
+}
+
+function RoadmapStage({ stage }: { stage: NonNullable<LimitedReportDataV1["mvpReport"]>["roadmap"][number] }) {
+  return (
+    <article className="rounded-lg border border-neutral-200 p-4">
+      <h3 className="text-sm font-semibold text-neutral-900">{stage.stage}</h3>
+      <dl className="mt-3 space-y-2 text-xs leading-[1.65]">
+        <DetailRow label="企业动作" value={stage.companyActions.join(" ")} />
+        <DetailRow label="星媄交付" value={stage.xingmeiDeliverables.join(" ")} />
+        <DetailRow label="验收标准" value={stage.acceptanceCriteria.join(" ")} />
+      </dl>
+    </article>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[70px_1fr] gap-2">
+      <dt className="text-neutral-400">{label}</dt>
+      <dd className="text-neutral-700">{value}</dd>
+    </div>
+  );
+}
+
+function LegacyLimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
+  const limited = vm.limitedReport!;
+  const readiness = limited.readinessScore;
+  return (
+    <div className="min-h-screen bg-neutral-100">
+      <div className="mx-auto max-w-[1000px] px-4 py-6 sm:px-6 lg:px-8">
+        <header className="mb-4 flex items-center justify-between border-b border-neutral-200 pb-4">
+          <div><p className="text-xs text-neutral-400">{SERVICE_BRAND_NAME}</p><h1 className="mt-0.5 text-base font-semibold text-neutral-900">企业GEO诊断报告</h1></div>
+          <div className="text-right text-xs text-neutral-400"><div className="break-words">{vm.brandName}</div><div className="mt-0.5">{formatDate(vm.reportDate)}</div></div>
+        </header>
+        <Section index={1} title="GEO诊断总览" className="mb-4">
+          <p className="text-sm leading-[1.65] text-neutral-700">{readiness.summary}</p>
+        </Section>
       </div>
     </div>
   );

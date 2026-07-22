@@ -18,10 +18,12 @@ async function createLimitedReport(request: APIRequestContext): Promise<string> 
 test.describe("limited report route", () => {
   test("renders the single enriched report without analysis tabs or model copy", async ({ page, request }) => {
     await page.goto(await createLimitedReport(request));
-    await expect(page.getByRole("heading", { name: "企业公开信息基础扫描" })).toBeVisible();
-    await expect(page.getByText("公开信息准备度指数")).toBeVisible();
-    await expect(page.getByText("公开来源覆盖矩阵")).toBeVisible();
-    await expect(page.getByText("重点内容资产方案")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "企业GEO诊断报告" })).toBeVisible();
+    await expect(page.getByText("GEO公开信息基础指数", { exact: true })).toBeVisible();
+    await expect(page.getByText("基础信源收录诊断")).toBeVisible();
+    await expect(page.getByText("客户搜索与AI问答准备度测试")).toBeVisible();
+    await expect(page.getByText("核心GEO问题深度诊断")).toBeVisible();
+    await expect(page.getByText("30/60/90天执行路线")).toBeVisible();
     const text = await page.locator("body").innerText();
     expect(text).not.toContain("快速版");
     expect(text).not.toContain("完整诊断");

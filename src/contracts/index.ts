@@ -85,13 +85,122 @@ export const PublicInformationSlotStatus = z.enum(["VERIFIED_PRESENT", "PARTIALL
 export type PublicInformationSlotStatus = z.infer<typeof PublicInformationSlotStatus>;
 export const SourceCoverageStatus = z.enum(["FOUND", "PARTIAL", "NOT_FOUND_IN_CHECKED_SCOPE", "NOT_CHECKED", "CONFLICTED", "PROVIDER_FAILED"]);
 export type SourceCoverageStatus = z.infer<typeof SourceCoverageStatus>;
-export const VerticalPolicyPackId = z.enum(["GENERAL_BUSINESS", "CONSUMER_BRAND", "LOCAL_SERVICE", "LOCAL_LIFESTYLE_BEAUTY", "LOCAL_REGULATED_MEDICAL", "B2B_INDUSTRIAL"]);
+export const VerticalPolicyPackId = z.enum(["REGULATED_MEDICAL", "LOCAL_LIFESTYLE_SERVICE", "GENERAL_BRAND_BUSINESS", "GENERAL_BUSINESS", "CONSUMER_BRAND", "LOCAL_SERVICE", "LOCAL_LIFESTYLE_BEAUTY", "LOCAL_REGULATED_MEDICAL", "B2B_INDUSTRIAL"]);
 export type VerticalPolicyPackId = z.infer<typeof VerticalPolicyPackId>;
 export const PublicInformationReadinessScoreV1 = z.object({ score: z.number().min(0).max(100).nullable(), scoreCoverage: z.number().min(0).max(1), checkedWeight: z.number().min(0).max(1), summary: z.string(), dimensions: z.array(z.object({ id: z.string(), title: z.string(), weight: z.number().min(0).max(1), status: PublicInformationSlotStatus, score: z.number().min(0).max(100).nullable() })), algorithmVersion: z.literal("public-information-readiness-score.v1") });
 export type PublicInformationReadinessScoreV1 = z.infer<typeof PublicInformationReadinessScoreV1>;
 export const SourceCoverageSlotV1 = z.object({ slotId: z.string(), title: z.string(), category: z.string(), status: SourceCoverageStatus, evidenceIds: z.array(z.string()), checkedQueries: z.array(z.string()), sourceTypes: z.array(z.string()), findingSummary: z.string(), missingInformation: z.string(), recommendedAction: z.string(), confidence: z.number().min(0).max(1), requiredForFullDiagnosis: z.boolean() });
 export type SourceCoverageSlotV1 = z.infer<typeof SourceCoverageSlotV1>;
-export const LimitedReportDataV1 = z.object({ readinessScore: PublicInformationReadinessScoreV1, sourceCoverageMatrix: z.array(SourceCoverageSlotV1), verticalPolicy: z.object({ selectedPack: VerticalPolicyPackId, resolutionStatus: z.enum(["RESOLVED", "NEEDS_CONFIRMATION"]), requiredSlots: z.array(z.string()), prohibitedClaims: z.array(z.string()) }), questionCoverage: z.array(z.object({ question: z.string(), answerStatus: z.string(), missingInformation: z.string(), recommendedContent: z.string() })), contentAssetPlans: z.array(z.object({ title: z.string(), linkedQuestion: z.string(), suggestedContent: z.array(z.string()), businessValue: z.string(), evidenceBoundary: z.string() })).min(2).max(6), requestedMaterials: z.array(z.string()).max(6), evidenceCounts: z.object({ total: z.number(), searchSnippet: z.number(), crawledPage: z.number(), officialPage: z.number(), officialRegistry: z.number() }), algorithmVersion: z.literal("universal-limited-report.v1") });
+export const MvpGeoReportPackId = z.enum(["REGULATED_MEDICAL", "LOCAL_LIFESTYLE_SERVICE", "GENERAL_BRAND_BUSINESS"]);
+export type MvpGeoReportPackId = z.infer<typeof MvpGeoReportPackId>;
+export const MvpGeoScoreFindingStatus = z.enum(["CLEARLY_FOUND", "PARTIALLY_FOUND", "NOT_FOUND_IN_CHECKED_SCOPE", "NOT_CHECKED"]);
+export type MvpGeoScoreFindingStatus = z.infer<typeof MvpGeoScoreFindingStatus>;
+export const MvpGeoScoreDimension = z.object({
+  id: z.string(),
+  title: z.string(),
+  maxScore: z.number().min(0).max(100),
+  score: z.number().min(0).max(100).nullable(),
+  checkedItemCount: z.number().int().nonnegative(),
+  totalItemCount: z.number().int().positive(),
+  findings: z.array(z.object({
+    title: z.string(),
+    status: MvpGeoScoreFindingStatus,
+    score: z.number().min(0).max(100).nullable(),
+    evidenceIds: z.array(z.string()),
+    currentStatus: z.string(),
+    impact: z.string(),
+    recommendation: z.string(),
+  })),
+});
+export type MvpGeoScoreDimension = z.infer<typeof MvpGeoScoreDimension>;
+export const MvpGeoCoreIssue = z.object({
+  title: z.string(),
+  essence: z.string(),
+  currentPerformance: z.string(),
+  impacts: z.array(z.string()).min(3),
+  severity: z.enum(["★★★★★", "★★★★☆", "★★★☆☆"]),
+  priority: z.enum(["P0", "P1", "P2"]),
+  direction: z.string(),
+});
+export type MvpGeoCoreIssue = z.infer<typeof MvpGeoCoreIssue>;
+export const MvpGeoContentPlan = z.object({
+  title: z.string(),
+  buildContent: z.string(),
+  solvesProblem: z.string(),
+  recommendedCarrier: z.string(),
+  priority: z.enum(["P0", "P1", "P2"]),
+  requiredMaterials: z.array(z.string()).min(1),
+  deliverables: z.array(z.string()).min(1),
+});
+export type MvpGeoContentPlan = z.infer<typeof MvpGeoContentPlan>;
+export const MvpGeoRoadmapStage = z.object({
+  stage: z.string(),
+  companyActions: z.array(z.string()).min(1),
+  xingmeiDeliverables: z.array(z.string()).min(1),
+  acceptanceCriteria: z.array(z.string()).min(1),
+});
+export type MvpGeoRoadmapStage = z.infer<typeof MvpGeoRoadmapStage>;
+export const MvpGeoDiagnosticReportV1 = z.object({
+  strategyPack: MvpGeoReportPackId,
+  score: z.object({
+    overall: z.number().min(0).max(100).nullable(),
+    level: z.string(),
+    completionRate: z.number().min(0).max(100),
+    dimensions: z.array(MvpGeoScoreDimension).length(5),
+    explanation: z.string(),
+  }),
+  overview: z.object({
+    companyName: z.string(),
+    industry: z.string(),
+    region: z.string(),
+    reportDate: z.string(),
+    overallEvaluation: z.string(),
+    topProblems: z.array(z.string()).min(3).max(3),
+    topOpportunities: z.array(z.string()).min(3).max(3),
+  }),
+  industryAnalysis: z.array(z.string()).min(3),
+  sourceFoundationRows: z.array(z.object({
+    sourceType: z.string(),
+    finding: z.string(),
+    status: z.string(),
+    score: z.number().min(0).max(100).nullable(),
+    decisionImpact: z.string(),
+    optimization: z.string(),
+  })),
+  contentAssetRows: z.array(z.object({
+    item: z.string(),
+    currentStatus: z.string(),
+    score: z.number().min(0).max(100).nullable(),
+    gap: z.string(),
+    impact: z.string(),
+    recommendation: z.string(),
+  })),
+  customerScenarioRows: z.array(z.object({
+    scenario: z.string(),
+    question: z.string(),
+    answerability: z.string(),
+    performance: z.string(),
+    score: z.number().min(0).max(100).nullable(),
+    impact: z.string(),
+    recommendedContent: z.string(),
+  })),
+  trustRiskRows: z.array(z.object({
+    item: z.string(),
+    currentStatus: z.string(),
+    score: z.number().min(0).max(100).nullable(),
+    impact: z.string(),
+    recommendation: z.string(),
+  })),
+  coreIssues: z.array(MvpGeoCoreIssue).min(4).max(6),
+  contentPlans: z.array(MvpGeoContentPlan).min(5).max(8),
+  roadmap: z.array(MvpGeoRoadmapStage).length(3),
+  conclusion: z.array(z.string()).min(3),
+  disclaimer: z.string(),
+  visibleCharacterCount: z.number().int().nonnegative(),
+  algorithmVersion: z.literal("fast-mvp-geo-diagnostic-report.v1"),
+});
+export type MvpGeoDiagnosticReportV1 = z.infer<typeof MvpGeoDiagnosticReportV1>;
+export const LimitedReportDataV1 = z.object({ readinessScore: PublicInformationReadinessScoreV1, sourceCoverageMatrix: z.array(SourceCoverageSlotV1), verticalPolicy: z.object({ selectedPack: VerticalPolicyPackId, resolutionStatus: z.enum(["RESOLVED", "NEEDS_CONFIRMATION"]), requiredSlots: z.array(z.string()), prohibitedClaims: z.array(z.string()) }), questionCoverage: z.array(z.object({ question: z.string(), answerStatus: z.string(), missingInformation: z.string(), recommendedContent: z.string() })), contentAssetPlans: z.array(z.object({ title: z.string(), linkedQuestion: z.string(), suggestedContent: z.array(z.string()), businessValue: z.string(), evidenceBoundary: z.string() })).min(2).max(8), requestedMaterials: z.array(z.string()).max(8), evidenceCounts: z.object({ total: z.number(), searchSnippet: z.number(), crawledPage: z.number(), officialPage: z.number(), officialRegistry: z.number() }), mvpReport: MvpGeoDiagnosticReportV1.optional(), algorithmVersion: z.union([z.literal("universal-limited-report.v1"), z.literal("fast-mvp-geo-diagnostic-report.v1")]) });
 export type LimitedReportDataV1 = z.infer<typeof LimitedReportDataV1>;
 
 // ---------------------------------------------------------------------------
