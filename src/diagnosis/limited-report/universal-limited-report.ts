@@ -377,6 +377,14 @@ function industryQuestions(policy: PolicyDefinition, input: DiagnosisInput): str
 
 function buildCoreIssues(report: MvpGeoDiagnosticReportV1): MvpGeoDiagnosticReportV1["coreIssues"] {
   type CoreIssue = MvpGeoDiagnosticReportV1["coreIssues"][number];
+  const priorityPlan: Array<Pick<CoreIssue, "severity" | "priority">> = [
+    { severity: "★★★★★", priority: "P0" },
+    { severity: "★★★★★", priority: "P0" },
+    { severity: "★★★★☆", priority: "P1" },
+    { severity: "★★★★☆", priority: "P1" },
+    { severity: "★★★★☆", priority: "P1" },
+    { severity: "★★★☆☆", priority: "P2" },
+  ];
   const definitions = [
     ["基础信源体系薄弱", "企业身份、官方入口、地图或平台入口没有形成稳定的公开信源体系。", "sourceFoundation"],
     ["服务内容资产不足", "客户搜索到企业后，还需要进一步理解项目、流程、边界和适用场景。", "contentAssets"],
@@ -389,10 +397,8 @@ function buildCoreIssues(report: MvpGeoDiagnosticReportV1): MvpGeoDiagnosticRepo
   return definitions
     .map(([title, essence, dimensionId], index) => {
       const dimension = dimensionMap.get(dimensionId);
-      const score = dimension?.score ?? 0;
       const missing = dimension?.findings.filter((finding) => finding.status !== "CLEARLY_FOUND").slice(0, 2).map((finding) => finding.title).join("、") || "相关公开入口";
-      const severity: CoreIssue["severity"] = score <= 25 ? "★★★★★" : score <= 50 ? "★★★★☆" : "★★★☆☆";
-      const priority: CoreIssue["priority"] = index < 2 || score <= 25 ? "P0" : index < 4 || score <= 50 ? "P1" : "P2";
+      const planned = priorityPlan[index] ?? { severity: "★★★☆☆", priority: "P2" as const };
       return {
         title,
         essence,
@@ -402,8 +408,8 @@ function buildCoreIssues(report: MvpGeoDiagnosticReportV1): MvpGeoDiagnosticRepo
           "信任判断：缺少集中说明时，客户难以判断信息来源和更新状态。",
           "搜索咨询：搜索和AI问答难以稳定引用企业自己的完整答案。",
         ],
-        severity,
-        priority,
+        severity: planned.severity,
+        priority: planned.priority,
         direction: dimension?.findings.find((finding) => finding.status !== "CLEARLY_FOUND")?.recommendation ?? "整理真实资料，形成可检索、可引用、可持续更新的公开内容资产。",
       };
     })

@@ -341,7 +341,7 @@ function EvidenceSection({ evidence }: { evidence: EnterpriseReportViewModel["ev
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-2 text-xs text-neutral-500 transition hover:text-neutral-700"
+        className="flex items-center gap-2 text-[14px] text-stone-500 transition hover:text-stone-700"
       >
         <span>{expanded ? "收起" : `查看 ${evidence.items.length} 条证据（${sourceSummary}）`}</span>
       </button>
@@ -367,175 +367,276 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
   if (!report) {
     return <LegacyLimitedEnterpriseReport vm={vm} />;
   }
+  const dimensions = report.score.dimensions;
+  const topPainPoints = report.coreIssues.slice(0, 3).map((issue) => ({
+    title: issue.title,
+    customerImpact: customerImpactForIssue(issue.title),
+    action: issue.direction,
+  }));
+  const priorityGroups = {
+    priority: report.coreIssues.filter((issue) => issue.priority === "P0"),
+    improvement: report.coreIssues.filter((issue) => issue.priority === "P1"),
+    continuous: report.coreIssues.filter((issue) => issue.priority === "P2"),
+  };
   return (
-    <div className="min-h-screen bg-neutral-100">
-      <div className="mx-auto max-w-[1000px] px-4 py-6 sm:px-6 lg:px-8">
-        <header className="mb-4 flex items-center justify-between border-b border-neutral-200 pb-4">
-          <div><p className="text-xs text-neutral-400">{SERVICE_BRAND_NAME}</p><h1 className="mt-0.5 text-base font-semibold text-neutral-900">企业GEO诊断报告</h1></div>
-          <div className="text-right text-xs text-neutral-400"><div className="break-words">{vm.brandName}</div><div className="mt-0.5">{formatDate(vm.reportDate)}</div></div>
+    <div className="min-h-screen bg-[#f7f8f4] pb-20 text-[16px] leading-[1.75] text-stone-800 md:text-[17px] md:leading-[1.72]">
+      <div className="mx-auto max-w-[1040px] px-4 py-6 sm:px-6 lg:px-8">
+        <header className="mb-6 flex flex-col gap-2 border-b border-emerald-900/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[14px] font-medium text-emerald-800">{SERVICE_BRAND_NAME}</p>
+            <p className="mt-1 text-[14px] text-stone-500">企业GEO诊断报告</p>
+          </div>
+          <p className="text-[14px] text-stone-500">报告日期 {formatDate(report.overview.reportDate)}</p>
         </header>
 
-        <Section index={1} title="GEO诊断总览" className="mb-4">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-bold text-neutral-900 break-words">{report.overview.companyName}</h2>
-                <span className="rounded bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-500">LIMITED_PUBLIC_SCAN</span>
+        <CustomerSection index={1} title="老板决策摘要" className="mb-6">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_340px]">
+            <div className="space-y-4">
+              <div>
+                <h1 className="break-words text-[27px] font-semibold leading-[1.18] text-stone-950 md:text-[34px]">
+                  {report.overview.companyName}
+                </h1>
+                <div className="mt-3 flex flex-wrap gap-2 text-[14px] text-stone-600">
+                  <span className="rounded bg-emerald-50 px-3 py-1">{report.overview.industry}</span>
+                  <span className="rounded bg-emerald-50 px-3 py-1">{report.overview.region}</span>
+                </div>
               </div>
-              <div className="grid grid-cols-1 gap-2 text-xs text-neutral-600 sm:grid-cols-3">
-                <MetaItem label="行业" value={report.overview.industry} />
-                <MetaItem label="地区" value={report.overview.region} />
-                <MetaItem label="报告日期" value={formatDate(report.overview.reportDate)} />
+              <p className="text-[17px] leading-[1.72] text-stone-700">
+                {customerSummary()}
+              </p>
+              <div className="rounded-lg border border-emerald-900/10 bg-emerald-50 p-4">
+                <p className="text-[14px] font-medium text-emerald-900">当前建议先启动的一件事</p>
+                <p className="mt-2 text-[16px] leading-[1.7] text-stone-800">
+                  优先完成企业信任信息、核心服务说明和客户高频问题内容的统一梳理，让客户在搜索后能更快理解企业、建立信任并发起咨询。
+                </p>
               </div>
-              <p className="text-sm leading-[1.75] text-neutral-700">{report.overview.overallEvaluation}</p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <MiniList title="三个最严重问题" items={report.overview.topProblems} />
-                <MiniList title="三个最重要建设机会" items={report.overview.topOpportunities} />
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <CustomerButton primary>预约报告解读</CustomerButton>
+                <CustomerButton>获取首期建设方案</CustomerButton>
+                <CustomerButton muted>补充企业资料</CustomerButton>
               </div>
             </div>
-            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-              <p className="text-xs text-neutral-500">GEO公开信息基础指数</p>
-              <p className="mt-1 text-4xl font-semibold text-neutral-900">{report.score.overall === null ? "未评分" : `${report.score.overall}`}</p>
-              <p className="mt-1 text-sm font-medium text-neutral-700">{report.score.level}</p>
-              <p className="mt-2 text-xs text-neutral-500">检查完成度 {report.score.completionRate}%</p>
-              <div className="mt-3 space-y-2">
-                {report.score.dimensions.map((dimension) => (
-                  <ScoreBar key={dimension.id} label={dimension.title} score={dimension.score} max={dimension.maxScore} />
+
+            <div className="rounded-lg border border-emerald-900/10 bg-white p-5">
+              <p className="text-[14px] text-stone-500">GEO公开信息基础指数</p>
+              <div className="mt-2 flex items-end gap-2">
+                <span className="text-[56px] font-semibold leading-none text-emerald-800">{report.score.overall ?? "未评分"}</span>
+                <span className="pb-2 text-[18px] text-stone-500">/100</span>
+              </div>
+              <p className="mt-2 text-[19px] font-semibold text-stone-900">{report.score.level}</p>
+              <div className="mt-5 space-y-3">
+                {dimensions.map((dimension) => (
+                  <NormalizedScoreBar key={dimension.id} label={shortDimensionTitle(dimension.title)} score={normalizedScore(dimension.score, dimension.maxScore)} />
                 ))}
               </div>
+              <p className="mt-4 text-[14px] leading-[1.65] text-stone-500">
+                该指数用于判断企业公开信息是否容易被客户和AI检索、理解和引用，不代表企业实际服务质量、市场份额或AI平台官方排名。
+              </p>
             </div>
           </div>
-        </Section>
 
-        <Section index={2} title="GEO与行业适配分析" className="mb-4">
-          <div className="space-y-3 text-sm leading-[1.75] text-neutral-700">{report.industryAnalysis.map((item, index) => <p key={index}>{item}</p>)}</div>
-        </Section>
+          <div className="mt-5">
+            <h3 className="text-[19px] font-semibold text-stone-950">最影响客户决策的三个问题</h3>
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+              {topPainPoints.map((item) => <PainPointCard key={item.title} item={item} />)}
+            </div>
+          </div>
+        </CustomerSection>
 
-        <Section index={3} title="基础信源收录诊断" className="mb-4">
-          <ResponsiveTable headers={["信源类型", "本次检索结果", "状态", "得分", "影响", "优化方向"]} rows={report.sourceFoundationRows.map((row) => [row.sourceType, row.finding, row.status, formatFindingScore(row.score), row.decisionImpact, row.optimization])} />
-        </Section>
+        <CustomerSection index={2} title="GEO与行业适配分析" className="mb-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {industryCards(report.industryAnalysis).map((item) => <InsightCard key={item.title} title={item.title} body={item.body} />)}
+          </div>
+        </CustomerSection>
 
-        <Section index={4} title="内容资产盘点" className="mb-4">
-          <ResponsiveTable headers={["内容项", "当前现状", "得分", "具体缺口", "影响", "建议"]} rows={report.contentAssetRows.map((row) => [row.item, row.currentStatus, formatFindingScore(row.score), row.gap, row.impact, row.recommendation])} />
-        </Section>
+        <DimensionCustomerSection index={3} title="基础信源收录诊断" dimension={dimensions[0]} conclusion={dimensionConclusion("sourceFoundation")} rows={report.sourceFoundationRows.map((row) => ({ title: row.sourceType, status: row.status, current: row.finding, impact: row.decisionImpact, action: row.optimization }))} />
 
-        <Section index={5} title="客户搜索与AI问答准备度测试" className="mb-4">
-          <ResponsiveTable headers={["搜索场景", "用户会怎么问", "能否回答", "当前表现", "得分", "影响", "建议建设内容"]} rows={report.customerScenarioRows.map((row) => [row.scenario, row.question, row.answerability, row.performance, formatFindingScore(row.score), row.impact, row.recommendedContent])} />
-        </Section>
+        <DimensionCustomerSection index={4} title="内容资产盘点" dimension={dimensions[1]} conclusion={dimensionConclusion("contentAssets")} rows={report.contentAssetRows.map((row) => ({ title: row.item, status: statusFromScore(row.score), current: row.currentStatus, impact: row.impact, action: row.recommendation }))} />
 
-        <Section index={6} title="信任与风险信息诊断" className="mb-4">
-          <ResponsiveTable headers={["诊断项", "当前现状", "得分", "影响", "建议"]} rows={report.trustRiskRows.map((row) => [row.item, row.currentStatus, formatFindingScore(row.score), row.impact, row.recommendation])} />
-        </Section>
+        <DimensionCustomerSection index={5} title="客户搜索与AI问答准备度测试" dimension={dimensions[2]} conclusion={dimensionConclusion("customerScenarios")} rows={report.customerScenarioRows.map((row) => ({ title: row.scenario, status: row.answerability, current: row.question, impact: row.impact, action: row.recommendedContent }))} />
 
-        <Section index={7} title="核心GEO问题深度诊断" className="mb-4">
-          <div className="space-y-3">{report.coreIssues.map((issue) => <IssueBlock key={issue.title} issue={issue} />)}</div>
-        </Section>
+        <TrustConversionSection
+          trustDimension={dimensions[3]}
+          conversionDimension={dimensions[4]}
+          trustRows={report.trustRiskRows.slice(0, 5).map((row) => ({ title: row.item, status: statusFromScore(row.score), current: row.currentStatus, impact: row.impact, action: row.recommendation }))}
+          conversionRows={report.trustRiskRows.slice(5).map((row) => ({ title: row.item, status: statusFromScore(row.score), current: row.currentStatus, impact: row.impact, action: row.recommendation }))}
+        />
 
-        <Section index={8} title="GEO建设方案" className="mb-4">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{report.contentPlans.map((plan) => <PlanBlock key={plan.title} plan={plan} />)}</div>
-        </Section>
+        <CustomerSection index={7} title="核心GEO问题深度诊断" className="mb-6">
+          <PrioritySummary groups={priorityGroups} />
+          <div className="mt-4 space-y-4">{report.coreIssues.map((issue) => <IssueBlock key={issue.title} issue={issue} />)}</div>
+        </CustomerSection>
 
-        <Section index={9} title="30/60/90天执行路线" className="mb-4">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">{report.roadmap.map((stage) => <RoadmapStage key={stage.stage} stage={stage} />)}</div>
-        </Section>
+        <CustomerSection index={8} title="GEO建设方案" className="mb-6">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">{report.contentPlans.map((plan) => <PlanBlock key={plan.title} plan={plan} />)}</div>
+        </CustomerSection>
 
-        <Section index={10} title="结论和下一步" className="mb-4">
-          <div className="space-y-3 text-sm leading-[1.75] text-neutral-700">{report.conclusion.map((item, index) => <p key={index}>{item}</p>)}</div>
-          <p className="mt-4 rounded-lg bg-neutral-50 p-3 text-xs leading-[1.7] text-neutral-500">{report.disclaimer}</p>
-        </Section>
+        <CustomerSection index={9} title="30/60/90天执行路线" className="mb-6">
+          <p className="mb-4 rounded-lg bg-emerald-50 p-4 text-[16px] leading-[1.7] text-stone-800">
+            首期启动建议：优先完成企业事实确认、核心信任信息整理和客户高频问题建设，再进入持续内容发布和复测。
+          </p>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">{report.roadmap.map((stage) => <RoadmapStage key={stage.stage} stage={stage} />)}</div>
+        </CustomerSection>
 
-        <div className="mb-4 rounded-lg border border-neutral-200 bg-white p-4">
+        <CustomerSection index={10} title="结论和下一步" className="mb-6">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <InsightCard title="当前判断" body="企业已经具备部分公开基础，但信息仍较分散，客户在进一步了解服务、专业能力和咨询流程时，获得完整答案的成本较高。" />
+            <InsightCard title="首期建议" body="优先建设统一的企业信任信息、核心服务说明和客户高频问题内容。" />
+            <InsightCard title="星媄数据协作" body="星媄数据可以根据企业现有资料，完成公开信息梳理、内容结构设计和首期建设方案。" />
+          </div>
+          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <CooperationCard />
+            <XingmeiDeliveryCard />
+          </div>
+          <p className="mt-5 rounded-lg bg-stone-50 p-4 text-[14px] leading-[1.7] text-stone-500">
+            报告判断基于本次公开检索范围；未发现表示当前公开渠道中未检索到清晰信息，不代表企业现实中一定不存在相关资料。
+          </p>
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <CustomerButton primary>预约报告解读</CustomerButton>
+            <CustomerButton>获取首期建设方案</CustomerButton>
+            <CustomerButton muted>补充企业资料</CustomerButton>
+          </div>
+        </CustomerSection>
+
+        <div className="mb-6 rounded-lg border border-emerald-900/10 bg-white p-4">
           <EvidenceSection evidence={vm.evidence} />
         </div>
 
-        <footer className="mt-6 border-t border-neutral-200 pt-4 text-center text-xs text-neutral-400">{SERVICE_BRAND_NAME} · 企业GEO诊断报告 · {formatDate(vm.reportDate)}</footer>
+        <footer className="mt-6 border-t border-emerald-900/10 pt-4 text-center text-[14px] text-stone-500">{SERVICE_BRAND_NAME} · 企业GEO诊断报告 · {formatDate(vm.reportDate)}</footer>
+      </div>
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-emerald-900/10 bg-[#f7f8f4]/95 px-4 py-3 backdrop-blur sm:hidden">
+        <button type="button" className="w-full rounded-lg bg-emerald-800 px-4 py-3 text-[16px] font-semibold text-white">预约报告解读</button>
       </div>
     </div>
   );
 }
 
-function formatFindingScore(score: number | null) {
-  return score === null ? "未检查" : `${score}`;
+function customerSummary() {
+  return "当前企业已经具备部分公开信息基础，但客户在进一步了解服务、专业能力、流程和咨询方式时，仍难以从公开渠道获得完整答案。建议优先统一企业信任信息和核心服务内容，再逐步覆盖客户高频问题。";
 }
 
-function MetaItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-neutral-50 px-3 py-2">
-      <p className="text-[11px] text-neutral-400">{label}</p>
-      <p className="mt-0.5 break-words text-xs font-medium text-neutral-700">{value}</p>
-    </div>
-  );
+function normalizedScore(score: number | null | undefined, max: number | undefined) {
+  if (score === null || score === undefined || !max) return null;
+  return Math.round((score / max) * 100);
 }
 
-function MiniList({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className="rounded-lg border border-neutral-200 p-3">
-      <p className="mb-2 text-xs font-semibold text-neutral-700">{title}</p>
-      <ul className="space-y-1.5">
-        {items.map((item) => <li key={item} className="text-xs leading-[1.65] text-neutral-600">{item}</li>)}
-      </ul>
-    </div>
-  );
+function shortDimensionTitle(title: string) {
+  return title
+    .replace("基础信源与企业身份", "基础信源")
+    .replace("服务或产品内容资产", "内容资产")
+    .replace("客户搜索场景覆盖", "客户搜索场景");
 }
 
-function ScoreBar({ label, score, max }: { label: string; score: number | null; max: number }) {
-  const pct = score === null ? 0 : Math.max(0, Math.min(100, Math.round((score / max) * 100)));
+function NormalizedScoreBar({ label, score }: { label: string; score: number | null }) {
+  const pct = score ?? 0;
   return (
     <div>
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="text-neutral-600">{label}</span>
-        <span className="font-medium text-neutral-800">{score === null ? "未检查" : `${score}/${max}`}</span>
+      <div className="flex items-center justify-between gap-3 text-[15px]">
+        <span className="text-stone-700">{label}</span>
+        <span className="font-semibold text-emerald-800">{score === null ? "未检查" : `${score}分`}</span>
       </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded bg-neutral-200">
-        <div className="h-full rounded bg-neutral-900" style={{ width: `${pct}%` }} />
+      <div className="mt-1.5 h-2 overflow-hidden rounded bg-emerald-100">
+        <div className="h-full rounded bg-emerald-700" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
 }
 
-function ResponsiveTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
+function CustomerSection({ index, title, children, className = "" }: SectionProps) {
   return (
-    <div className="overflow-hidden rounded-lg border border-neutral-200">
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full border-collapse text-left text-xs">
-          <thead className="bg-neutral-50 text-neutral-500">
-            <tr>{headers.map((header) => <th key={header} className="px-3 py-2 font-medium">{header}</th>)}</tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100">
-            {rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={`${rowIndex}-${cellIndex}`} className="px-3 py-2 align-top leading-[1.6] text-neutral-700">{cell}</td>)}</tr>)}
-          </tbody>
-        </table>
+    <section className={`rounded-lg border border-emerald-900/10 bg-white ${className}`}>
+      <div className="border-b border-emerald-900/10 px-4 py-4 md:px-5">
+        <div className="flex items-center gap-3">
+          <span className="text-[14px] font-semibold text-emerald-700">{String(index).padStart(2, "0")}</span>
+          <h2 className="text-[23px] font-semibold leading-[1.25] text-stone-950 md:text-[26px]">{title}</h2>
+        </div>
       </div>
-      <div className="divide-y divide-neutral-100 md:hidden">
-        {rows.map((row, rowIndex) => (
-          <div key={rowIndex} className="space-y-1.5 p-3">
-            {row.map((cell, cellIndex) => (
-              <div key={`${rowIndex}-${cellIndex}`} className="grid grid-cols-[88px_1fr] gap-2 text-xs leading-[1.6]">
-                <span className="text-neutral-400">{headers[cellIndex]}</span>
-                <span className="break-words text-neutral-700">{cell}</span>
-              </div>
-            ))}
-          </div>
-        ))}
+      <div className="p-4 md:p-5">
+        {children}
       </div>
+    </section>
+  );
+}
+
+type Dimension = NonNullable<LimitedReportDataV1["mvpReport"]>["score"]["dimensions"][number] | undefined;
+type CustomerRow = { title: string; status: string; current: string; impact: string; action: string };
+
+function DimensionCustomerSection({ index, title, dimension, conclusion, rows }: { index: number; title: string; dimension: Dimension; conclusion: string; rows: CustomerRow[] }) {
+  return (
+    <CustomerSection index={index} title={title} className="mb-6">
+      <div className="mb-4 rounded-lg bg-emerald-50 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[19px] font-semibold text-stone-950">{shortDimensionTitle(dimension?.title ?? title)} {normalizedScore(dimension?.score, dimension?.maxScore) ?? "未检查"}分</p>
+          <p className="text-[14px] text-stone-500">板块综合评分</p>
+        </div>
+        <p className="mt-2 text-[16px] leading-[1.72] text-stone-700">客户结论：{conclusion}</p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {rows.map((row) => <DiagnosticCard key={`${title}-${row.title}-${row.current}`} row={row} />)}
+      </div>
+    </CustomerSection>
+  );
+}
+
+function TrustConversionSection({ trustDimension, conversionDimension, trustRows, conversionRows }: { trustDimension: Dimension; conversionDimension: Dimension; trustRows: CustomerRow[]; conversionRows: CustomerRow[] }) {
+  return (
+    <CustomerSection index={6} title="信任与风险信息诊断" className="mb-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div>
+          <DimensionSummary dimension={trustDimension} conclusion={dimensionConclusion("trustInformation")} />
+          <div className="mt-4 grid grid-cols-1 gap-4">{trustRows.map((row) => <DiagnosticCard key={`trust-${row.title}`} row={row} />)}</div>
+        </div>
+        <div>
+          <DimensionSummary dimension={conversionDimension} conclusion={dimensionConclusion("conversionPath")} />
+          <div className="mt-4 grid grid-cols-1 gap-4">{conversionRows.map((row) => <DiagnosticCard key={`conversion-${row.title}`} row={row} />)}</div>
+        </div>
+      </div>
+    </CustomerSection>
+  );
+}
+
+function DimensionSummary({ dimension, conclusion }: { dimension: Dimension; conclusion: string }) {
+  return (
+    <div className="rounded-lg bg-emerald-50 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[19px] font-semibold text-stone-950">{shortDimensionTitle(dimension?.title ?? "诊断板块")} {normalizedScore(dimension?.score, dimension?.maxScore) ?? "未检查"}分</p>
+        <p className="text-[14px] text-stone-500">板块综合评分</p>
+      </div>
+      <p className="mt-2 text-[16px] leading-[1.72] text-stone-700">客户结论：{conclusion}</p>
     </div>
+  );
+}
+
+function DiagnosticCard({ row }: { row: CustomerRow }) {
+  return (
+    <article className="rounded-lg border border-stone-200 bg-white p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <h3 className="break-words text-[18px] font-semibold leading-[1.35] text-stone-950 md:text-[19px]">{row.title}</h3>
+        <span className="w-fit rounded bg-stone-100 px-2.5 py-1 text-[14px] font-medium text-stone-700">{customerStatus(row.status)}</span>
+      </div>
+      <dl className="mt-3 space-y-3 text-[16px] leading-[1.72]">
+        <DetailRow label="当前状态" value={row.current} />
+        <DetailRow label="客户影响" value={row.impact} />
+        <DetailRow label="建议动作" value={row.action} />
+      </dl>
+    </article>
   );
 }
 
 function IssueBlock({ issue }: { issue: NonNullable<LimitedReportDataV1["mvpReport"]>["coreIssues"][number] }) {
   return (
-    <article className="rounded-lg border border-neutral-200 p-4">
+    <article className="rounded-lg border border-stone-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-neutral-900">{issue.title}</h3>
-        <div className="flex items-center gap-2 text-xs">
-          <span className="font-medium text-red-700">{issue.severity}</span>
-          <span className="rounded bg-neutral-100 px-2 py-1 font-medium text-neutral-700">{issue.priority}</span>
+        <h3 className="text-[18px] font-semibold text-stone-950 md:text-[19px]">{issue.title}</h3>
+        <div className="flex items-center gap-2 text-[14px]">
+          <span className="font-medium text-rose-700">{issue.severity}</span>
+          <span className="rounded bg-emerald-50 px-2.5 py-1 font-medium text-emerald-800">{priorityLabel(issue.priority)}</span>
         </div>
       </div>
-      <dl className="mt-3 space-y-2 text-xs leading-[1.65]">
+      <dl className="mt-3 space-y-3 text-[16px] leading-[1.72]">
         <DetailRow label="问题本质" value={issue.essence} />
         <DetailRow label="当前表现" value={issue.currentPerformance} />
-        <DetailRow label="具体影响" value={issue.impacts.join(" ")} />
+        <DetailRow label="客户影响" value={customerImpactForIssue(issue.title)} />
         <DetailRow label="建设方向" value={issue.direction} />
       </dl>
     </article>
@@ -544,30 +645,30 @@ function IssueBlock({ issue }: { issue: NonNullable<LimitedReportDataV1["mvpRepo
 
 function PlanBlock({ plan }: { plan: NonNullable<LimitedReportDataV1["mvpReport"]>["contentPlans"][number] }) {
   return (
-    <article className="rounded-lg border border-neutral-200 p-4">
+    <article className="rounded-lg border border-stone-200 bg-white p-4">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold text-neutral-900">{plan.title}</h3>
-        <span className="rounded bg-neutral-100 px-2 py-1 text-xs font-medium text-neutral-700">{plan.priority}</span>
+        <h3 className="text-[18px] font-semibold text-stone-950 md:text-[19px]">{plan.title}</h3>
       </div>
-      <dl className="mt-3 space-y-2 text-xs leading-[1.65]">
+      <dl className="mt-3 space-y-3 text-[16px] leading-[1.72]">
         <DetailRow label="建设内容" value={plan.buildContent} />
         <DetailRow label="解决问题" value={plan.solvesProblem} />
         <DetailRow label="建议载体" value={plan.recommendedCarrier} />
-        <DetailRow label="企业材料" value={plan.requiredMaterials.join("、")} />
-        <DetailRow label="星媄交付" value={plan.deliverables.join("、")} />
+        <DetailRow label="星媄交付" value={plan.deliverables.slice(0, 2).join("、")} />
       </dl>
     </article>
   );
 }
 
 function RoadmapStage({ stage }: { stage: NonNullable<LimitedReportDataV1["mvpReport"]>["roadmap"][number] }) {
+  const target = stage.stage === "0-30天" ? "统一企业事实和核心信任信息" : stage.stage === "31-60天" ? "补齐服务内容、客户问题和咨询入口" : "持续发布、复测和优化";
   return (
-    <article className="rounded-lg border border-neutral-200 p-4">
-      <h3 className="text-sm font-semibold text-neutral-900">{stage.stage}</h3>
-      <dl className="mt-3 space-y-2 text-xs leading-[1.65]">
-        <DetailRow label="企业动作" value={stage.companyActions.join(" ")} />
-        <DetailRow label="星媄交付" value={stage.xingmeiDeliverables.join(" ")} />
-        <DetailRow label="验收标准" value={stage.acceptanceCriteria.join(" ")} />
+    <article className="rounded-lg border border-stone-200 bg-white p-4">
+      <h3 className="text-[18px] font-semibold text-stone-950 md:text-[19px]">{stage.stage}</h3>
+      <dl className="mt-3 space-y-3 text-[16px] leading-[1.72]">
+        <DetailRow label="目标" value={target} />
+        <DetailRow label="企业配合" value={stage.companyActions[0] ?? ""} />
+        <DetailRow label="星媄动作" value={stage.xingmeiDeliverables[0] ?? ""} />
+        <DetailRow label="完成标志" value={stage.acceptanceCriteria[0] ?? ""} />
       </dl>
     </article>
   );
@@ -575,11 +676,144 @@ function RoadmapStage({ stage }: { stage: NonNullable<LimitedReportDataV1["mvpRe
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[70px_1fr] gap-2">
-      <dt className="text-neutral-400">{label}</dt>
-      <dd className="text-neutral-700">{value}</dd>
+    <div className="grid grid-cols-1 gap-1 sm:grid-cols-[82px_1fr] sm:gap-3">
+      <dt className="text-[14px] font-medium text-stone-500">{label}</dt>
+      <dd className="break-words text-stone-700 [overflow-wrap:anywhere]">{value}</dd>
     </div>
   );
+}
+
+function CustomerButton({ children, primary = false, muted = false }: { children: ReactNode; primary?: boolean; muted?: boolean }) {
+  const style = primary
+    ? "bg-emerald-800 text-white hover:bg-emerald-900"
+    : muted
+      ? "border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+      : "border border-emerald-800 bg-white text-emerald-900 hover:bg-emerald-50";
+  return <button type="button" className={`rounded-lg px-5 py-3 text-[16px] font-semibold transition ${style}`}>{children}</button>;
+}
+
+function InsightCard({ title, body }: { title: string; body: string }) {
+  return (
+    <article className="rounded-lg border border-stone-200 bg-white p-4">
+      <h3 className="text-[18px] font-semibold text-stone-950 md:text-[19px]">{title}</h3>
+      <p className="mt-2 text-[16px] leading-[1.72] text-stone-700">{body}</p>
+    </article>
+  );
+}
+
+function PainPointCard({ item }: { item: { title: string; customerImpact: string; action: string } }) {
+  return (
+    <article className="rounded-lg border border-rose-100 bg-rose-50/50 p-4">
+      <h3 className="text-[18px] font-semibold text-stone-950 md:text-[19px]">{item.title}</h3>
+      <dl className="mt-3 space-y-3 text-[16px] leading-[1.72]">
+        <DetailRow label="客户影响" value={item.customerImpact} />
+        <DetailRow label="建议动作" value={item.action} />
+      </dl>
+    </article>
+  );
+}
+
+function PrioritySummary({ groups }: { groups: { priority: Array<{ title: string }>; improvement: Array<{ title: string }>; continuous: Array<{ title: string }> } }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <MiniPriority title="先做事项" items={groups.priority.map((item) => item.title)} />
+      <MiniPriority title="重点完善" items={groups.improvement.map((item) => item.title)} />
+      <MiniPriority title="持续建设" items={groups.continuous.map((item) => item.title)} />
+    </div>
+  );
+}
+
+function MiniPriority({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="rounded-lg bg-emerald-50 p-4">
+      <p className="text-[18px] font-semibold text-stone-950">{title}</p>
+      <p className="mt-2 text-[16px] leading-[1.7] text-stone-700">{items.length > 0 ? items.join("、") : "暂无"}</p>
+    </div>
+  );
+}
+
+function CooperationCard() {
+  return (
+    <article className="rounded-lg border border-stone-200 bg-white p-4">
+      <h3 className="text-[19px] font-semibold text-stone-950">企业需要配合什么</h3>
+      <p className="mt-3 text-[16px] leading-[1.72] text-stone-700">
+        企业只需配合提供与主体、服务、团队、流程、案例和现有公开渠道相关的资料。具体资料清单将在项目启动后，由星媄数据根据企业实际情况整理，无需一次性准备全部内容。
+      </p>
+      <p className="mt-2 text-[14px] text-stone-500">涉及敏感信息时，可以脱敏后提供。</p>
+    </article>
+  );
+}
+
+function XingmeiDeliveryCard() {
+  const items = [
+    ["企业公开信息梳理", "整理企业主体、服务、团队和信任信息，形成统一的公开知识基础。"],
+    ["客户问题内容体系", "围绕客户真实决策问题，建设能够被理解和引用的问答与内容。"],
+    ["重点页面和内容规划", "明确首期需要建设的页面、内容主题和公开入口。"],
+    ["持续诊断与优化", "完成建设后持续复测公开信息和客户问题覆盖情况。"],
+  ];
+  return (
+    <article className="rounded-lg border border-stone-200 bg-white p-4">
+      <h3 className="text-[19px] font-semibold text-stone-950">星媄数据可以帮助完成什么</h3>
+      <div className="mt-3 space-y-3">
+        {items.map(([title, body]) => (
+          <div key={title}>
+            <p className="text-[16px] font-semibold text-emerald-900">{title}</p>
+            <p className="text-[15px] leading-[1.65] text-stone-600">{body}</p>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function industryCards(items: string[]) {
+  return [
+    { title: "客户如何选择", body: items[0] ?? "客户会先确认企业身份、服务内容和咨询方式。" },
+    { title: "哪些信息影响信任", body: items[1] ?? "主体、团队、服务流程和保障内容会影响客户是否继续咨询。" },
+    { title: "优先建设什么", body: items[2] ?? "优先建设企业信任信息、服务说明和客户高频问题内容。" },
+  ];
+}
+
+function dimensionConclusion(id: string) {
+  const map: Record<string, string> = {
+    sourceFoundation: "客户能够检索到部分企业信息，但目前缺少统一、清晰、容易确认的官方信息入口。",
+    contentAssets: "现有公开内容能够提供部分基础介绍，但还不足以完整说明服务项目、专业团队、流程和注意事项。",
+    customerScenarios: "客户直接搜索企业名称时可以获得部分信息，但进一步询问具体服务、流程和信任问题时，公开答案仍不完整。",
+    trustInformation: "客户可以看到部分企业信息，但专业能力、服务依据和保障内容尚未形成集中展示。",
+    conversionPath: "客户产生兴趣后，仍需要通过多个渠道确认联系方式、预约流程、收费边界和后续服务。",
+  };
+  return map[id] ?? "当前公开信息已有基础，但仍需要进一步集中整理。";
+}
+
+function customerStatus(status: string) {
+  if (/清晰|可清晰/.test(status)) return "信息较清晰";
+  if (/部分|只能部分/.test(status)) return "已发现部分信息";
+  if (/未发现|无法回答|基本无法/.test(status)) return "本次检索暂未发现";
+  if (/未检查|尚未/.test(status)) return "本次尚未检查";
+  return status;
+}
+
+function statusFromScore(score: number | null) {
+  if (score === null) return "本次尚未检查";
+  if (score >= 100) return "信息较清晰";
+  if (score > 0) return "已发现部分信息";
+  return "本次检索暂未发现";
+}
+
+function priorityLabel(priority: "P0" | "P1" | "P2") {
+  return priority === "P0" ? "优先处理" : priority === "P1" ? "重点完善" : "持续建设";
+}
+
+function customerImpactForIssue(title: string) {
+  const map: Record<string, string> = {
+    基础信源体系薄弱: "客户找到企业后，仍需要在多个入口之间确认企业主体、地址和官方信息，增加继续咨询前的判断成本。",
+    服务内容资产不足: "客户想了解具体服务时，难以一次看清项目、流程和注意事项，容易停留在比较和观望阶段。",
+    客户问题覆盖不足: "客户提出真实问题时，公开渠道给不出完整答案，会降低客户继续询问和预约的意愿。",
+    信任信息不完整: "客户无法集中看到主体、专业团队和服务依据，信任建立速度会变慢。",
+    咨询转化路径不清晰: "客户产生兴趣后，还要反复确认联系方式、预约流程和收费边界，下一步行动不够顺畅。",
+    本地语义关联不足: "客户用地区和服务项目搜索时，企业信息与本地服务场景的连接不够集中，影响快速理解。",
+  };
+  return map[title] ?? "客户需要花更多时间确认企业信息，影响理解、信任和下一步咨询。";
 }
 
 function LegacyLimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
