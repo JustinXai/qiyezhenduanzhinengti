@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { EnterpriseReport } from "../../components/report/enterprise-report";
 import { buildLimitedCanonicalReport } from "../../src/diagnosis/limited-report/universal-limited-report";
 import { toEnterpriseReportViewModel } from "../../src/report/presentation/report-presentation-service";
-import type { EvidenceItem } from "../../src/contracts";
+import type { EvidenceItem, ReputationAndPublicOpinionSnapshotV1 } from "../../src/contracts";
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -40,6 +40,95 @@ function renderCustomerReport() {
     generatedAt: "2026-07-22T00:00:00.000Z",
   });
   return renderToStaticMarkup(createElement(EnterpriseReport, { vm: toEnterpriseReportViewModel(report) }));
+}
+
+function renderCustomerReportWithReputation(snapshot: ReputationAndPublicOpinionSnapshotV1) {
+  const report = buildLimitedCanonicalReport({
+    diagnosisId: "diag_customer_rep",
+    publicToken: "tok_customer_rep",
+    input: {
+      brandName: "舆情展示测试企业",
+      website: "",
+      industry: "教育培训",
+      productOrService: "考研培训",
+      targetRegion: "四川省成都市",
+      customerQuestions: [{ question: "退费和课程服务如何保障？" }],
+    },
+    evidence,
+    searchCompleted: true,
+    generatedAt: "2026-07-22T00:00:00.000Z",
+  });
+  report.limitedReport!.mvpReport!.reputation = snapshot;
+  return renderToStaticMarkup(createElement(EnterpriseReport, { vm: toEnterpriseReportViewModel(report) }));
+}
+
+function reputationSnapshot(): ReputationAndPublicOpinionSnapshotV1 {
+  return {
+    diagnosisId: "diag_customer_rep",
+    companyName: "舆情展示测试企业",
+    knownBrandNames: ["舆情展示测试企业"],
+    region: "成都",
+    searchedQueries: Array.from({ length: 8 }, (_, index) => `query_${index + 1}`),
+    sourceCoverage: ["黑猫投诉", "新闻媒体", "企业自身回应"],
+    reputationSignals: [
+      {
+        signalId: "rep_negative",
+        signalType: "COMPLAINT",
+        sentiment: "NEGATIVE",
+        sourceCategory: "黑猫投诉",
+        sourceName: "tousu.sina.com.cn",
+        title: "一个非常非常非常非常非常非常非常非常非常非常长的公开投诉标题",
+        snippet: "相关内容属于投诉者陈述，本次暂未核实争议事实的最终处理结果。",
+        url: "https://tousu.sina.com.cn/complaint/example",
+        entityMatch: "HIGH",
+        resolutionStatus: "UNRESOLVED",
+        riskTheme: "退费争议",
+        evidenceId: "ev_negative",
+        observedAt: "2026-07-20T00:00:00.000Z",
+      },
+      {
+        signalId: "rep_response",
+        signalType: "COMPANY_RESPONSE",
+        sentiment: "NEUTRAL",
+        sourceCategory: "企业自身回应",
+        sourceName: "official.example.com",
+        title: "企业公开回应说明",
+        snippet: "公开信息中出现企业回应或处理说明。",
+        url: "https://official.example.com/response",
+        entityMatch: "HIGH",
+        resolutionStatus: "RESPONDED",
+        riskTheme: "常规公开评价",
+        evidenceId: "ev_response",
+        observedAt: "2026-07-21T00:00:00.000Z",
+      },
+      {
+        signalId: "rep_news",
+        signalType: "MEDIA_REPORT",
+        sentiment: "NEUTRAL",
+        sourceCategory: "新闻媒体",
+        sourceName: "news.example.com",
+        title: "媒体公开报道",
+        snippet: "媒体公开报道中出现企业相关背景信息。",
+        url: "https://news.example.com/article",
+        entityMatch: "HIGH",
+        resolutionStatus: "UNKNOWN",
+        riskTheme: "常规公开评价",
+        evidenceId: "ev_news",
+        observedAt: "2026-07-19T00:00:00.000Z",
+      },
+    ],
+    complaintSignals: [],
+    positiveSignals: [],
+    neutralSignals: [],
+    responseSignals: [],
+    riskThemes: ["退费争议"],
+    overallReputationScore: 82,
+    riskLevel: "LOW",
+    summary: "legacy",
+    evidenceIds: ["ev_negative", "ev_response", "ev_news", "ev_4", "ev_5", "ev_6", "ev_7"],
+    generatedAt: "2026-07-22T00:00:00.000Z",
+    version: "reputation-public-opinion-snapshot.v1",
+  };
 }
 
 describe("customer readability polish report", () => {
@@ -86,5 +175,26 @@ describe("customer readability polish report", () => {
     ]) {
       expect(html).not.toContain(banned);
     }
+  });
+
+  it("renders reputation evidence counts, LOW explanation and representative evidence", () => {
+    const html = renderCustomerReportWithReputation({
+      ...reputationSnapshot(),
+      complaintSignals: [reputationSnapshot().reputationSignals[0]!],
+      neutralSignals: [reputationSnapshot().reputationSignals[1]!, reputationSnapshot().reputationSignals[2]!],
+      responseSignals: [reputationSnapshot().reputationSignals[1]!],
+    });
+    expect(html).toContain("本次共执行 8 组公开舆情查询，匹配到 7 条");
+    expect(html).toContain("风险等级 低");
+    expect(html).toContain("包含部分投诉或争议信号");
+    expect(html).toContain("综合风险等级评估为低风险");
+    expect(html).toContain("投诉平台");
+    expect(html).toContain("企业回应");
+    expect(html).toContain("代表性公开证据");
+    expect(html).toContain("查看原文链接");
+    expect(html).toContain("[overflow-wrap:anywhere]");
+    expect(html).not.toContain("未发现舆情");
+    expect(html).not.toContain("未发现负面");
+    expect(html).not.toContain("没有投诉");
   });
 });

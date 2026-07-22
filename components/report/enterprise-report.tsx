@@ -7,6 +7,7 @@ import { formatDate } from "./labels";
 import { PRIMARY_CTA_LABEL, SECONDARY_CTA_LABEL, SERVICE_BRAND_NAME } from "../../src/product/customer-copy";
 import { EvidenceView } from "./evidence-view";
 import { useState } from "react";
+import { buildReputationReportSummary, type ReputationEvidenceSummary } from "../../src/diagnosis/reputation/report-summary";
 
 // ============================================================================
 // Round-9.3: Enterprise GEO Consulting Report
@@ -565,39 +566,66 @@ type Dimension = NonNullable<LimitedReportDataV1["mvpReport"]>["score"]["dimensi
 type CustomerRow = { title: string; status: string; current: string; impact: string; action: string };
 
 function ReputationCustomerSection({ report, dimension }: { report: NonNullable<LimitedReportDataV1["mvpReport"]>; dimension: Dimension }) {
-  const reputation = report.reputation;
-  const signals = reputation?.complaintSignals.slice(0, 3) ?? [];
-  const rows: CustomerRow[] = signals.length > 0
-    ? signals.map((signal) => ({
-        title: signal.riskTheme,
-        status: signal.resolutionStatus === "UNRESOLVED" ? "需要回应" : "已有处理线索",
-        current: signal.snippet || signal.title,
-        impact: "客户搜索企业口碑时，相关投诉、退款或争议信息会影响信任判断。",
-        action: "整理公开回应、服务边界和后续处理说明，避免客户只看到片段化信息。",
-      }))
-    : [{
-        title: "公开负面舆情集中度",
-        status: "本次检索暂未发现",
-        current: reputation?.summary ?? "本次公开检索暂未发现明显集中的负面舆情。",
-        impact: "仍需持续关注投诉平台、社交平台和媒体报道，避免新争议长期无人解释。",
-        action: "建立舆情主题台账和月度复查机制，保留真实评价、投诉处理和企业回应材料。",
-      }];
+  const summary = buildReputationReportSummary(report.reputation);
   return (
     <CustomerSection index={2} title="舆情与口碑诊断" className="mb-6">
       <div className="mb-4 rounded-lg bg-emerald-50 p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[19px] font-semibold text-stone-950">舆情与口碑 {normalizedScore(dimension?.score, dimension?.maxScore) ?? "未检查"}分</p>
-          <p className="text-[14px] text-stone-500">风险等级 {reputationRiskLabel(reputation?.riskLevel)}</p>
+          <p className="text-[14px] text-stone-500">风险等级 {reputationRiskLabel(summary.riskLevel)}</p>
         </div>
-        <p className="mt-2 text-[16px] leading-[1.72] text-stone-700">客户结论：{reputation?.summary ?? "本次公开检索暂未发现明显集中的负面舆情。"}</p>
-        {reputation && reputation.riskThemes.length > 0 ? (
-          <p className="mt-2 text-[15px] text-stone-600">集中主题：{reputation.riskThemes.join("、")}</p>
-        ) : null}
+        <p className="mt-2 text-[16px] leading-[1.72] text-stone-700">
+          本次共执行 {summary.searchedQueryCount} 组公开舆情查询，匹配到 {summary.matchedEvidenceCount} 条与企业或品牌相关的公开证据。
+        </p>
+        <p className="mt-2 text-[16px] leading-[1.72] text-stone-700">客户结论：{summary.summary}</p>
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {rows.map((row) => <DiagnosticCard key={`${row.title}-${row.current}`} row={row} />)}
+
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        {summary.categoryRows.map((row) => (
+          <div key={row.label} className="rounded-lg border border-stone-200 bg-white p-4">
+            <p className="text-[14px] text-stone-500">{row.label}</p>
+            <p className="mt-1 text-[24px] font-semibold text-emerald-800">{row.count} 条</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mb-4 rounded-lg border border-stone-200 bg-white p-4">
+        <h3 className="text-[18px] font-semibold text-stone-950">风险等级判断依据</h3>
+        <ul className="mt-3 space-y-2 text-[16px] leading-[1.72] text-stone-700">
+          {summary.riskReasons.map((reason) => <li key={reason}>· {reason}</li>)}
+        </ul>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        <h3 className="text-[18px] font-semibold text-stone-950">代表性公开证据</h3>
+        {summary.representativeEvidence.length > 0 ? (
+          summary.representativeEvidence.map((item) => <ReputationEvidenceCard key={`${item.url}-${item.title}`} item={item} />)
+        ) : (
+          <article className="rounded-lg border border-stone-200 bg-white p-4">
+            <p className="text-[16px] leading-[1.72] text-stone-700">本次公开检索暂未匹配到相关证据；这不等于现实中不存在舆情，建议后续持续复查。</p>
+          </article>
+        )}
       </div>
     </CustomerSection>
+  );
+}
+
+function ReputationEvidenceCard({ item }: { item: ReputationEvidenceSummary }) {
+  return (
+    <article className="rounded-lg border border-stone-200 bg-white p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <h3 className="break-words text-[18px] font-semibold leading-[1.35] text-stone-950 [overflow-wrap:anywhere] md:text-[19px]">{item.title}</h3>
+        <span className="w-fit rounded bg-stone-100 px-2.5 py-1 text-[14px] font-medium text-stone-700">{item.evidenceType}</span>
+      </div>
+      <dl className="mt-3 space-y-3 text-[16px] leading-[1.72]">
+        <DetailRow label="来源" value={`${item.sourceCategory} · ${item.source}`} />
+        <DetailRow label="日期" value={item.date ?? "未标注日期"} />
+        <DetailRow label="摘要" value={item.summary} />
+      </dl>
+      <a className="mt-3 inline-block break-all text-[15px] font-medium text-emerald-800 underline underline-offset-2 [overflow-wrap:anywhere]" href={item.url} target="_blank" rel="noreferrer">
+        查看原文链接
+      </a>
+    </article>
   );
 }
 

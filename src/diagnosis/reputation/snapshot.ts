@@ -17,7 +17,8 @@ type EntityMatch = ReputationSignalV1["entityMatch"];
 
 const NEGATIVE_TERMS = ["投诉", "退费", "退款", "虚假宣传", "霸王条款", "纠纷", "合同", "课程缩水", "教学质量", "欺骗", "差评", "维权"];
 const POSITIVE_TERMS = ["好评", "满意", "推荐", "靠谱", "优质", "认可", "口碑好"];
-const RESPONSE_TERMS = ["回应", "回复", "处理", "已回复", "已完成", "企业回应", "协商"];
+const RESPONSE_TERMS = ["回应", "回复", "已回复", "已完成", "已解决", "处理完成", "企业回应", "商家回复", "官方回复", "协商"];
+const OFFICIAL_REGISTRY_DOMAINS = ["qcc.com", "tianyancha.com", "qizhidao.com", "qixin.com", "aiqicha.baidu.com"];
 
 function clean(value: string | undefined | null): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
@@ -36,11 +37,12 @@ function sourceCategory(item: EvidenceItem): string {
   const domain = item.sourceDomain.toLowerCase();
   if (text.includes("黑猫") || domain.includes("tousu.sina")) return "黑猫投诉";
   if (text.includes("消费保") || text.includes("消费投诉") || domain.includes("xfb315")) return "消费投诉平台";
+  if (/企业回应|商家回复|官方回复|已回复|已回应/.test(text)) return "企业自身回应";
+  if (OFFICIAL_REGISTRY_DOMAINS.some((item) => domain.includes(item)) || /工商|备案|统一社会信用|注册资本|商标|司法案件|纳税人/.test(text)) return "官方公开渠道";
   if (/news|xinhuanet|people|chinanews|sina|sohu|163|qq|thepaper/.test(domain) || /新闻|媒体|报道/.test(text)) return "新闻媒体";
   if (/xiaohongshu|zhihu|weibo|douyin|bilibili/.test(domain) || /小红书|知乎|微博|抖音|社交/.test(text)) return "社交平台";
   if (/dianping|meituan|amap|baidu/.test(domain) || /大众点评|美团|地图|本地生活/.test(text)) return "本地生活平台";
   if (/gov|edu|org/.test(domain) || /官方|公开|公示/.test(text)) return "官方公开渠道";
-  if (/官网|官方网站|公众号|回复|回应/.test(text)) return "企业自身回应";
   return "新闻媒体";
 }
 
@@ -136,8 +138,7 @@ export function buildReputationSnapshot(input: {
   const score = scoreFromSignals(complaintSignals, positiveSignals, responseSignals);
   const riskLevel = complaintSignals.length >= 3 ? "HIGH" : complaintSignals.length >= 1 ? "MEDIUM" : "LOW";
   const sourceCoverage = REPUTATION_SOURCE_CATEGORIES.filter((category) =>
-    signals.some((signal) => signal.sourceCategory === category) ||
-    input.searchedQueries.some((query) => query.includes(category.replace("平台", ""))),
+    signals.some((signal) => signal.sourceCategory === category),
   );
   return {
     diagnosisId: input.diagnosisId,
