@@ -143,15 +143,17 @@ function reputationSnapshot(): ReputationAndPublicOpinionSnapshotV1 {
 describe("customer readability polish report", () => {
   it("renders normalized dimension scores and customer-facing priority labels", () => {
     const html = renderCustomerReport();
-    expect(html).toContain("GEO公开信息基础指数");
+    expect(html).toContain("综合诊断指数");
+    expect(html).toContain("评分结构");
+    expect(html).toContain("公开信息建设能力");
+    expect(html).toContain("舆情与口碑");
+    expect(html).toContain("查看评分说明");
     expect(html).toContain("基础信源");
     expect(html).toMatch(/基础信源[\s\S]*\d+分/);
-    expect(html).toContain("优先处理");
+    expect(html).toContain("立即处理");
     expect(html).toContain("重点完善");
     expect(html).toContain("持续建设");
-    expect(html).not.toContain(">P0<");
-    expect(html).not.toContain(">P1<");
-    expect(html).not.toContain(">P2<");
+    expect(html).not.toContain("★★★★★");
   });
 
   it("keeps cooperation and delivery copy concise", () => {

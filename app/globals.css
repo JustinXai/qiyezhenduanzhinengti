@@ -1,3 +1,46 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #111827 !important;
+  }
+
+  button,
+  nav,
+  aside,
+  [data-print-hide="true"] {
+    display: none !important;
+  }
+
+  section,
+  article,
+  details {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  section {
+    margin-bottom: 12mm !important;
+  }
+
+  details > summary {
+    display: none;
+  }
+
+  details > div {
+    display: block !important;
+  }
+}
