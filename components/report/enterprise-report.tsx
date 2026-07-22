@@ -370,6 +370,7 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
     return <LegacyLimitedEnterpriseReport vm={vm} />;
   }
   const dimensions = report.score.dimensions;
+  const reputationSummary = buildReputationReportSummary(report.reputation);
   const topPainPoints = report.coreIssues.slice(0, 3).map((issue) => ({
     title: issue.title,
     customerImpact: customerImpactForIssue(issue.title),
@@ -412,6 +413,14 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
                   优先完成企业信任信息、核心服务说明和客户高频问题内容的统一梳理，让客户在搜索后能更快理解企业、建立信任并发起咨询。
                 </p>
               </div>
+              {reputationSummary.negativeSignalCount > 0 ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+                  <p className="text-[14px] font-medium text-rose-800">舆情提醒</p>
+                  <p className="mt-2 text-[16px] leading-[1.7] text-stone-800">
+                    公开舆情中已出现{reputationSummary.issueThemes.map((item) => item.theme).join("、")}相关信息，需要及时整理事实、处理状态和统一回应口径。
+                  </p>
+                </div>
+              ) : null}
               <div className="flex flex-col gap-3 sm:flex-row">
                 <CustomerButton primary>预约报告解读</CustomerButton>
                 <CustomerButton>获取首期建设方案</CustomerButton>
@@ -475,7 +484,7 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
 
         <CustomerSection index={7} title="核心GEO问题深度诊断" className="mb-6">
           <PrioritySummary groups={priorityGroups} />
-          <div className="mt-4 space-y-4">{report.coreIssues.map((issue) => <IssueBlock key={issue.title} issue={issue} />)}</div>
+          <div className="mt-4 space-y-4">{report.coreIssues.slice(0, 3).map((issue) => <IssueBlock key={issue.title} issue={issue} />)}</div>
         </CustomerSection>
 
         <CustomerSection index={8} title="GEO建设方案" className="mb-6">
@@ -574,38 +583,39 @@ function ReputationCustomerSection({ report, dimension }: { report: NonNullable<
           <p className="text-[19px] font-semibold text-stone-950">舆情与口碑 {normalizedScore(dimension?.score, dimension?.maxScore) ?? "未检查"}分</p>
           <p className="text-[14px] text-stone-500">风险等级 {reputationRiskLabel(summary.riskLevel)}</p>
         </div>
-        <p className="mt-2 text-[16px] leading-[1.72] text-stone-700">
-          本次共执行 {summary.searchedQueryCount} 组公开舆情查询，匹配到 {summary.matchedEvidenceCount} 条与企业或品牌相关的公开证据。
-        </p>
         <p className="mt-2 text-[16px] leading-[1.72] text-stone-700">客户结论：{summary.summary}</p>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        {summary.categoryRows.map((row) => (
-          <div key={row.label} className="rounded-lg border border-stone-200 bg-white p-4">
-            <p className="text-[14px] text-stone-500">{row.label}</p>
-            <p className="mt-1 text-[24px] font-semibold text-emerald-800">{row.count} 条</p>
+      {summary.issueThemes.length > 0 ? (
+        <div className="mb-4 rounded-lg border border-stone-200 bg-white p-4">
+          <h3 className="text-[18px] font-semibold text-stone-950">主要舆情情况</h3>
+          <div className="mt-3 space-y-2 text-[16px] leading-[1.72] text-stone-700">
+            {summary.issueThemes.map((item) => (
+              <p key={item.theme}><span className="font-medium text-stone-950">{item.theme}</span>：发现 {item.count} 条相关信息，{item.summary}</p>
+            ))}
           </div>
-        ))}
+        </div>
+      ) : null}
+
+      <div className="mb-4 rounded-lg border border-stone-200 bg-white p-4 text-[16px] leading-[1.72] text-stone-700">
+        <p>{summary.deductionExplanation}</p>
+        <p className="mt-2">
+          {summary.responseSignalCount > 0
+            ? "公开渠道中发现企业回应或处理信息，但尚未形成集中、统一的公开说明。"
+            : "本次暂未发现集中、清晰的企业公开回应。"}
+        </p>
       </div>
 
-      <div className="mb-4 rounded-lg border border-stone-200 bg-white p-4">
-        <h3 className="text-[18px] font-semibold text-stone-950">风险等级判断依据</h3>
-        <ul className="mt-3 space-y-2 text-[16px] leading-[1.72] text-stone-700">
-          {summary.riskReasons.map((reason) => <li key={reason}>· {reason}</li>)}
-        </ul>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4">
-        <h3 className="text-[18px] font-semibold text-stone-950">代表性公开证据</h3>
-        {summary.representativeEvidence.length > 0 ? (
-          summary.representativeEvidence.map((item) => <ReputationEvidenceCard key={`${item.url}-${item.title}`} item={item} />)
-        ) : (
-          <article className="rounded-lg border border-stone-200 bg-white p-4">
+      <details className="rounded-lg border border-stone-200 bg-white p-4">
+        <summary className="cursor-pointer text-[16px] font-semibold text-emerald-900">查看舆情依据（{summary.matchedEvidenceCount} 条）</summary>
+        <div className="mt-4 grid grid-cols-1 gap-4">
+          {summary.representativeEvidence.length > 0 ? (
+            summary.representativeEvidence.map((item) => <ReputationEvidenceCard key={`${item.url}-${item.title}`} item={item} />)
+          ) : (
             <p className="text-[16px] leading-[1.72] text-stone-700">本次公开检索暂未匹配到相关证据；这不等于现实中不存在舆情，建议后续持续复查。</p>
-          </article>
-        )}
-      </div>
+          )}
+        </div>
+      </details>
     </CustomerSection>
   );
 }
@@ -683,7 +693,7 @@ function DiagnosticCard({ row }: { row: CustomerRow }) {
         <span className="w-fit rounded bg-stone-100 px-2.5 py-1 text-[14px] font-medium text-stone-700">{customerStatus(row.status)}</span>
       </div>
       <dl className="mt-3 space-y-3 text-[16px] leading-[1.72]">
-        <DetailRow label="当前状态" value={row.current} />
+        <DetailRow label="当前发现" value={row.current} />
         <DetailRow label="客户影响" value={row.impact} />
         <DetailRow label="建议动作" value={row.action} />
       </dl>
@@ -703,9 +713,8 @@ function IssueBlock({ issue }: { issue: NonNullable<LimitedReportDataV1["mvpRepo
       </div>
       <dl className="mt-3 space-y-3 text-[16px] leading-[1.72]">
         <DetailRow label="问题本质" value={issue.essence} />
-        <DetailRow label="当前表现" value={issue.currentPerformance} />
-        <DetailRow label="客户影响" value={customerImpactForIssue(issue.title)} />
-        <DetailRow label="建设方向" value={issue.direction} />
+        <DetailRow label="为何处理" value={customerImpactForIssue(issue.title)} />
+        <DetailRow label="建设动作" value={issue.direction} />
       </dl>
     </article>
   );

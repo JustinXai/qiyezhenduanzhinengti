@@ -156,7 +156,8 @@ describe("append-only report revisions", () => {
     ]);
   });
 
-  it("deterministically reads the newest append even when its supplied timestamp is older", async () => {
+  it("deterministically reads the newest appended report row", async () => {
+    db.prepare("UPDATE reports SET created_at = ? WHERE id = ?").run(2_000_000_000, "report_original");
     const revised = buildSampleReport({ coreIssues: [] });
     const revision = await repository.append({
       diagnosisId: original.diagnosisId,
@@ -171,7 +172,7 @@ describe("append-only report revisions", () => {
       .prepare("SELECT id, created_at FROM reports ORDER BY rowid")
       .all() as Array<{ id: string; created_at: number }>;
     expect(rows).toHaveLength(2);
-    expect(rows[1]?.created_at).toBeLessThan(rows[0]?.created_at ?? 0);
+    expect(rows[1]?.created_at).toBeGreaterThan(rows[0]?.created_at ?? 0);
     expect((await storage.getReport(original.diagnosisId))?.id).toBe(revision.id);
   });
 

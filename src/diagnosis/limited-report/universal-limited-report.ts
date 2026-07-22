@@ -163,6 +163,65 @@ const GENERAL_DIMENSIONS = cloneDimensionWithOverrides(MEDICAL_DIMENSIONS, {
   ],
 });
 
+const EDUCATION_DIMENSIONS = cloneDimensionWithOverrides(GENERAL_DIMENSIONS, {
+  sourceFoundation: [
+    { title: "机构主体和品牌身份", keywords: ["公司", "品牌", "企业", "主体", "机构", "学校"], impact: "家长和学员需要先确认机构主体、品牌关系和校区是否真实。", recommendation: "建立机构主体、品牌沿革、校区地址和官方入口说明。" },
+    { title: "官网及官方账号", keywords: ["官网", "官方网站", "官方账号", "公众号"], impact: "官方入口影响学员对课程信息和报名规则的信任。", recommendation: "统一官网、公众号、视频号和校区咨询入口。" },
+    { title: "校区、地区和服务范围", keywords: ["校区", "地区", "地址", "成都", "四川"], impact: "线下咨询和试听前，客户会核实校区位置和服务范围。", recommendation: "补齐校区地址、上课形式、服务城市和联系方式。" },
+    { title: "咨询、试听和报名入口", keywords: ["咨询", "试听", "报名", "联系方式"], impact: "入口不清晰会降低学员咨询和到校试听意愿。", recommendation: "建立咨询、试听、报名与校区入口。" },
+    { title: "第三方公开收录", keywords: ["百科", "媒体", "平台", "收录", "企查查", "天眼查"], impact: "第三方公开信息能帮助客户交叉验证机构真实性。", recommendation: "补齐合规公开收录，并保持主体、地址和联系方式一致。" },
+  ],
+  contentAssets: [
+    { title: "课程体系和班型", keywords: ["课程", "班型", "考研", "培训", "辅导"], impact: "学员需要理解有哪些课程、适合什么备考阶段。", recommendation: "建设课程体系、班型差异和适用人群说明。" },
+    { title: "收费、报名和退费规则", keywords: ["价格", "收费", "报名", "退费", "退款"], impact: "收费和退费边界不清晰会直接影响信任和投诉风险。", recommendation: "补齐收费组成、报名流程、退费规则和常见争议FAQ。" },
+    { title: "师资与教学服务", keywords: ["老师", "师资", "教学", "教研", "服务"], impact: "师资和教学服务决定客户是否相信课程交付。", recommendation: "展示师资背景、教研体系、督学服务和答疑机制。" },
+    { title: "课程适用边界和学习服务注意事项", keywords: ["适合", "阶段", "基础", "注意事项", "服务"], impact: "适用边界缺失容易造成预期不一致。", recommendation: "说明不同基础、目标院校和备考阶段的适用课程。" },
+    { title: "学员案例、评价和服务口碑", keywords: ["案例", "评价", "口碑", "学员"], impact: "学员评价和案例是教育培训决策的重要信任凭据。", recommendation: "合规整理真实案例、评价入口和服务反馈机制。" },
+  ],
+  customerScenarios: [
+    { title: "机构是否正规", keywords: ["正规", "机构", "主体", "资质"], impact: "客户会先确认机构是否真实、主体是否清晰。", recommendation: "集中说明机构主体、品牌关系、校区和官方入口。" },
+    { title: "课程和班型如何选择", keywords: ["课程", "班型", "适合", "阶段"], impact: "课程选择不清晰会让客户转向竞品比较。", recommendation: "建设课程选择与备考方案说明。" },
+    { title: "师资和教学服务是否清晰", keywords: ["师资", "老师", "教学", "督学"], impact: "师资与服务不透明会削弱报名信任。", recommendation: "补齐师资、教研、督学和答疑服务说明。" },
+    { title: "收费和退费规则", keywords: ["收费", "价格", "报名", "退费"], impact: "收费和退费规则是教育培训客户最敏感的问题之一。", recommendation: "建立收费、报名和退费FAQ。" },
+    { title: "试听、咨询和校区入口", keywords: ["试听", "咨询", "校区", "报名"], impact: "客户产生兴趣后需要低摩擦进入试听和咨询。", recommendation: "明确校区、试听、咨询和报名路径。" },
+  ],
+  trustInformation: [
+    { title: "主体和校区说明", keywords: ["主体", "校区", "地址", "机构"], impact: "主体和校区说明影响客户基础信任。", recommendation: "集中展示主体、校区、联系方式和官方入口。" },
+    { title: "师资和教研背景", keywords: ["师资", "老师", "教研", "团队"], impact: "师资信息不足会降低客户对课程交付的判断。", recommendation: "补齐师资、教研和教学服务分工。" },
+    { title: "课程适用边界和退费规则", keywords: ["适用", "退费", "规则", "注意事项"], impact: "边界不清晰容易导致报名后争议。", recommendation: "用中性语言说明课程适用边界、退费规则和学习服务注意事项。" },
+    { title: "学员案例和第三方评价", keywords: ["案例", "评价", "口碑", "第三方"], impact: "评价和案例能帮助客户理解真实服务体验。", recommendation: "整理合规案例、学员评价入口和第三方公开信息。" },
+    { title: "售后、投诉和争议处理", keywords: ["售后", "投诉", "纠纷", "处理", "退费"], impact: "争议处理路径不清晰会增加客户顾虑。", recommendation: "建立投诉、退费和学习服务争议处理说明。" },
+  ],
+  conversionPath: [
+    { title: "咨询入口", keywords: ["电话", "联系", "客服", "咨询"], impact: "咨询入口不清晰会直接影响报名转化。", recommendation: "统一展示电话、在线咨询和校区联系方式。" },
+    { title: "校区和上课信息", keywords: ["地址", "校区", "上课", "交通"], impact: "校区和上课形式影响试听和报名决策。", recommendation: "补齐校区地址、上课方式、交通和到校说明。" },
+    { title: "试听和报名流程", keywords: ["试听", "报名", "预约"], impact: "试听和报名流程不清晰会导致客户不知道下一步怎么做。", recommendation: "建立咨询、试听和报名流程说明。" },
+    { title: "收费和退费说明边界", keywords: ["收费", "价格", "费用", "退费"], impact: "收费和退费边界缺失会增加投诉和咨询顾虑。", recommendation: "给出收费组成、退费规则和服务边界，不作保过、押题命中或升学结果承诺。" },
+    { title: "学习服务和售后路径", keywords: ["服务流程", "答疑", "督学", "售后"], impact: "学习服务路径不清晰会削弱报名后信任。", recommendation: "补齐答疑、督学、学习反馈和售后处理路径。" },
+  ],
+});
+
+const EDUCATION_POLICY: PolicyDefinition = {
+  id: "GENERAL_BRAND_BUSINESS",
+  label: "教育培训机构",
+  prohibitedClaims: ["保过", "押题命中", "升学结果承诺", "没有投诉"],
+  dimensions: EDUCATION_DIMENSIONS,
+  industryAnalysis: [
+    "教育培训客户会先确认机构是否正规、校区是否真实、师资是否清晰，再比较课程体系、班型、适用备考阶段、收费组成和退费规则。",
+    "对考研和升学培训来说，客户最关心课程能不能匹配自己的基础和目标，教学服务是否稳定，学员评价和服务口碑是否可信。",
+    "GEO建设应优先把机构主体、课程班型、师资服务、收费退费、学员案例、试听咨询和校区入口整理成稳定内容资产，减少客户反复确认的成本。",
+  ],
+  plans: [
+    { title: "品牌与机构正规性说明", buildContent: "整理机构主体、品牌关系、校区地址、官方入口和联系方式。", solvesProblem: "基础信源体系薄弱", recommendedCarrier: "官网关于页、校区页、公众号资料页", requiredMaterials: ["营业主体信息", "品牌标准名称", "校区地址和联系方式"], deliverables: ["机构正规性说明", "公开入口一致性清单", "校区信息结构"] },
+    { title: "课程与服务体系", buildContent: "梳理课程分类、班型差异、适用人群和备考阶段。", solvesProblem: "课程内容资产不足", recommendedCarrier: "官网课程页、班型说明页", requiredMaterials: ["课程清单", "班型设置", "适用人群"], deliverables: ["课程体系页", "班型说明", "备考方案FAQ"] },
+    { title: "师资与教学服务说明", buildContent: "展示师资背景、教研体系、督学答疑和学习服务流程。", solvesProblem: "教学信任信息不完整", recommendedCarrier: "师资页、教学服务页、公众号专题", requiredMaterials: ["师资资料", "教研介绍", "服务流程"], deliverables: ["师资介绍", "教学服务说明", "学习服务问答"] },
+    { title: "收费、报名和退费 FAQ", buildContent: "说明收费组成、报名流程、退费规则和常见争议边界。", solvesProblem: "收费和退费边界不清晰", recommendedCarrier: "FAQ页、报名说明页、咨询前说明", requiredMaterials: ["收费规则", "报名流程", "退费条款"], deliverables: ["收费退费FAQ", "报名流程说明", "争议处理口径"] },
+    { title: "学员案例与口碑回应", buildContent: "整理真实学员案例、评价入口和公开舆情回应机制。", solvesProblem: "口碑和争议回应不足", recommendedCarrier: "案例页、口碑页、售后说明页", requiredMaterials: ["学员案例", "评价链接", "处理结果材料"], deliverables: ["案例结构", "口碑回应说明", "服务争议FAQ"] },
+    { title: "校区、试听和咨询入口", buildContent: "明确校区位置、试听预约、咨询方式和报名下一步。", solvesProblem: "咨询转化路径不清晰", recommendedCarrier: "校区页、试听页、联系页", requiredMaterials: ["校区资料", "试听规则", "咨询入口"], deliverables: ["校区入口文案", "试听流程", "咨询路径建议"] },
+  ],
+  requestedMaterials: ["机构主体信息", "校区资料", "课程和班型清单", "师资资料", "收费报名退费规则", "学员案例", "咨询试听流程"],
+};
+
 const POLICIES: Record<MvpGeoReportPackId, PolicyDefinition> = {
   REGULATED_MEDICAL: {
     id: "REGULATED_MEDICAL",
@@ -229,6 +288,7 @@ const POLICIES: Record<MvpGeoReportPackId, PolicyDefinition> = {
 
 function selectPolicy(industry = "", product = ""): PolicyDefinition {
   const text = `${industry} ${product}`.toLowerCase();
+  if (/教育|培训|考研|升学|课程|学校|辅导|万学|海文/.test(text)) return EDUCATION_POLICY;
   if (/医疗|医美|口腔|体检|诊所/.test(text)) return POLICIES.REGULATED_MEDICAL;
   if (/美容|美发|美甲|spa|摄影|健身|皮肤护理|本地生活/.test(text)) return POLICIES.LOCAL_LIFESTYLE_SERVICE;
   return POLICIES.GENERAL_BRAND_BUSINESS;
@@ -393,7 +453,9 @@ function industryQuestions(policy: PolicyDefinition, input: DiagnosisInput): str
   const submitted = (input.customerQuestions ?? [])
     .map((item) => item.question)
     .filter((question): question is string => typeof question === "string" && question.trim().length > 0);
-  const typical = policy.id === "REGULATED_MEDICAL"
+  const typical = policy === EDUCATION_POLICY
+    ? ["这家机构是否正规？", "课程体系和班型适合哪些备考阶段？", "师资、督学和答疑服务如何安排？", "咨询、试听、报名、收费与退费规则是什么？", "有没有学员案例、评价或公开风险提示？"]
+    : policy.id === "REGULATED_MEDICAL"
     ? ["这家机构是否正规？", "有哪些服务项目和流程？", "怎么预约，收费和随访如何安排？", "有没有真实案例、评价或风险提示？", "服务后出现问题如何处理？"]
     : policy.id === "LOCAL_LIFESTYLE_SERVICE"
       ? ["门店在哪里，营业时间是什么？", "服务项目和价格区间是什么？", "如何预约到店，售后怎么处理？", "客户评价和案例是否可信？", "出现退款或争议时如何处理？"]
@@ -433,7 +495,7 @@ function reputationScoreDimension(snapshot: ReputationAndPublicOpinionSnapshotV1
       status: complaintCount === 0 ? "CLEARLY_FOUND" as const : complaintCount <= 2 ? "PARTIALLY_FOUND" as const : "NOT_FOUND_IN_CHECKED_SCOPE" as const,
       score: complaintCount === 0 ? 100 : complaintCount <= 2 ? 50 : 0,
       evidenceIds: snapshot.complaintSignals.map((item) => item.evidenceId),
-      currentStatus: complaintCount === 0 ? "本次公开检索暂未发现明显集中的负面舆情。" : `本次检索发现${complaintCount}条投诉、退款或争议相关线索。`,
+      currentStatus: complaintCount === 0 ? "本次公开检索暂未发现明确负面风险信号。" : `本次检索发现${complaintCount}条投诉、争议或企业风险提示相关线索。`,
       impact: "客户在咨询前会用投诉和负面评价交叉验证企业可信度。",
       recommendation: "先整理公开争议主题、处理口径和真实服务边界，形成可持续更新的信任说明。",
     },
@@ -487,18 +549,19 @@ function reputationScoreDimension(snapshot: ReputationAndPublicOpinionSnapshotV1
 
 function reputationIssue(report: MvpGeoDiagnosticReportV1): MvpGeoDiagnosticReportV1["coreIssues"][number] | null {
   const reputation = report.reputation;
-  if (!reputation || reputation.riskLevel === "LOW" || reputation.riskLevel === "UNKNOWN") return null;
+  if (!reputation || (reputation.riskLevel === "LOW" && reputation.complaintSignals.length === 0) || reputation.riskLevel === "UNKNOWN") return null;
+  const lowRiskSignal = reputation.riskLevel === "LOW";
   return {
-    title: reputation.responseSignals.length > 0 ? "公开负面舆情影响品牌信任" : "企业对投诉与争议信息缺少公开回应",
-    essence: "客户在搜索企业时会同步查看投诉、退款、评价和媒体线索，负面信息如果缺少解释和回应，会直接影响咨询意愿。",
+    title: lowRiskSignal ? "公开风险提示需要核实和说明" : reputation.responseSignals.length > 0 ? "公开负面舆情影响品牌信任" : "企业对投诉与争议信息缺少公开回应",
+    essence: lowRiskSignal ? "当前负面信号数量不多，但公开风险提示如果没有事实核实和边界说明，客户容易产生额外顾虑。" : "客户在搜索企业时会同步查看投诉、退款、评价和媒体线索，负面信息如果缺少解释和回应，会直接影响咨询意愿。",
     currentPerformance: reputation.summary,
     impacts: [
       "客户理解：客户会先看到争议主题，再回头验证企业是否可信。",
       "信任判断：缺少服务边界和处理说明时，负面信息更容易放大。",
       "搜索咨询：AI和搜索结果可能优先引用公开争议片段，削弱企业自己的解释空间。",
     ],
-    severity: reputation.riskLevel === "HIGH" ? "★★★★★" : "★★★★☆",
-    priority: "P0",
+    severity: reputation.riskLevel === "HIGH" ? "★★★★★" : lowRiskSignal ? "★★★☆☆" : "★★★★☆",
+    priority: lowRiskSignal ? "P1" : "P0",
     direction: "整理投诉、退款、合同条款和教学服务争议主题，建立公开回应、服务边界和信任修复内容。",
   };
 }
@@ -547,8 +610,8 @@ function buildCoreIssues(report: MvpGeoDiagnosticReportV1): MvpGeoDiagnosticRepo
     })
     .slice(0, 5);
   const rep = reputationIssue(report);
-  if (!rep) return built.slice(0, 6);
-  return [rep, ...built.filter((issue) => issue.title !== rep.title)].slice(0, 6);
+  if (!rep) return built.slice(0, 4);
+  return [rep, ...built.filter((issue) => issue.title !== rep.title)].slice(0, 4);
 }
 
 function withPriorities(policy: PolicyDefinition, reputation?: ReputationAndPublicOpinionSnapshotV1): MvpGeoDiagnosticReportV1["contentPlans"] {
@@ -560,10 +623,10 @@ function withPriorities(policy: PolicyDefinition, reputation?: ReputationAndPubl
     requiredMaterials: ["投诉和争议主题清单", "退款及合同边界", "服务流程说明", "企业可公开回应规则"],
     deliverables: ["舆情主题整理", "回应口径结构", "信任修复内容页", "售后争议FAQ"],
   };
-  const basePlans = reputation && reputation.riskLevel !== "LOW"
+  const basePlans = reputation && (reputation.riskLevel !== "LOW" || reputation.complaintSignals.length > 0)
     ? [reputationPlan, ...policy.plans.filter((plan) => plan.title !== reputationPlan.title)]
     : policy.plans;
-  return basePlans.slice(0, 7).map((plan, index) => ({
+  return basePlans.slice(0, 5).map((plan, index) => ({
     ...plan,
     priority: index < 2 ? "P0" : index < 4 ? "P1" : "P2",
   }));
@@ -600,6 +663,8 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
   const reportDate = generatedAt;
   const questions = industryQuestions(policy, input);
   const questionSource = (input.customerQuestions ?? []).some((item) => item.question?.trim()) ? "USER_PROVIDED" : "SYSTEM_GENERATED";
+  const hasReputationRisk = reputation.complaintSignals.length > 0;
+  const isEducation = policy === EDUCATION_POLICY;
 
   const report: MvpGeoDiagnosticReportV1 = {
     strategyPack: policy.id,
@@ -619,16 +684,16 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
         ? `${companyName}本次检查完成度为${completion}%，暂不输出总分。`
         : `${companyName}当前GEO公开信息基础指数为${overall}分，属于“${level}”。公开信息可以开始作为诊断依据，但仍存在明显建设空间。`,
       topProblems: [
-        ...(reputation.riskLevel === "MEDIUM" || reputation.riskLevel === "HIGH" ? ["公开负面舆情和争议回应需要优先处理。"] : []),
+        ...(hasReputationRisk ? ["公开舆情中已出现争议或企业风险提示，需要整理事实和回应口径。"] : []),
         ...topMissing.map((entry) => entry.finding.title),
       ].slice(0, 3),
       topOpportunities: [
         "先补齐企业身份、官方入口和本地信源，让客户能确认企业基本事实。",
-        "把投诉、评价、退款和企业回应整理成可解释的公开信任内容。",
-        "围绕服务项目和客户问题建设结构化内容，让搜索和AI问答有可引用答案。",
+        hasReputationRisk ? "把风险提示、客户反馈和企业回应整理成可解释的公开信任内容。" : "把评价、案例和服务反馈整理成可解释的公开信任内容。",
+        isEducation ? "围绕课程、班型、师资、收费退费和试听报名建设结构化内容。" : "围绕服务项目和客户问题建设结构化内容，让搜索和AI问答有可引用答案。",
       ].slice(0, 3),
     },
-    industryAnalysis: [...policy.industryAnalysis],
+    industryAnalysis: [...policy.industryAnalysis].slice(0, 3),
     sourceFoundationRows: [],
     contentAssetRows: [],
     customerScenarioRows: [],
@@ -636,9 +701,9 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
     coreIssues: [],
     contentPlans: withPriorities(policy, reputation),
     roadmap: [
-      { stage: "0-30天", companyActions: ["确认企业主体、品牌名称、地址、联系方式和可公开资料。", "提供核心服务项目、团队、争议处理和预约规则。"], xingmeiDeliverables: ["完成公开信源、舆情主题和页面结构。", "输出企业身份、基础项目和转化入口文案。"], acceptanceCriteria: ["客户搜索品牌名能看到统一基础信息。", "官网、地图或官方账号至少形成一个清晰入口。"] },
-      { stage: "31-60天", companyActions: ["补充客户高频问题、服务流程、注意事项和案例评价材料。", "确认可公开的价格边界、售后、投诉和退款处理规则。"], xingmeiDeliverables: ["建设客户决策FAQ、项目页和信任信息页。", "完成行业典型搜索场景内容覆盖。"], acceptanceCriteria: ["客户搜索地区和项目时能找到结构化说明。", "客户对争议和售后问题能看到清晰边界。"] },
-      { stage: "61-90天", companyActions: ["按月提供新增服务、案例和客户问题。", "配合复测公开信息表现并校正内容。"], xingmeiDeliverables: ["持续发布、测试、更新和优化内容资产。", "输出阶段复盘和下一轮建设建议。"], acceptanceCriteria: ["核心内容持续更新。", "重点问题和转化入口完成复测，不承诺排名或流量结果。"] },
+      { stage: "0-30天", companyActions: hasReputationRisk ? ["核实主要投诉、争议或企业风险提示的事实范围。", "整理处理结果、统一回应口径、收费报名退费和服务边界说明。"] : ["确认企业主体、品牌名称、地址、联系方式和可公开资料。", "提供课程、师资、服务流程和咨询报名规则。"], xingmeiDeliverables: hasReputationRisk ? ["完成公开信源、舆情主题和页面结构。", "输出机构正规性、收费退费和回应口径文案。"] : ["完成公开信源清单和页面结构。", "输出机构身份、课程服务和咨询入口文案。"], acceptanceCriteria: ["客户搜索品牌名能看到统一基础信息。", "官网、地图或官方账号至少形成一个清晰入口。"] },
+      { stage: "31-60天", companyActions: hasReputationRisk ? ["发布退款规则、学习服务流程和常见争议FAQ。", "补充学员服务、售后处理说明、真实案例和处理结果材料。"] : ["补充客户高频问题、课程流程、服务注意事项和案例评价材料。", "确认可公开的收费、报名、退费和学习服务规则。"], xingmeiDeliverables: ["建设客户决策FAQ、课程页和信任信息页。", "完成行业典型搜索场景内容覆盖。"], acceptanceCriteria: ["客户搜索课程、班型和校区时能找到结构化说明。", "客户对收费、退费和服务问题能看到清晰边界。"] },
+      { stage: "61-90天", companyActions: hasReputationRisk ? ["复查舆情变化，跟踪相同问题是否继续出现。", "更新公开回应、客户问题内容和处理结果材料。"] : ["按月提供新增课程、案例和客户问题。", "配合复测公开信息表现并校正内容。"], xingmeiDeliverables: ["持续发布、测试、更新和优化内容资产。", "输出阶段复盘和下一轮建设建议。"], acceptanceCriteria: ["核心内容持续更新。", "重点问题和转化入口完成复测，不承诺排名或经营结果。"] },
     ],
     conclusion: [
       overall === null ? `本次检查完成度为${completion}%，需要先补齐检查范围。` : `${companyName}当前分数为${overall}分，最大问题是公开信息入口和客户决策内容仍不够集中。`,
@@ -652,7 +717,7 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
     algorithmVersion: "fast-mvp-geo-diagnostic-report.v1",
   };
 
-  report.sourceFoundationRows = dimensionRows(report, "sourceFoundation").map((finding) => ({
+  report.sourceFoundationRows = dimensionRows(report, "sourceFoundation").slice(0, 3).map((finding) => ({
     sourceType: finding.title,
     finding: finding.currentStatus,
     status: statusCopy(finding.status),
@@ -660,7 +725,7 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
     decisionImpact: finding.impact,
     optimization: finding.recommendation,
   }));
-  report.contentAssetRows = dimensionRows(report, "contentAssets").slice(0, 4).map((finding) => ({
+  report.contentAssetRows = dimensionRows(report, "contentAssets").slice(0, 3).map((finding) => ({
     item: finding.title,
     currentStatus: finding.currentStatus,
     score: finding.score,
@@ -668,7 +733,7 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
     impact: finding.impact,
     recommendation: finding.recommendation,
   }));
-  report.customerScenarioRows = questions.slice(0, 5).map((question, index) => {
+  report.customerScenarioRows = questions.slice(0, 3).map((question, index) => {
     const finding = dimensionRows(report, "customerScenarios")[index % 5]!;
     return {
       scenario: finding.title,
@@ -680,7 +745,7 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
       recommendedContent: finding.recommendation,
     };
   });
-  report.trustRiskRows = [...dimensionRows(report, "trustInformation").slice(0, 4), ...dimensionRows(report, "conversionPath").slice(0, 4)].map((finding) => ({
+  report.trustRiskRows = [...dimensionRows(report, "trustInformation").slice(0, 1), ...dimensionRows(report, "conversionPath").slice(0, 3)].map((finding) => ({
     item: finding.title,
     currentStatus: finding.currentStatus,
     score: finding.score,
@@ -699,13 +764,12 @@ function countVisibleChars(report: MvpGeoDiagnosticReportV1): number {
     ...report.overview.topOpportunities,
     report.reputation?.summary ?? "",
     ...(report.reputation?.riskThemes ?? []),
-    ...(report.reputation?.complaintSignals.slice(0, 3).flatMap((signal) => [signal.title, signal.snippet, signal.riskTheme]) ?? []),
-    ...report.industryAnalysis,
+    ...report.industryAnalysis.slice(0, 3),
     ...report.sourceFoundationRows.flatMap((row) => [row.sourceType, row.finding, row.status, row.decisionImpact, row.optimization]),
     ...report.contentAssetRows.flatMap((row) => [row.item, row.currentStatus, row.gap, row.impact, row.recommendation]),
     ...report.customerScenarioRows.flatMap((row) => [row.scenario, row.question, row.answerability, row.performance, row.impact, row.recommendedContent]),
     ...report.trustRiskRows.flatMap((row) => [row.item, row.currentStatus, row.impact, row.recommendation]),
-    ...report.coreIssues.flatMap((issue) => [issue.title, issue.essence, issue.currentPerformance, ...issue.impacts, issue.severity, issue.priority, issue.direction]),
+    ...report.coreIssues.slice(0, 3).flatMap((issue) => [issue.title, issue.essence, issue.currentPerformance, ...issue.impacts, issue.severity, issue.priority, issue.direction]),
     ...report.contentPlans.flatMap((plan) => [plan.title, plan.buildContent, plan.solvesProblem, plan.recommendedCarrier, plan.priority, ...plan.requiredMaterials, ...plan.deliverables]),
     ...report.roadmap.flatMap((stage) => [stage.stage, ...stage.companyActions, ...stage.xingmeiDeliverables, ...stage.acceptanceCriteria]),
     ...report.conclusion,

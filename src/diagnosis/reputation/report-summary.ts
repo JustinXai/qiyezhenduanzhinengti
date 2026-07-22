@@ -2,6 +2,7 @@ import type {
   ReputationAndPublicOpinionSnapshotV1,
   ReputationSignalV1,
 } from "../../contracts";
+import { reputationDeductionFromSignals } from "./snapshot";
 
 export interface ReputationEvidenceSummary {
   title: string;
@@ -29,8 +30,11 @@ export interface ReputationReportSummary {
   positiveSignalCount: number;
   neutralSignalCount: number;
   responseSignalCount: number;
+  reputationDeduction: number;
   summary: string;
+  deductionExplanation: string;
   riskReasons: string[];
+  issueThemes: Array<{ theme: string; count: number; summary: string }>;
   representativeEvidence: ReputationEvidenceSummary[];
   categoryRows: Array<{ label: string; count: number }>;
   guardViolations: string[];
@@ -63,6 +67,9 @@ function safeSummary(signal: ReputationSignalV1): string {
   const text = signal.snippet.trim() || signal.title.trim();
   if (!text) return "该条公开证据提供了与企业或品牌相关的背景信息。";
   if (signal.signalType === "COMPLAINT" || signal.signalType === "NEGATIVE_REVIEW") {
+    if (/司法|自身风险|被执行|处罚|案件/.test(`${signal.title} ${signal.snippet}`)) {
+      return `公开信息中出现企业风险提示：${text}`;
+    }
     return `有用户在公开平台反映：${text}`;
   }
   if (signal.signalType === "COMPANY_RESPONSE") {
@@ -104,27 +111,24 @@ function summaryFor(input: {
   negativeSignalCount: number;
   responseSignalCount: number;
   riskLevel: ReputationReportSummary["riskLevel"];
+  issueThemes: readonly { theme: string; count: number }[];
 }): string {
   if (input.matchedEvidenceCount === 0) {
     return "本次公开检索暂未匹配到与企业或品牌相关的舆情证据；这不等于现实中不存在舆情，建议后续持续复查。";
   }
-  if (input.negativeSignalCount > 0 && input.riskLevel === "LOW") {
-    const responseCopy = input.responseSignalCount > 0
-      ? "部分公开争议已出现企业回应或处理信息，这有助于降低信息不对称，但仍建议建立统一的公开回应入口。"
-      : "暂未看到足够集中的企业公开回应入口，建议补充统一、可核验的回应机制。";
-    return `公开渠道已发现与品牌服务、客户反馈或企业回应相关的舆情信息，并包含部分投诉或争议信号；当前证据数量、集中程度或严重程度暂未形成明显高风险聚集，因此综合风险等级评估为低风险。${responseCopy}`;
-  }
   if (input.negativeSignalCount > 0) {
-    const responseCopy = input.responseSignalCount > 0 ? "同时也检索到企业回应或处理信息。" : "暂未检索到足够清晰的企业公开回应入口。";
-    return `本次检索发现部分投诉或争议信息，建议企业持续关注相关问题，并补充公开、统一、可核验的回应机制。${responseCopy}`;
+    const themes = input.issueThemes.map((item) => item.theme).slice(0, 3).join("、") || "公开争议";
+    const responseCopy = input.responseSignalCount > 0 ? "同时发现部分企业回应或处理信息。" : "本次暂未发现集中、清晰的企业公开回应。";
+    return `本次公开检索发现与品牌相关的负面舆情线索，主要涉及${themes}。相关信息以公开平台摘录为主，需进一步核实具体事实；${responseCopy}综合证据数量、重复程度和来源强度，风险等级为${riskLevelLabel(input.riskLevel)}。`;
   }
-  return "本次公开检索匹配到与企业或品牌相关的舆情和公开信息，暂未发现明确负面风险信号；这不等于网络上没有舆情，后续仍应持续复查。";
+  return `本次公开检索匹配到与企业或品牌相关的公开信息，暂未发现明确负面风险信号；这不等于网络上没有舆情，综合风险等级为${riskLevelLabel(input.riskLevel)}。`;
 }
 
 function riskReasons(input: {
   matchedEvidenceCount: number;
   negativeSignalCount: number;
   responseSignalCount: number;
+  reputationDeduction: number;
   mediaCount: number;
   officialCount: number;
   riskThemes: readonly string[];
@@ -135,7 +139,7 @@ function riskReasons(input: {
   }
   const reasons: string[] = [`本次匹配到${input.matchedEvidenceCount}条相关公开证据。`];
   if (input.negativeSignalCount > 0) {
-    reasons.push(`其中${input.negativeSignalCount}条属于投诉、退款或争议相关信号。`);
+    reasons.push(`其中${input.negativeSignalCount}条属于投诉、争议或企业风险提示相关信号。`);
   } else {
     reasons.push("当前匹配证据未形成明确负面信号。");
   }
@@ -147,10 +151,41 @@ function riskReasons(input: {
   if (input.responseSignalCount > 0) {
     reasons.push(`发现${input.responseSignalCount}条企业回应或处理相关线索。`);
   }
+  if (input.reputationDeduction > 0) {
+    reasons.push(`舆情扣分为${input.reputationDeduction}分，按唯一风险主题计算。`);
+  }
   if (input.mediaCount > 0 || input.officialCount > 0) {
     reasons.push(`证据中包含${input.mediaCount}条新闻媒体线索和${input.officialCount}条官方公开渠道线索。`);
   }
   return reasons.slice(0, 4);
+}
+
+function riskLevelLabel(level: ReputationReportSummary["riskLevel"]): string {
+  if (level === "HIGH") return "高";
+  if (level === "MEDIUM") return "中";
+  if (level === "LOW") return "低";
+  return "未知";
+}
+
+function issueThemes(signals: readonly ReputationSignalV1[]): Array<{ theme: string; count: number; summary: string }> {
+  const byTheme = new Map<string, ReputationSignalV1[]>();
+  for (const signal of signals) {
+    const theme = signal.riskTheme || "公开舆情";
+    byTheme.set(theme, [...(byTheme.get(theme) ?? []), signal]);
+  }
+  return Array.from(byTheme.entries()).slice(0, 3).map(([theme, items]) => ({
+    theme,
+    count: items.length,
+    summary: theme === "司法与企业风险提示"
+      ? "主要涉及公开企业风险提示、司法案件或相关风险监控信息，具体事实需以权威文书或监管信息进一步核验。"
+      : "主要涉及用户反馈、服务体验或合同收费相关争议，当前仍需核实处理结果和企业说明。",
+  }));
+}
+
+function deductionExplanation(deduction: number, themes: readonly { theme: string; count: number }[]): string {
+  if (deduction <= 0) return "本项未因明确负面舆情扣分。";
+  const names = themes.map((item) => item.theme).slice(0, 2).join("、") || "公开舆情风险";
+  return `本项主要因${names}出现公开风险信号而扣除 ${deduction} 分。`;
 }
 
 export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinionSnapshotV1 | undefined): ReputationReportSummary {
@@ -167,8 +202,11 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     positiveSignalCount: 0,
     neutralSignalCount: 0,
     responseSignalCount: 0,
+    reputationDeduction: 0,
     summary: "本次公开检索暂未匹配到相关证据；这不等于现实中不存在舆情，建议后续持续复查。",
+    deductionExplanation: "本项未因明确负面舆情扣分。",
     riskReasons: ["缺少可用于展示的舆情证据。"],
+    issueThemes: [],
     representativeEvidence: [],
     categoryRows: [],
     guardViolations: [],
@@ -180,16 +218,19 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
   const positiveSignalCount = snapshot.positiveSignals.length;
   const neutralSignalCount = snapshot.neutralSignals.length;
   const responseSignalCount = snapshot.responseSignals.length;
+  const reputationDeduction = reputationDeductionFromSignals(snapshot.complaintSignals, snapshot.responseSignals);
   const complaintCount = sourceCategoryCount(signals, "黑猫投诉") + sourceCategoryCount(signals, "消费投诉平台");
   const mediaCount = sourceCategoryCount(signals, "新闻媒体");
   const officialCount = sourceCategoryCount(signals, "官方公开渠道");
-  const companyResponseCount = sourceCategoryCount(signals, "企业自身回应") + responseSignalCount;
+  const companyResponseCount = responseSignalCount;
   const matchedEvidenceCount = snapshot.evidenceIds.length;
+  const themes = issueThemes(snapshot.complaintSignals);
   const summary = summaryFor({
     matchedEvidenceCount,
     negativeSignalCount,
     responseSignalCount,
     riskLevel: snapshot.riskLevel,
+    issueThemes: themes,
   });
   const categoryRows = [
     { label: "投诉平台", count: complaintCount },
@@ -222,16 +263,20 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     positiveSignalCount,
     neutralSignalCount,
     responseSignalCount,
+    reputationDeduction,
     summary,
+    deductionExplanation: deductionExplanation(reputationDeduction, themes),
     riskReasons: riskReasons({
       matchedEvidenceCount,
       negativeSignalCount,
       responseSignalCount,
+      reputationDeduction,
       mediaCount,
       officialCount,
       riskThemes: snapshot.riskThemes,
       riskLevel: snapshot.riskLevel,
     }),
+    issueThemes: themes,
     representativeEvidence,
     categoryRows,
     guardViolations: [],

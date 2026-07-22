@@ -33,7 +33,25 @@ describe("universal limited report", () => {
     expect(mvp.score.overall).not.toBeNull();
     expect(mvp.score.dimensions).toHaveLength(6);
     expect(mvp.score.dimensions[1]?.id).toBe("reputationAndPublicOpinion");
-    expect(mvp.reputation?.summary).toContain("本次公开检索暂未发现明显集中的负面舆情");
+    expect(mvp.reputation?.summary).toContain("暂未发现明确负面风险信号");
     expect(mvp.score.dimensions.flatMap((dimension) => dimension.findings).some((finding) => finding.status === "NOT_FOUND_IN_CHECKED_SCOPE" && finding.score === 0)).toBe(true);
+  });
+
+  it("uses education language for education training reports", () => {
+    const report = buildUniversalLimitedReport({
+      brandName: "成都万学海文教育科技有限公司",
+      website: "",
+      industry: "教育培训",
+      productOrService: "考研培训课程",
+      targetRegion: "成都",
+    }, snippets, true);
+    const text = JSON.stringify(report.mvpReport);
+    expect(text).toContain("课程与服务体系");
+    expect(text).toContain("咨询、试听和报名流程说明");
+    expect(text).toContain("师资与教学服务");
+    expect(text).toContain("收费、报名和退费 FAQ");
+    for (const banned of ["面诊", "治疗效果", "随访", "禁忌", "品质工艺", "规格选购", "购买和合作入口", "产品体系"]) {
+      expect(text).not.toContain(banned);
+    }
   });
 });

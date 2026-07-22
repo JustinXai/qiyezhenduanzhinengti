@@ -184,17 +184,43 @@ describe("customer readability polish report", () => {
       neutralSignals: [reputationSnapshot().reputationSignals[1]!, reputationSnapshot().reputationSignals[2]!],
       responseSignals: [reputationSnapshot().reputationSignals[1]!],
     });
-    expect(html).toContain("本次共执行 8 组公开舆情查询，匹配到 7 条");
+    expect(html).toContain("查看舆情依据（7 条）");
+    expect(html).toContain("<details class=");
+    expect(html).not.toContain("<details open");
     expect(html).toContain("风险等级 低");
-    expect(html).toContain("包含部分投诉或争议信号");
-    expect(html).toContain("综合风险等级评估为低风险");
-    expect(html).toContain("投诉平台");
+    expect(html).toContain("负面舆情线索");
+    expect(html).toContain("风险等级为低");
+    expect(html).toContain("主要舆情情况");
+    expect(html).toContain("本项主要因退费争议出现公开风险信号");
     expect(html).toContain("企业回应");
-    expect(html).toContain("代表性公开证据");
     expect(html).toContain("查看原文链接");
     expect(html).toContain("[overflow-wrap:anywhere]");
     expect(html).not.toContain("未发现舆情");
     expect(html).not.toContain("未发现负面");
     expect(html).not.toContain("没有投诉");
+  });
+
+  it("renders education reports without medical or manufacturing wording", () => {
+    const report = buildLimitedCanonicalReport({
+      diagnosisId: "diag_customer_edu",
+      publicToken: "tok_customer_edu",
+      input: {
+        brandName: "成都万学海文教育科技有限公司",
+        website: "",
+        industry: "教育培训",
+        productOrService: "考研培训课程",
+        targetRegion: "四川省成都市",
+      },
+      evidence,
+      searchCompleted: true,
+      generatedAt: "2026-07-22T00:00:00.000Z",
+    });
+    const html = renderToStaticMarkup(createElement(EnterpriseReport, { vm: toEnterpriseReportViewModel(report) }));
+    expect(html).toContain("课程与服务体系");
+    expect(html).toContain("师资与教学服务");
+    expect(html).toContain("咨询、试听和报名流程说明");
+    for (const banned of ["面诊", "治疗效果", "随访", "禁忌", "品质工艺", "规格选购", "购买和合作入口", "产品体系"]) {
+      expect(html).not.toContain(banned);
+    }
   });
 });

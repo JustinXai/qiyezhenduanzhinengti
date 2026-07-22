@@ -51,6 +51,8 @@ async function main(): Promise<void> {
     throw new Error("ALLOW_REPUTATION_REPORT_REFRESH_REQUIRED");
   }
   const diagnosisId = requiredEnv("DIAGNOSIS_ID");
+  const revisionReason = process.env.REVISION_REASON?.trim() || "REPUTATION_SUMMARY_SCORE_INDUSTRY_POLISH_V1";
+  const algorithmVersion = process.env.REPUTATION_REFRESH_ALGORITHM_VERSION?.trim() || "reputation-summary-score-industry-polish.v1";
   const dbUrl = process.env.DATABASE_URL ?? "./data/dev.sqlite";
   const db = openMigratedDatabase(dbUrl);
   applyReportRevisionSchema(db);
@@ -90,14 +92,14 @@ async function main(): Promise<void> {
     executionMode: "LIMITED_PUBLIC_SCAN",
     publicReportEligible: true,
     publicReportStatus: "LIMITED_READY",
-    reportProvenance: "REPUTATION_REPORT_EVIDENCE_SURFACING_V1",
+    reportProvenance: revisionReason,
     limitedReport,
   });
   const appended = await revisions.append({
     diagnosisId,
     expectedParentReportId: current.reportId,
-    revisionReason: "REPUTATION_REPORT_EVIDENCE_SURFACING_V1",
-    algorithmVersion: "reputation-report-evidence-surfacing.v1",
+    revisionReason,
+    algorithmVersion,
     canonicalJson: JSON.stringify(nextReport),
     prunedClaims: [],
   });
@@ -106,6 +108,8 @@ async function main(): Promise<void> {
   console.log(JSON.stringify({
     diagnosisId,
     revisionId: appended.id,
+    revisionReason,
+    algorithmVersion,
     previousScore: previousReputation?.overallReputationScore ?? null,
     nextScore: reputation.overallReputationScore,
     previousRiskLevel: previousReputation?.riskLevel ?? null,
