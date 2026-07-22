@@ -390,7 +390,7 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
           <p className="text-[14px] text-stone-500">报告日期 {formatDate(report.overview.reportDate)}</p>
         </header>
 
-        <CustomerSection index={1} title="老板决策摘要" className="mb-6">
+        <CustomerSection index={1} title="GEO诊断总览" className="mb-6">
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_340px]">
             <div className="space-y-4">
               <div>
