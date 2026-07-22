@@ -44,25 +44,23 @@ describe("planSearchQueries", () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 
-  it("produces all three intent categories from a full profile", () => {
+  it("produces brand, reputation, purchase and competitor intent categories from a full profile", () => {
     const queries = planSearchQueries(makeProfile());
     const categories = new Set(queries.map((q) => q.category));
     expect(categories.has("BRAND_DIRECT")).toBe(true);
+    expect(categories.has("REPUTATION_REVIEW")).toBe(true);
     expect(categories.has("PURCHASE_DECISION")).toBe(true);
     expect(categories.has("COMPETITOR_COMPARISON")).toBe(true);
   });
 
-  it("orders brand-direct before purchase-decision before competitor-comparison", () => {
+  it("keeps reputation queries before purchase and competitor queries", () => {
     const queries = planSearchQueries(makeProfile());
-    const order = {
-      BRAND_DIRECT: 0,
-      PURCHASE_DECISION: 1,
-      COMPETITOR_COMPARISON: 2,
-      COMPETITOR_DOMAIN_RESOLUTION: 3,
-    };
-    const ranks = queries.map((q) => order[q.category]);
-    const sorted = [...ranks].sort((x, y) => x - y);
-    expect(ranks).toEqual(sorted);
+    const firstReputation = queries.findIndex((q) => q.category === "REPUTATION_REVIEW");
+    const firstPurchase = queries.findIndex((q) => q.category === "PURCHASE_DECISION");
+    const firstCompetitor = queries.findIndex((q) => q.category === "COMPETITOR_COMPARISON");
+    expect(firstReputation).toBeGreaterThan(-1);
+    expect(firstPurchase).toBeGreaterThan(firstReputation);
+    expect(firstCompetitor).toBeGreaterThan(firstReputation);
   });
 
   it("includes a bare brand query and a competitor comparison for each competitor", () => {

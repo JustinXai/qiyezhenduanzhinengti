@@ -5,11 +5,14 @@ import type {
   MvpGeoDiagnosticReportV1,
   MvpGeoReportPackId,
   MvpGeoScoreFindingStatus,
+  ReputationAndPublicOpinionSnapshotV1,
   SourceCoverageSlotV1,
   PublicInformationSlotStatus,
 } from "../../contracts";
 import { REPORT_CONTRACT_VERSION, SCORE_CONTRACT_VERSION } from "../../contracts";
 import type { DiagnosisInput } from "../../runtime/diagnosis-input";
+import { buildReputationQueries } from "../reputation/policy";
+import { buildReputationSnapshot } from "../reputation/snapshot";
 
 type CheckItem = {
   title: string;
@@ -38,6 +41,15 @@ type PolicyDefinition = {
 
 const DISCLAIMER =
   "以下判断基于本次公开检索范围；未发现表示当前公开渠道中未检索到清晰信息，不代表企业实际业务或资质一定不存在。该指数用于判断企业当前公开信息是否容易被客户和AI检索、理解与引用，不代表企业实际服务质量、市场份额或AI平台官方排名。";
+
+const SCORE_V2_WEIGHTS: Record<string, number> = {
+  sourceFoundation: 0.2,
+  reputationAndPublicOpinion: 0.2,
+  contentAssets: 0.2,
+  customerScenarios: 0.15,
+  trustInformation: 0.15,
+  conversionPath: 0.1,
+};
 
 const MEDICAL_DIMENSIONS: readonly DimensionDefinition[] = [
   {
@@ -328,9 +340,23 @@ function completionRate(dimensions: MvpGeoDiagnosticReportV1["score"]["dimension
   return total > 0 ? Math.round((checked / total) * 100) : 0;
 }
 
+function normalizedDimensionScore(dimension: MvpGeoDiagnosticReportV1["score"]["dimensions"][number]): number | null {
+  if (dimension.score === null || dimension.maxScore <= 0) return null;
+  return Math.round((dimension.score / dimension.maxScore) * 100);
+}
+
 function overallScore(dimensions: MvpGeoDiagnosticReportV1["score"]["dimensions"], completion: number): number | null {
   if (completion < 80) return null;
-  return Math.round(dimensions.reduce((total, dimension) => total + (dimension.score ?? 0), 0));
+  let weighted = 0;
+  let weightSum = 0;
+  for (const dimension of dimensions) {
+    const score = normalizedDimensionScore(dimension);
+    const weight = SCORE_V2_WEIGHTS[dimension.id] ?? 0;
+    if (score === null || weight <= 0) continue;
+    weighted += score * weight;
+    weightSum += weight;
+  }
+  return weightSum > 0 ? Math.round(weighted / weightSum) : null;
 }
 
 function topMissingFindings(dimensions: MvpGeoDiagnosticReportV1["score"]["dimensions"], limit: number) {
@@ -368,21 +394,123 @@ function industryQuestions(policy: PolicyDefinition, input: DiagnosisInput): str
     .map((item) => item.question)
     .filter((question): question is string => typeof question === "string" && question.trim().length > 0);
   const typical = policy.id === "REGULATED_MEDICAL"
-    ? ["这家机构是否正规？", "有哪些服务项目和流程？", "怎么预约，收费和随访如何安排？"]
+    ? ["这家机构是否正规？", "有哪些服务项目和流程？", "怎么预约，收费和随访如何安排？", "有没有真实案例、评价或风险提示？", "服务后出现问题如何处理？"]
     : policy.id === "LOCAL_LIFESTYLE_SERVICE"
-      ? ["门店在哪里，营业时间是什么？", "服务项目和价格区间是什么？", "如何预约到店，售后怎么处理？"]
-      : ["企业主要产品或服务是什么？", "产品适合什么场景？", "如何购买、咨询或商务合作？"];
+      ? ["门店在哪里，营业时间是什么？", "服务项目和价格区间是什么？", "如何预约到店，售后怎么处理？", "客户评价和案例是否可信？", "出现退款或争议时如何处理？"]
+      : ["企业主要产品或服务是什么？", "产品适合什么场景？", "如何购买、咨询或商务合作？", "网上评价、投诉和企业回应情况如何？", "售后、交付和合同边界是否清楚？"];
   return [...submitted, ...typical].slice(0, 8);
+}
+
+function reputationScoreDimension(snapshot: ReputationAndPublicOpinionSnapshotV1, searchCompleted: boolean): MvpGeoDiagnosticReportV1["score"]["dimensions"][number] {
+  if (!searchCompleted) {
+    const titles = ["公开投诉与负面舆情集中度", "争议主题清晰度", "企业公开回应线索", "正向评价与第三方口碑", "舆情来源覆盖"];
+    return {
+      id: "reputationAndPublicOpinion",
+      title: "舆情与口碑",
+      maxScore: 100,
+      score: null,
+      checkedItemCount: 0,
+      totalItemCount: titles.length,
+      findings: titles.map((title) => ({
+        title,
+        status: "NOT_CHECKED" as const,
+        score: null,
+        evidenceIds: [],
+        currentStatus: `本次尚未执行${title}检查。`,
+        impact: "舆情与口碑会影响客户搜索后的信任判断。",
+        recommendation: "完成舆情检索后再判断投诉、评价和回应情况。",
+      })),
+    };
+  }
+  const score = snapshot.overallReputationScore;
+  const complaintCount = snapshot.complaintSignals.length;
+  const responseCount = snapshot.responseSignals.length;
+  const sourceCount = snapshot.sourceCoverage.length;
+  const riskThemeCount = snapshot.riskThemes.length;
+  const findings = [
+    {
+      title: "公开投诉与负面舆情集中度",
+      status: complaintCount === 0 ? "CLEARLY_FOUND" as const : complaintCount <= 2 ? "PARTIALLY_FOUND" as const : "NOT_FOUND_IN_CHECKED_SCOPE" as const,
+      score: complaintCount === 0 ? 100 : complaintCount <= 2 ? 50 : 0,
+      evidenceIds: snapshot.complaintSignals.map((item) => item.evidenceId),
+      currentStatus: complaintCount === 0 ? "本次公开检索暂未发现明显集中的负面舆情。" : `本次检索发现${complaintCount}条投诉、退款或争议相关线索。`,
+      impact: "客户在咨询前会用投诉和负面评价交叉验证企业可信度。",
+      recommendation: "先整理公开争议主题、处理口径和真实服务边界，形成可持续更新的信任说明。",
+    },
+    {
+      title: "争议主题清晰度",
+      status: riskThemeCount === 0 ? "CLEARLY_FOUND" as const : riskThemeCount <= 2 ? "PARTIALLY_FOUND" as const : "NOT_FOUND_IN_CHECKED_SCOPE" as const,
+      score: riskThemeCount === 0 ? 100 : riskThemeCount <= 2 ? 50 : 0,
+      evidenceIds: snapshot.complaintSignals.map((item) => item.evidenceId),
+      currentStatus: riskThemeCount === 0 ? "本次检索未形成集中争议主题。" : `风险主题集中在${snapshot.riskThemes.slice(0, 3).join("、")}。`,
+      impact: "争议主题如果没有被主动说明，客户容易只看到片段化负面信息。",
+      recommendation: "将争议高频点转化为服务流程、合同边界和售后处理说明。",
+    },
+    {
+      title: "企业公开回应线索",
+      status: responseCount > 0 ? "PARTIALLY_FOUND" as const : complaintCount > 0 ? "NOT_FOUND_IN_CHECKED_SCOPE" as const : "CLEARLY_FOUND" as const,
+      score: responseCount > 0 ? 50 : complaintCount > 0 ? 0 : 100,
+      evidenceIds: snapshot.responseSignals.map((item) => item.evidenceId),
+      currentStatus: responseCount > 0 ? "本次检索发现部分回应或处理线索。" : complaintCount > 0 ? "暂未形成足够清晰的公开回应线索。" : "未见需要公开回应的集中负面舆情。",
+      impact: "公开回应能让客户看到企业是否重视争议处理。",
+      recommendation: "建立投诉、退款、合同和服务争议的公开回应与咨询前说明机制。",
+    },
+    {
+      title: "正向评价与第三方口碑",
+      status: snapshot.positiveSignals.length > 0 ? "PARTIALLY_FOUND" as const : "NOT_FOUND_IN_CHECKED_SCOPE" as const,
+      score: snapshot.positiveSignals.length > 0 ? 50 : 0,
+      evidenceIds: snapshot.positiveSignals.map((item) => item.evidenceId),
+      currentStatus: snapshot.positiveSignals.length > 0 ? "本次检索发现部分正向评价或中性口碑线索。" : "本次检索未发现集中、清晰的正向评价入口。",
+      impact: "正向口碑材料不足时，客户更容易被零散负面信息影响。",
+      recommendation: "合规整理真实评价、案例和服务反馈入口，不制造或诱导虚假评价。",
+    },
+    {
+      title: "舆情来源覆盖",
+      status: sourceCount >= 4 ? "CLEARLY_FOUND" as const : sourceCount >= 2 ? "PARTIALLY_FOUND" as const : "NOT_FOUND_IN_CHECKED_SCOPE" as const,
+      score: sourceCount >= 4 ? 100 : sourceCount >= 2 ? 50 : 0,
+      evidenceIds: snapshot.evidenceIds,
+      currentStatus: sourceCount > 0 ? `本次覆盖${snapshot.sourceCoverage.join("、")}等公开来源。` : "本次舆情检索来源覆盖有限。",
+      impact: "来源覆盖不足会让报告只能做范围内判断。",
+      recommendation: "持续跟踪投诉平台、社交平台、媒体报道和官方公开渠道。",
+    },
+  ];
+  return {
+    id: "reputationAndPublicOpinion",
+    title: "舆情与口碑",
+    maxScore: 100,
+    score,
+    checkedItemCount: findings.length,
+    totalItemCount: findings.length,
+    findings,
+  };
+}
+
+function reputationIssue(report: MvpGeoDiagnosticReportV1): MvpGeoDiagnosticReportV1["coreIssues"][number] | null {
+  const reputation = report.reputation;
+  if (!reputation || reputation.riskLevel === "LOW" || reputation.riskLevel === "UNKNOWN") return null;
+  return {
+    title: reputation.responseSignals.length > 0 ? "公开负面舆情影响品牌信任" : "企业对投诉与争议信息缺少公开回应",
+    essence: "客户在搜索企业时会同步查看投诉、退款、评价和媒体线索，负面信息如果缺少解释和回应，会直接影响咨询意愿。",
+    currentPerformance: reputation.summary,
+    impacts: [
+      "客户理解：客户会先看到争议主题，再回头验证企业是否可信。",
+      "信任判断：缺少服务边界和处理说明时，负面信息更容易放大。",
+      "搜索咨询：AI和搜索结果可能优先引用公开争议片段，削弱企业自己的解释空间。",
+    ],
+    severity: reputation.riskLevel === "HIGH" ? "★★★★★" : "★★★★☆",
+    priority: "P0",
+    direction: "整理投诉、退款、合同条款和教学服务争议主题，建立公开回应、服务边界和信任修复内容。",
+  };
 }
 
 function buildCoreIssues(report: MvpGeoDiagnosticReportV1): MvpGeoDiagnosticReportV1["coreIssues"] {
   type CoreIssue = MvpGeoDiagnosticReportV1["coreIssues"][number];
   const priorityPlan: Array<Pick<CoreIssue, "severity" | "priority">> = [
     { severity: "★★★★★", priority: "P0" },
-    { severity: "★★★★★", priority: "P0" },
+    { severity: "★★★★☆", priority: "P0" },
     { severity: "★★★★☆", priority: "P1" },
     { severity: "★★★★☆", priority: "P1" },
-    { severity: "★★★★☆", priority: "P1" },
+    { severity: "★★★☆☆", priority: "P2" },
     { severity: "★★★☆☆", priority: "P2" },
   ];
   const definitions = [
@@ -394,7 +522,7 @@ function buildCoreIssues(report: MvpGeoDiagnosticReportV1): MvpGeoDiagnosticRepo
     ["本地语义关联不足", "地区、服务项目和客户搜索语言之间的内容连接仍不够集中。", "customerScenarios"],
   ] as const;
   const dimensionMap = new Map(report.score.dimensions.map((dimension) => [dimension.id, dimension]));
-  return definitions
+  const built = definitions
     .map(([title, essence, dimensionId], index) => {
       const dimension = dimensionMap.get(dimensionId);
       const missing = dimension?.findings.filter((finding) => finding.status !== "CLEARLY_FOUND").slice(0, 2).map((finding) => finding.title).join("、") || "相关公开入口";
@@ -417,19 +545,51 @@ function buildCoreIssues(report: MvpGeoDiagnosticReportV1): MvpGeoDiagnosticRepo
       const priorityRank: Record<CoreIssue["priority"], number> = { P0: 0, P1: 1, P2: 2 };
       return priorityRank[a.priority] - priorityRank[b.priority];
     })
-    .slice(0, 6);
+    .slice(0, 5);
+  const rep = reputationIssue(report);
+  if (!rep) return built.slice(0, 6);
+  return [rep, ...built.filter((issue) => issue.title !== rep.title)].slice(0, 6);
 }
 
-function withPriorities(policy: PolicyDefinition): MvpGeoDiagnosticReportV1["contentPlans"] {
-  return policy.plans.slice(0, 8).map((plan, index) => ({
+function withPriorities(policy: PolicyDefinition, reputation?: ReputationAndPublicOpinionSnapshotV1): MvpGeoDiagnosticReportV1["contentPlans"] {
+  const reputationPlan: Omit<MvpGeoDiagnosticReportV1["contentPlans"][number], "priority"> = {
+    title: "舆情回应与信任修复方案",
+    buildContent: "整理公开投诉、退款、合同条款、教学服务争议和企业回应口径，形成客户可理解的服务边界与处理说明。",
+    solvesProblem: "公开负面舆情影响品牌信任",
+    recommendedCarrier: "官网信任说明页、服务协议摘要、售后FAQ、咨询前说明",
+    requiredMaterials: ["投诉和争议主题清单", "退款及合同边界", "服务流程说明", "企业可公开回应规则"],
+    deliverables: ["舆情主题整理", "回应口径结构", "信任修复内容页", "售后争议FAQ"],
+  };
+  const basePlans = reputation && reputation.riskLevel !== "LOW"
+    ? [reputationPlan, ...policy.plans.filter((plan) => plan.title !== reputationPlan.title)]
+    : policy.plans;
+  return basePlans.slice(0, 7).map((plan, index) => ({
     ...plan,
-    priority: index < 3 ? "P0" : index < 6 ? "P1" : "P2",
+    priority: index < 2 ? "P0" : index < 4 ? "P1" : "P2",
   }));
 }
 
-function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[], searchCompleted: boolean, generatedAt = new Date().toISOString()): MvpGeoDiagnosticReportV1 {
+interface LimitedReportBuildOptions {
+  diagnosisId?: string;
+  reputation?: ReputationAndPublicOpinionSnapshotV1;
+  searchedReputationQueries?: readonly string[];
+}
+
+function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[], searchCompleted: boolean, generatedAt = new Date().toISOString(), options: LimitedReportBuildOptions = {}): MvpGeoDiagnosticReportV1 {
   const policy = selectPolicy(input.industry, input.productOrService);
-  const dimensions = scoreDimensions(policy, input, evidence, searchCompleted);
+  const reputation = options.reputation ?? buildReputationSnapshot({
+    diagnosisId: options.diagnosisId ?? "unknown",
+    diagnosisInput: input,
+    evidence,
+    searchedQueries: options.searchedReputationQueries ?? buildReputationQueries(input, 8),
+    generatedAt,
+  });
+  const baseDimensions = scoreDimensions(policy, input, evidence, searchCompleted);
+  const dimensions = [
+    baseDimensions[0]!,
+    reputationScoreDimension(reputation, searchCompleted),
+    ...baseDimensions.slice(1),
+  ];
   const completion = completionRate(dimensions);
   const overall = overallScore(dimensions, completion);
   const level = scoreLevel(overall);
@@ -439,6 +599,7 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
   const region = input.targetRegion ?? "待确认地区";
   const reportDate = generatedAt;
   const questions = industryQuestions(policy, input);
+  const questionSource = (input.customerQuestions ?? []).some((item) => item.question?.trim()) ? "USER_PROVIDED" : "SYSTEM_GENERATED";
 
   const report: MvpGeoDiagnosticReportV1 = {
     strategyPack: policy.id,
@@ -447,7 +608,7 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
       level,
       completionRate: completion,
       dimensions,
-      explanation: "GEO公开信息基础指数采用五个一级维度，检查项按已清晰发现、部分发现、本次检索未发现、尚未执行检查四类处理；前三类分别按100%、50%、0%计分，未执行检查不参与评分并降低检查完成度。",
+      explanation: "GEO公开信息基础指数V2采用六个一级维度：基础信源20%、舆情与口碑20%、内容资产20%、客户搜索场景15%、信任与决策信息15%、咨询与转化路径10%。",
     },
     overview: {
       companyName,
@@ -457,12 +618,15 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
       overallEvaluation: overall === null
         ? `${companyName}本次检查完成度为${completion}%，暂不输出总分。`
         : `${companyName}当前GEO公开信息基础指数为${overall}分，属于“${level}”。公开信息可以开始作为诊断依据，但仍存在明显建设空间。`,
-      topProblems: topMissing.map((entry) => entry.finding.title).slice(0, 3),
+      topProblems: [
+        ...(reputation.riskLevel === "MEDIUM" || reputation.riskLevel === "HIGH" ? ["公开负面舆情和争议回应需要优先处理。"] : []),
+        ...topMissing.map((entry) => entry.finding.title),
+      ].slice(0, 3),
       topOpportunities: [
         "先补齐企业身份、官方入口和本地信源，让客户能确认企业基本事实。",
+        "把投诉、评价、退款和企业回应整理成可解释的公开信任内容。",
         "围绕服务项目和客户问题建设结构化内容，让搜索和AI问答有可引用答案。",
-        "把咨询、预约、收费边界和售后路径做成清晰转化链路。",
-      ],
+      ].slice(0, 3),
     },
     industryAnalysis: [...policy.industryAnalysis],
     sourceFoundationRows: [],
@@ -470,17 +634,19 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
     customerScenarioRows: [],
     trustRiskRows: [],
     coreIssues: [],
-    contentPlans: withPriorities(policy),
+    contentPlans: withPriorities(policy, reputation),
     roadmap: [
-      { stage: "0-30天", companyActions: ["确认企业主体、品牌名称、地址、联系方式和可公开资料。", "提供核心服务项目、团队和预约规则。"], xingmeiDeliverables: ["完成公开信源清单和页面结构。", "输出企业身份、基础项目和转化入口文案。"], acceptanceCriteria: ["客户搜索品牌名能看到统一基础信息。", "官网、地图或官方账号至少形成一个清晰入口。"] },
-      { stage: "31-60天", companyActions: ["补充客户高频问题、服务流程、注意事项和案例评价材料。", "确认可公开的价格边界、售后和投诉处理规则。"], xingmeiDeliverables: ["建设客户决策FAQ、项目页和信任信息页。", "完成行业典型搜索场景内容覆盖。"], acceptanceCriteria: ["客户搜索地区和项目时能找到结构化说明。", "用户提交问题至少有集中公开内容可回答。"] },
+      { stage: "0-30天", companyActions: ["确认企业主体、品牌名称、地址、联系方式和可公开资料。", "提供核心服务项目、团队、争议处理和预约规则。"], xingmeiDeliverables: ["完成公开信源、舆情主题和页面结构。", "输出企业身份、基础项目和转化入口文案。"], acceptanceCriteria: ["客户搜索品牌名能看到统一基础信息。", "官网、地图或官方账号至少形成一个清晰入口。"] },
+      { stage: "31-60天", companyActions: ["补充客户高频问题、服务流程、注意事项和案例评价材料。", "确认可公开的价格边界、售后、投诉和退款处理规则。"], xingmeiDeliverables: ["建设客户决策FAQ、项目页和信任信息页。", "完成行业典型搜索场景内容覆盖。"], acceptanceCriteria: ["客户搜索地区和项目时能找到结构化说明。", "客户对争议和售后问题能看到清晰边界。"] },
       { stage: "61-90天", companyActions: ["按月提供新增服务、案例和客户问题。", "配合复测公开信息表现并校正内容。"], xingmeiDeliverables: ["持续发布、测试、更新和优化内容资产。", "输出阶段复盘和下一轮建设建议。"], acceptanceCriteria: ["核心内容持续更新。", "重点问题和转化入口完成复测，不承诺排名或流量结果。"] },
     ],
     conclusion: [
       overall === null ? `本次检查完成度为${completion}%，需要先补齐检查范围。` : `${companyName}当前分数为${overall}分，最大问题是公开信息入口和客户决策内容仍不够集中。`,
-      "最大机会在于把企业真实资料整理成可检索、可理解、可引用的GEO内容资产，先解决客户能不能找到、看懂、信任并咨询的问题。",
+      "最大机会在于把企业真实资料、公开口碑和争议回应整理成可检索、可理解、可引用的GEO内容资产。",
       "第一阶段应优先补齐企业身份、官方入口、服务项目、预约咨询和信任信息，再进入持续内容发布和复测。",
     ],
+    reputation,
+    questionSource,
     disclaimer: DISCLAIMER,
     visibleCharacterCount: 0,
     algorithmVersion: "fast-mvp-geo-diagnostic-report.v1",
@@ -494,7 +660,7 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
     decisionImpact: finding.impact,
     optimization: finding.recommendation,
   }));
-  report.contentAssetRows = dimensionRows(report, "contentAssets").map((finding) => ({
+  report.contentAssetRows = dimensionRows(report, "contentAssets").slice(0, 4).map((finding) => ({
     item: finding.title,
     currentStatus: finding.currentStatus,
     score: finding.score,
@@ -502,7 +668,7 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
     impact: finding.impact,
     recommendation: finding.recommendation,
   }));
-  report.customerScenarioRows = questions.map((question, index) => {
+  report.customerScenarioRows = questions.slice(0, 5).map((question, index) => {
     const finding = dimensionRows(report, "customerScenarios")[index % 5]!;
     return {
       scenario: finding.title,
@@ -514,7 +680,7 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
       recommendedContent: finding.recommendation,
     };
   });
-  report.trustRiskRows = [...dimensionRows(report, "trustInformation"), ...dimensionRows(report, "conversionPath")].map((finding) => ({
+  report.trustRiskRows = [...dimensionRows(report, "trustInformation").slice(0, 4), ...dimensionRows(report, "conversionPath").slice(0, 4)].map((finding) => ({
     item: finding.title,
     currentStatus: finding.currentStatus,
     score: finding.score,
@@ -531,6 +697,9 @@ function countVisibleChars(report: MvpGeoDiagnosticReportV1): number {
     report.overview.overallEvaluation,
     ...report.overview.topProblems,
     ...report.overview.topOpportunities,
+    report.reputation?.summary ?? "",
+    ...(report.reputation?.riskThemes ?? []),
+    ...(report.reputation?.complaintSignals.slice(0, 3).flatMap((signal) => [signal.title, signal.snippet, signal.riskTheme]) ?? []),
     ...report.industryAnalysis,
     ...report.sourceFoundationRows.flatMap((row) => [row.sourceType, row.finding, row.status, row.decisionImpact, row.optimization]),
     ...report.contentAssetRows.flatMap((row) => [row.item, row.currentStatus, row.gap, row.impact, row.recommendation]),
@@ -545,8 +714,8 @@ function countVisibleChars(report: MvpGeoDiagnosticReportV1): number {
   return texts.join("").replace(/\s+/g, "").length;
 }
 
-export function buildUniversalLimitedReport(input: DiagnosisInput, evidence: readonly EvidenceItem[], searchCompleted: boolean, generatedAt = new Date().toISOString()): LimitedReportDataV1 {
-  const mvpReport = buildMvpReport(input, evidence, searchCompleted, generatedAt);
+export function buildUniversalLimitedReport(input: DiagnosisInput, evidence: readonly EvidenceItem[], searchCompleted: boolean, generatedAt = new Date().toISOString(), options: LimitedReportBuildOptions = {}): LimitedReportDataV1 {
+  const mvpReport = buildMvpReport(input, evidence, searchCompleted, generatedAt, options);
   const policy = selectPolicy(input.industry, input.productOrService);
   const sourceCoverageMatrix = buildSourceCoverageMatrix(mvpReport.score.dimensions, searchCompleted);
   const evidenceCount = sourceCounts(evidence);
@@ -561,9 +730,9 @@ export function buildUniversalLimitedReport(input: DiagnosisInput, evidence: rea
     return {
       id: dimension.id,
       title: dimension.title,
-      weight: dimension.maxScore / 100,
+      weight: SCORE_V2_WEIGHTS[dimension.id] ?? dimension.maxScore / 100,
       status,
-      score: dimension.score === null ? null : Math.round((dimension.score / dimension.maxScore) * 100),
+      score: normalizedDimensionScore(dimension),
     };
   });
   const questions = (input.customerQuestions ?? []).map((item) => item.question).filter((question): question is string => typeof question === "string");
@@ -580,7 +749,11 @@ export function buildUniversalLimitedReport(input: DiagnosisInput, evidence: rea
     verticalPolicy: {
       selectedPack: policy.id,
       resolutionStatus: "RESOLVED",
-      requiredSlots: policy.dimensions.flatMap((dimension) => dimension.items.map((item) => item.title)),
+      requiredSlots: [
+        ...policy.dimensions.flatMap((dimension) => dimension.items.map((item) => item.title)),
+        "公开投诉与负面舆情集中度",
+        "企业公开回应线索",
+      ],
       prohibitedClaims: [...policy.prohibitedClaims],
     },
     questionCoverage: (questions.length > 0 ? questions : industryQuestions(policy, input).slice(0, 5)).map((question, index) => {

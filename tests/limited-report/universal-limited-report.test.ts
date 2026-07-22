@@ -31,7 +31,9 @@ describe("universal limited report", () => {
     const mvp = report.mvpReport!;
     expect(mvp.score.completionRate).toBe(100);
     expect(mvp.score.overall).not.toBeNull();
-    expect(mvp.score.dimensions).toHaveLength(5);
+    expect(mvp.score.dimensions).toHaveLength(6);
+    expect(mvp.score.dimensions[1]?.id).toBe("reputationAndPublicOpinion");
+    expect(mvp.reputation?.summary).toContain("本次公开检索暂未发现明显集中的负面舆情");
     expect(mvp.score.dimensions.flatMap((dimension) => dimension.findings).some((finding) => finding.status === "NOT_FOUND_IN_CHECKED_SCOPE" && finding.score === 0)).toBe(true);
   });
 });

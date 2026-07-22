@@ -356,6 +356,7 @@ function EvidenceSection({ evidence }: { evidence: EnterpriseReportViewModel["ev
 
 const SERVICE_COLLAB_ITEMS = [
   "企业知识资产整理",
+  "舆情与口碑问题整理",
   "客户决策内容建设",
   "GEO内容体系规划",
   "持续诊断与优化建议",
@@ -443,23 +444,32 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
           </div>
         </CustomerSection>
 
-        <CustomerSection index={2} title="GEO与行业适配分析" className="mb-6">
+        <ReputationCustomerSection report={report} dimension={dimensions[1]} />
+
+        <CustomerSection index={3} title="GEO与行业、客户决策分析" className="mb-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {industryCards(report.industryAnalysis).map((item) => <InsightCard key={item.title} title={item.title} body={item.body} />)}
           </div>
         </CustomerSection>
 
-        <DimensionCustomerSection index={3} title="基础信源收录诊断" dimension={dimensions[0]} conclusion={dimensionConclusion("sourceFoundation")} rows={report.sourceFoundationRows.map((row) => ({ title: row.sourceType, status: row.status, current: row.finding, impact: row.decisionImpact, action: row.optimization }))} />
+        <CustomerSection index={4} title="公开信源与内容资产诊断" className="mb-6">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <DimensionSummary dimension={dimensions[0]} conclusion={dimensionConclusion("sourceFoundation")} />
+            <DimensionSummary dimension={dimensions[2]} conclusion={dimensionConclusion("contentAssets")} />
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+            {report.sourceFoundationRows.slice(0, 3).map((row) => <DiagnosticCard key={`source-${row.sourceType}`} row={{ title: row.sourceType, status: row.status, current: row.finding, impact: row.decisionImpact, action: row.optimization }} />)}
+            {report.contentAssetRows.slice(0, 3).map((row) => <DiagnosticCard key={`content-${row.item}`} row={{ title: row.item, status: statusFromScore(row.score), current: row.currentStatus, impact: row.impact, action: row.recommendation }} />)}
+          </div>
+        </CustomerSection>
 
-        <DimensionCustomerSection index={4} title="内容资产盘点" dimension={dimensions[1]} conclusion={dimensionConclusion("contentAssets")} rows={report.contentAssetRows.map((row) => ({ title: row.item, status: statusFromScore(row.score), current: row.currentStatus, impact: row.impact, action: row.recommendation }))} />
-
-        <DimensionCustomerSection index={5} title="客户搜索与AI问答准备度测试" dimension={dimensions[2]} conclusion={dimensionConclusion("customerScenarios")} rows={report.customerScenarioRows.map((row) => ({ title: row.scenario, status: row.answerability, current: row.question, impact: row.impact, action: row.recommendedContent }))} />
+        <DimensionCustomerSection index={5} title="客户搜索与AI问答准备度" dimension={dimensions[3]} conclusion={dimensionConclusion("customerScenarios")} rows={report.customerScenarioRows.slice(0, 5).map((row) => ({ title: row.scenario, status: row.answerability, current: row.question, impact: row.impact, action: row.recommendedContent }))} />
 
         <TrustConversionSection
-          trustDimension={dimensions[3]}
-          conversionDimension={dimensions[4]}
-          trustRows={report.trustRiskRows.slice(0, 5).map((row) => ({ title: row.item, status: statusFromScore(row.score), current: row.currentStatus, impact: row.impact, action: row.recommendation }))}
-          conversionRows={report.trustRiskRows.slice(5).map((row) => ({ title: row.item, status: statusFromScore(row.score), current: row.currentStatus, impact: row.impact, action: row.recommendation }))}
+          trustDimension={dimensions[4]}
+          conversionDimension={dimensions[5]}
+          trustRows={report.trustRiskRows.slice(0, 4).map((row) => ({ title: row.item, status: statusFromScore(row.score), current: row.currentStatus, impact: row.impact, action: row.recommendation }))}
+          conversionRows={report.trustRiskRows.slice(4, 8).map((row) => ({ title: row.item, status: statusFromScore(row.score), current: row.currentStatus, impact: row.impact, action: row.recommendation }))}
         />
 
         <CustomerSection index={7} title="核心GEO问题深度诊断" className="mb-6">
@@ -471,19 +481,11 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">{report.contentPlans.map((plan) => <PlanBlock key={plan.title} plan={plan} />)}</div>
         </CustomerSection>
 
-        <CustomerSection index={9} title="30/60/90天执行路线" className="mb-6">
+        <CustomerSection index={9} title="30/60/90天执行路线与合作方式" className="mb-6">
           <p className="mb-4 rounded-lg bg-emerald-50 p-4 text-[16px] leading-[1.7] text-stone-800">
             首期启动建议：优先完成企业事实确认、核心信任信息整理和客户高频问题建设，再进入持续内容发布和复测。
           </p>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">{report.roadmap.map((stage) => <RoadmapStage key={stage.stage} stage={stage} />)}</div>
-        </CustomerSection>
-
-        <CustomerSection index={10} title="结论和下一步" className="mb-6">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <InsightCard title="当前判断" body="企业已经具备部分公开基础，但信息仍较分散，客户在进一步了解服务、专业能力和咨询流程时，获得完整答案的成本较高。" />
-            <InsightCard title="首期建议" body="优先建设统一的企业信任信息、核心服务说明和客户高频问题内容。" />
-            <InsightCard title="星媄数据协作" body="星媄数据可以根据企业现有资料，完成公开信息梳理、内容结构设计和首期建设方案。" />
-          </div>
           <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
             <CooperationCard />
             <XingmeiDeliveryCard />
@@ -498,9 +500,9 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
           </div>
         </CustomerSection>
 
-        <div className="mb-6 rounded-lg border border-emerald-900/10 bg-white p-4">
+        <CustomerSection index={10} title="证据附件" className="mb-6">
           <EvidenceSection evidence={vm.evidence} />
-        </div>
+        </CustomerSection>
 
         <footer className="mt-6 border-t border-emerald-900/10 pt-4 text-center text-[14px] text-stone-500">{SERVICE_BRAND_NAME} · 企业GEO诊断报告 · {formatDate(vm.reportDate)}</footer>
       </div>
@@ -524,7 +526,8 @@ function shortDimensionTitle(title: string) {
   return title
     .replace("基础信源与企业身份", "基础信源")
     .replace("服务或产品内容资产", "内容资产")
-    .replace("客户搜索场景覆盖", "客户搜索场景");
+    .replace("客户搜索场景覆盖", "客户搜索场景")
+    .replace("舆情与口碑", "舆情与口碑");
 }
 
 function NormalizedScoreBar({ label, score }: { label: string; score: number | null }) {
@@ -561,6 +564,43 @@ function CustomerSection({ index, title, children, className = "" }: SectionProp
 type Dimension = NonNullable<LimitedReportDataV1["mvpReport"]>["score"]["dimensions"][number] | undefined;
 type CustomerRow = { title: string; status: string; current: string; impact: string; action: string };
 
+function ReputationCustomerSection({ report, dimension }: { report: NonNullable<LimitedReportDataV1["mvpReport"]>; dimension: Dimension }) {
+  const reputation = report.reputation;
+  const signals = reputation?.complaintSignals.slice(0, 3) ?? [];
+  const rows: CustomerRow[] = signals.length > 0
+    ? signals.map((signal) => ({
+        title: signal.riskTheme,
+        status: signal.resolutionStatus === "UNRESOLVED" ? "需要回应" : "已有处理线索",
+        current: signal.snippet || signal.title,
+        impact: "客户搜索企业口碑时，相关投诉、退款或争议信息会影响信任判断。",
+        action: "整理公开回应、服务边界和后续处理说明，避免客户只看到片段化信息。",
+      }))
+    : [{
+        title: "公开负面舆情集中度",
+        status: "本次检索暂未发现",
+        current: reputation?.summary ?? "本次公开检索暂未发现明显集中的负面舆情。",
+        impact: "仍需持续关注投诉平台、社交平台和媒体报道，避免新争议长期无人解释。",
+        action: "建立舆情主题台账和月度复查机制，保留真实评价、投诉处理和企业回应材料。",
+      }];
+  return (
+    <CustomerSection index={2} title="舆情与口碑诊断" className="mb-6">
+      <div className="mb-4 rounded-lg bg-emerald-50 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[19px] font-semibold text-stone-950">舆情与口碑 {normalizedScore(dimension?.score, dimension?.maxScore) ?? "未检查"}分</p>
+          <p className="text-[14px] text-stone-500">风险等级 {reputationRiskLabel(reputation?.riskLevel)}</p>
+        </div>
+        <p className="mt-2 text-[16px] leading-[1.72] text-stone-700">客户结论：{reputation?.summary ?? "本次公开检索暂未发现明显集中的负面舆情。"}</p>
+        {reputation && reputation.riskThemes.length > 0 ? (
+          <p className="mt-2 text-[15px] text-stone-600">集中主题：{reputation.riskThemes.join("、")}</p>
+        ) : null}
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {rows.map((row) => <DiagnosticCard key={`${row.title}-${row.current}`} row={row} />)}
+      </div>
+    </CustomerSection>
+  );
+}
+
 function DimensionCustomerSection({ index, title, dimension, conclusion, rows }: { index: number; title: string; dimension: Dimension; conclusion: string; rows: CustomerRow[] }) {
   return (
     <CustomerSection index={index} title={title} className="mb-6">
@@ -580,7 +620,7 @@ function DimensionCustomerSection({ index, title, dimension, conclusion, rows }:
 
 function TrustConversionSection({ trustDimension, conversionDimension, trustRows, conversionRows }: { trustDimension: Dimension; conversionDimension: Dimension; trustRows: CustomerRow[]; conversionRows: CustomerRow[] }) {
   return (
-    <CustomerSection index={6} title="信任与风险信息诊断" className="mb-6">
+    <CustomerSection index={6} title="信任与咨询转化诊断" className="mb-6">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div>
           <DimensionSummary dimension={trustDimension} conclusion={dimensionConclusion("trustInformation")} />
@@ -747,6 +787,7 @@ function CooperationCard() {
 function XingmeiDeliveryCard() {
   const items = [
     ["企业公开信息梳理", "整理企业主体、服务、团队和信任信息，形成统一的公开知识基础。"],
+    ["舆情与口碑问题整理", "整理投诉、退款、争议主题和企业可公开回应口径，形成信任修复内容。"],
     ["客户问题内容体系", "围绕客户真实决策问题，建设能够被理解和引用的问答与内容。"],
     ["重点页面和内容规划", "明确首期需要建设的页面、内容主题和公开入口。"],
     ["持续诊断与优化", "完成建设后持续复测公开信息和客户问题覆盖情况。"],
@@ -786,11 +827,19 @@ function dimensionConclusion(id: string) {
 }
 
 function customerStatus(status: string) {
+  if (/需要回应/.test(status)) return "需要回应";
   if (/清晰|可清晰/.test(status)) return "信息较清晰";
   if (/部分|只能部分/.test(status)) return "已发现部分信息";
   if (/未发现|无法回答|基本无法/.test(status)) return "本次检索暂未发现";
   if (/未检查|尚未/.test(status)) return "本次尚未检查";
   return status;
+}
+
+function reputationRiskLabel(level: string | undefined) {
+  if (level === "HIGH") return "高";
+  if (level === "MEDIUM") return "中";
+  if (level === "LOW") return "低";
+  return "未检查";
 }
 
 function statusFromScore(score: number | null) {
@@ -812,6 +861,8 @@ function customerImpactForIssue(title: string) {
     信任信息不完整: "客户无法集中看到主体、专业团队和服务依据，信任建立速度会变慢。",
     咨询转化路径不清晰: "客户产生兴趣后，还要反复确认联系方式、预约流程和收费边界，下一步行动不够顺畅。",
     本地语义关联不足: "客户用地区和服务项目搜索时，企业信息与本地服务场景的连接不够集中，影响快速理解。",
+    公开负面舆情影响品牌信任: "客户在搜索企业口碑时会同步看到投诉、退款或争议信息，如果缺少企业解释，会削弱继续咨询的信任感。",
+    企业对投诉与争议信息缺少公开回应: "客户看到争议后找不到处理路径和服务边界说明，容易把个别争议理解为系统性风险。",
   };
   return map[title] ?? "客户需要花更多时间确认企业信息，影响理解、信任和下一步咨询。";
 }

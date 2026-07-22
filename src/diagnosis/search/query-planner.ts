@@ -21,11 +21,13 @@
 import type { z } from "zod";
 import type { CompanyProfile } from "../../contracts";
 import type { CompetitorResolution } from "../competitors/types";
+import { buildReputationQueries } from "../reputation/policy";
 
 export type CompanyProfileInput = z.infer<typeof CompanyProfile>;
 
 export type QueryCategory =
   | "BRAND_DIRECT"
+  | "REPUTATION_REVIEW"
   | "PURCHASE_DECISION"
   | "COMPETITOR_COMPARISON"
   // Dedicated intent for identifying a competitor's OFFICIAL domain. Only
@@ -146,6 +148,14 @@ export function planSearchQueries(
     push(`${brand} 怎么样 口碑 评价`, "BRAND_DIRECT");
     if (productOrService) {
       push(`${brand} ${productOrService}`, "BRAND_DIRECT");
+    }
+    for (const query of buildReputationQueries({
+      brandName: brand,
+      industry,
+      productOrService,
+      targetRegion: region,
+    }, 4)) {
+      push(query, "REPUTATION_REVIEW");
     }
   }
 

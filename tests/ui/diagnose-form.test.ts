@@ -34,25 +34,26 @@ function elementFor(html: string, testId: string): string | null {
 describe("DiagnoseForm rendering (Round-8 FINAL MVP)", () => {
   const html = renderForm();
 
-  it("places the required *-asterisk on every required field", () => {
+  it("keeps only the enterprise name as required and makes other inputs optional", () => {
     expect(html).toContain("企业/品牌名称");
     expect(html).toContain("企业官网");
     expect(html).toContain("所属行业");
     expect(html).toContain("主要产品或服务");
     expect(html).toContain("所在地区");
     expect(html).toContain("客户最常问的问题");
+    expect(html).toContain("只填写企业名称即可开始诊断。补充官网、行业和客户问题，可以让报告更加准确。");
     // Capability labels and 1-to-3-minute waiting copy live on the page above
     // the form; the form itself renders the disclaimer line right under the CTA.
     expect(html).toContain("通常需要 1 至 3 分钟");
   });
 
-  it("renders every required field in the frozen order", () => {
+  it("renders visible simple fields before the collapsed optional advanced area", () => {
     const expectedOrder = [
       "input-brand-name", // 1. 企业/品牌名称 (required)
-      "input-website", // 2. 企业官网 (required)
-      "input-industry", // 3. 所属行业 (required)
-      "input-product", // 4. 主要产品或服务 (required)
-      "input-region", // 5. 所在地区 (required)
+      "input-website", // 2. 企业官网 (optional)
+      "input-industry", // 3. 所属行业 (optional)
+      "input-product", // 4. 主要产品或服务 (optional)
+      "input-region", // 5. 所在地区 (optional)
       "input-customer-questions", // 6. 客户最常问的问题 (required, textarea)
       "input-competitors", // 7. 主要竞品 (optional, after questions)
       "input-contact-name", // 8. 联系人和手机号 (optional, not in payload)
@@ -77,14 +78,14 @@ describe("DiagnoseForm rendering (Round-8 FINAL MVP)", () => {
     const tag = elementFor(html, "input-customer-questions") ?? "";
     expect(tag.startsWith("<textarea")).toBe(true);
     expect(html).toContain(
-      "请填写3至5个客户在选购、采购或合作前最常问的问题，每行一个。",
+      "选填。客户在选择、报名、采购或合作前最常问什么？每行一个。",
     );
   });
 
-  it("marks brand, website, and customerQuestions as required on the input element", () => {
-    for (const id of ["input-brand-name", "input-website", "input-customer-questions"]) {
-      const tag = elementFor(html, id) ?? "";
-      expect(tag, `${id} should be required`).toMatch(/\brequired/);
+  it("marks only brand as required on the input element", () => {
+    expect(elementFor(html, "input-brand-name") ?? "").toMatch(/\brequired/);
+    for (const id of ["input-website", "input-industry", "input-product", "input-region", "input-customer-questions"]) {
+      expect(elementFor(html, id) ?? "", `${id} should not be required`).not.toMatch(/\brequired/);
     }
   });
 
@@ -116,7 +117,9 @@ describe("DiagnoseForm rendering (Round-8 FINAL MVP)", () => {
     expect(html).toMatch(/bg-neutral-50/);
   });
 
-  it("two-column short fields (industry + product) inside a responsive grid", () => {
-    expect(html).toMatch(/grid-cols-1[^"]{0,40}sm:grid-cols-2/);
+  it("keeps advanced customer questions and competitors collapsed under optional title", () => {
+    expect(html).toContain('data-testid="advanced-optional"');
+    expect(html).toContain("补充更多信息，让报告更准确（选填）");
+    expect(html).toContain("为空时系统会自动生成5个典型客户决策问题");
   });
 });

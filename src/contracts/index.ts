@@ -140,13 +140,50 @@ export const MvpGeoRoadmapStage = z.object({
   acceptanceCriteria: z.array(z.string()).min(1),
 });
 export type MvpGeoRoadmapStage = z.infer<typeof MvpGeoRoadmapStage>;
+export const ReputationSignalV1 = z.object({
+  signalId: z.string(),
+  signalType: z.enum(["COMPLAINT", "NEGATIVE_REVIEW", "POSITIVE_REVIEW", "NEUTRAL_MENTION", "MEDIA_REPORT", "COMPANY_RESPONSE"]),
+  sentiment: z.enum(["NEGATIVE", "POSITIVE", "NEUTRAL", "MIXED"]),
+  sourceCategory: z.string(),
+  sourceName: z.string(),
+  title: z.string(),
+  snippet: z.string(),
+  url: z.string().url(),
+  entityMatch: z.enum(["HIGH", "MEDIUM", "LOW", "CONFLICTED"]),
+  resolutionStatus: z.enum(["RESOLVED", "RESPONDED", "UNRESOLVED", "UNKNOWN"]),
+  riskTheme: z.string(),
+  evidenceId: z.string(),
+  observedAt: z.string(),
+});
+export type ReputationSignalV1 = z.infer<typeof ReputationSignalV1>;
+export const ReputationAndPublicOpinionSnapshotV1 = z.object({
+  diagnosisId: z.string(),
+  companyName: z.string(),
+  knownBrandNames: z.array(z.string()),
+  region: z.string(),
+  searchedQueries: z.array(z.string()),
+  sourceCoverage: z.array(z.string()),
+  reputationSignals: z.array(ReputationSignalV1),
+  complaintSignals: z.array(ReputationSignalV1),
+  positiveSignals: z.array(ReputationSignalV1),
+  neutralSignals: z.array(ReputationSignalV1),
+  riskThemes: z.array(z.string()),
+  responseSignals: z.array(ReputationSignalV1),
+  overallReputationScore: z.number().min(0).max(100).nullable(),
+  riskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "UNKNOWN"]),
+  summary: z.string(),
+  evidenceIds: z.array(z.string()),
+  generatedAt: z.string(),
+  version: z.literal("reputation-public-opinion-snapshot.v1"),
+});
+export type ReputationAndPublicOpinionSnapshotV1 = z.infer<typeof ReputationAndPublicOpinionSnapshotV1>;
 export const MvpGeoDiagnosticReportV1 = z.object({
   strategyPack: MvpGeoReportPackId,
   score: z.object({
     overall: z.number().min(0).max(100).nullable(),
     level: z.string(),
     completionRate: z.number().min(0).max(100),
-    dimensions: z.array(MvpGeoScoreDimension).length(5),
+    dimensions: z.array(MvpGeoScoreDimension).min(5).max(6),
     explanation: z.string(),
   }),
   overview: z.object({
@@ -194,6 +231,8 @@ export const MvpGeoDiagnosticReportV1 = z.object({
   coreIssues: z.array(MvpGeoCoreIssue).min(4).max(6),
   contentPlans: z.array(MvpGeoContentPlan).min(5).max(8),
   roadmap: z.array(MvpGeoRoadmapStage).length(3),
+  reputation: ReputationAndPublicOpinionSnapshotV1.optional(),
+  questionSource: z.enum(["USER_PROVIDED", "SYSTEM_GENERATED"]).optional(),
   conclusion: z.array(z.string()).min(3),
   disclaimer: z.string(),
   visibleCharacterCount: z.number().int().nonnegative(),
