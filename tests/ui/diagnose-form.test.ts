@@ -41,9 +41,9 @@ describe("DiagnoseForm rendering (Round-8 FINAL MVP)", () => {
     expect(html).toContain("主要产品或服务");
     expect(html).toContain("所在地区");
     expect(html).toContain("客户最常问的问题");
-    // Capability labels and 1-to-3-minute disclaimer copy live on the page above
+    // Capability labels and 1-to-3-minute waiting copy live on the page above
     // the form; the form itself renders the disclaimer line right under the CTA.
-    expect(html).toContain("通常 1 至 3 分钟生成");
+    expect(html).toContain("通常需要 1 至 3 分钟");
   });
 
   it("renders every required field in the frozen order", () => {
@@ -96,8 +96,9 @@ describe("DiagnoseForm rendering (Round-8 FINAL MVP)", () => {
     expect(html).toContain("生成企业诊断报告");
   });
 
-  it("renders the 1-to-3-minute disclaimer", () => {
-    expect(html).toContain("通常 1 至 3 分钟生成");
+  it("renders the 1-to-3-minute waiting copy", () => {
+    expect(html).toContain("通常需要 1 至 3 分钟");
+    expect(html).toContain("生成完成后会自动进入报告页");
     expect(html).toContain("不承诺排名或经营结果");
   });
 

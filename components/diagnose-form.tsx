@@ -24,6 +24,7 @@ interface ApiResponse {
 
 const MIN_QUESTIONS = 3;
 const MAX_QUESTIONS = 10;
+const REPORT_READY_STATUSES = new Set(["READY", "READY_LIMITED"]);
 
 function parseQuestions(raw: string): string[] {
   return raw
@@ -89,7 +90,7 @@ export function DiagnoseForm() {
       });
       const data = (await res.json()) as ApiResponse;
 
-      if (res.status === 201 && data.status === "READY" && data.publicToken) {
+      if (res.status === 201 && data.status && REPORT_READY_STATUSES.has(data.status) && data.publicToken) {
         if (contactName || contactPhone) {
           try {
             sessionStorage.setItem(
@@ -292,11 +293,11 @@ export function DiagnoseForm() {
         data-testid="submit-diagnose"
         className="mt-1 inline-flex h-12 w-full items-center justify-center rounded-lg bg-neutral-900 px-5 text-base font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? "报告生成中…" : "生成企业诊断报告"}
+        {loading ? "正在检索公开信息并生成报告…" : "生成企业诊断报告"}
       </button>
 
       <p className="text-center text-xs leading-relaxed text-neutral-500">
-        通常 1 至 3 分钟生成,结果基于本次公开网络信息,不承诺排名或经营结果。
+        通常需要 1 至 3 分钟。生成完成后会自动进入报告页,结果基于本次公开网络信息,不承诺排名或经营结果。
       </p>
     </form>
   );
