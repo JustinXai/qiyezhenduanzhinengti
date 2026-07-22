@@ -340,32 +340,39 @@ function EvidenceSection({ evidence }: { evidence: EnterpriseReportViewModel["ev
   const filteredItems = evidence.items.filter((item) => evidenceFilterMatch(item, filter));
 
   return (
-    <details className="rounded-lg border border-slate-200 bg-white p-4">
-      <summary className="cursor-pointer text-[16px] font-semibold text-slate-800">
-        查看 {evidence.items.length} 条证据（{sourceSummary}）
-      </summary>
-      <div>
-        <div className="mt-4">
-          <div className="mb-3 flex flex-wrap gap-2">
-            {filters.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setFilter(item)}
-                className={`rounded border px-3 py-1.5 text-[14px] ${filter === item ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600"}`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-          <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
-            {filteredItems.length > 0 ? filteredItems.map((item) => <CompactEvidenceRow key={item.id} item={item} />) : (
-              <p className="p-4 text-[14px] text-slate-500">当前筛选下暂无证据。</p>
-            )}
+    <>
+      <details className="rounded-lg border border-slate-200 bg-white p-4">
+        <summary className="cursor-pointer text-[16px] font-semibold text-slate-800">
+          查看 {evidence.items.length} 条证据（{sourceSummary}）
+        </summary>
+        <div>
+          <div className="mt-4">
+            <div className="mb-3 flex flex-wrap gap-2">
+              {filters.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setFilter(item)}
+                  className={`rounded border px-3 py-1.5 text-[14px] ${filter === item ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600"}`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+            <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+              {filteredItems.length > 0 ? filteredItems.map((item) => <CompactEvidenceRow key={item.id} item={item} />) : (
+                <p className="p-4 text-[14px] text-slate-500">当前筛选下暂无证据。</p>
+              )}
+            </div>
           </div>
         </div>
+      </details>
+      <div className="hidden print:block">
+        <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+          {evidence.items.map((item) => <CompactEvidenceRow key={`print-${item.id}`} item={item} />)}
+        </div>
       </div>
-    </details>
+    </>
   );
 }
 
