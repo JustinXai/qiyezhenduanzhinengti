@@ -500,6 +500,8 @@ function reputationScoreDimension(snapshot: ReputationAndPublicOpinionSnapshotV1
   const riskThemeCount = snapshot.riskThemes.length;
   const searchCoverageConfidence = snapshot.searchCoverageConfidence ?? (sourceCount >= 2 && snapshot.evidenceIds.length >= 5 ? "HIGH" : sourceCount > 0 ? "MEDIUM" : "LOW");
   const factualSpecificityConfidence = snapshot.factualSpecificityConfidence ?? "LOW";
+  const underlyingEntityConfidence = snapshot.underlyingEntityConfidence ?? snapshot.entityRelationConfidence ?? "LOW";
+  const eventAttributionConfidence = snapshot.eventAttributionConfidence ?? "LOW";
   const customerVisibilityConfidence = snapshot.customerVisibilityConfidence ?? (snapshot.evidenceIds.length >= 3 ? "HIGH" : snapshot.evidenceIds.length > 0 ? "MEDIUM" : "LOW");
   const findings = [
     {
@@ -516,7 +518,7 @@ function reputationScoreDimension(snapshot: ReputationAndPublicOpinionSnapshotV1
       status: riskThemeCount === 0 ? "CLEARLY_FOUND" as const : riskThemeCount <= 2 ? "PARTIALLY_FOUND" as const : "NOT_FOUND_IN_CHECKED_SCOPE" as const,
       score: riskThemeCount === 0 ? 100 : riskThemeCount <= 2 ? 50 : 0,
       evidenceIds: snapshot.complaintSignals.map((item) => item.evidenceId),
-      currentStatus: riskThemeCount === 0 ? "本次检索未形成集中争议主题。" : `风险主题集中在${snapshot.riskThemes.slice(0, 3).join("、")}；具体事实置信度为${factualSpecificityConfidence}。`,
+      currentStatus: riskThemeCount === 0 ? "本次检索未形成集中争议主题。" : `风险主题集中在${snapshot.riskThemes.slice(0, 3).join("、")}；主体确认置信度为${underlyingEntityConfidence}，事件归属置信度为${eventAttributionConfidence}，具体事实置信度为${factualSpecificityConfidence}。`,
       impact: "争议主题如果没有被主动说明，客户容易只看到片段化负面信息。",
       recommendation: "将争议高频点转化为服务流程、合同边界和售后处理说明。",
     },
@@ -543,7 +545,7 @@ function reputationScoreDimension(snapshot: ReputationAndPublicOpinionSnapshotV1
       status: sourceCount >= 4 ? "CLEARLY_FOUND" as const : sourceCount >= 2 ? "PARTIALLY_FOUND" as const : "NOT_FOUND_IN_CHECKED_SCOPE" as const,
       score: sourceCount >= 4 ? 100 : sourceCount >= 2 ? 50 : 0,
       evidenceIds: snapshot.evidenceIds,
-      currentStatus: sourceCount > 0 ? `本次检索覆盖置信度为${searchCoverageConfidence}，客户可见度置信度为${customerVisibilityConfidence}，覆盖${snapshot.sourceCoverage.join("、")}等公开来源。` : "本次舆情检索来源覆盖有限。",
+      currentStatus: sourceCount > 0 ? `本次检索覆盖置信度为${searchCoverageConfidence}，客户可见度置信度为${customerVisibilityConfidence}，覆盖${snapshot.sourceCoverage.join("、")}等公开来源；客户可见入口和底层事件已分开计算。` : "本次舆情检索来源覆盖有限。",
       impact: "来源覆盖只影响证据置信度，不用于抬高舆情健康分。",
       recommendation: "持续跟踪投诉平台、社交平台、媒体报道和官方公开渠道，并与舆情健康分分开解释。",
     },
@@ -678,7 +680,7 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
   const questions = industryQuestions(policy, input);
   const questionSource = (input.customerQuestions ?? []).some((item) => item.question?.trim()) ? "USER_PROVIDED" : "SYSTEM_GENERATED";
   const hasReputationRisk = reputation.complaintSignals.length > 0;
-  const firstReputationAction = "先核实和处理公开负面舆情，整理事实、处理状态和统一回应入口。";
+  const firstReputationAction = "先核实公开风险信息并建立统一说明入口。";
   const isEducation = policy === EDUCATION_POLICY;
 
   const report: MvpGeoDiagnosticReportV1 = {

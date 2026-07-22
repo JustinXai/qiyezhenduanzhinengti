@@ -295,8 +295,8 @@ function AssetPlanCard({ plan, index }: { plan: EnterpriseReportViewModel["conte
 
 function RoadmapInline() {
   const stages = [
-    { goal: "整理企业事实与内容口径", output: "品牌、产品、品质和合作基础资料" },
-    { goal: "建设客户决策内容", output: "产品指南、FAQ、品质说明、合作页面和案例内容" },
+    { goal: "整理企业事实与内容口径", output: "品牌、课程服务、信任依据和咨询基础资料" },
+    { goal: "建设客户决策内容", output: "课程说明、FAQ、服务保障、咨询入口和案例内容" },
     { goal: "持续验证与迭代", output: "公开信息检查、客户问题复测和内容更新建议" },
   ];
 
@@ -383,8 +383,10 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
   };
   const hasHighReputationRisk = reputationSummary.negativeSignalCount > 0 && reputationSummary.riskLevel === "HIGH";
   const firstRecommendedAction = hasHighReputationRisk
-    ? "先核实和处理公开负面舆情，整理事实、处理状态和统一回应入口。"
+    ? "先核实公开风险信息并建立统一说明入口。"
     : "优先完成企业信任信息、核心服务说明和客户高频问题内容的统一梳理，让客户在搜索后能更快理解企业、建立信任并发起咨询。";
+  const weightedFoundationScore = weightedPublicFoundationScore(dimensions);
+  const reputationScore = normalizedScore(dimensions[1]?.score, dimensions[1]?.maxScore);
   return (
     <div className="min-h-screen bg-[#f7f8f4] pb-20 text-[16px] leading-[1.75] text-stone-800 md:text-[17px] md:leading-[1.72]">
       <div className="mx-auto max-w-[1040px] px-4 py-6 sm:px-6 lg:px-8">
@@ -409,7 +411,7 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
                 </div>
               </div>
               <p className="text-[17px] leading-[1.72] text-stone-700">
-                {customerSummary()}
+                {customerSummary(hasHighReputationRisk)}
               </p>
               <div className="rounded-lg border border-emerald-900/10 bg-emerald-50 p-4">
                 <p className="text-[14px] font-medium text-emerald-900">当前建议先启动的一件事</p>
@@ -426,26 +428,31 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
                 </div>
               ) : null}
               <div className="flex flex-col gap-3 sm:flex-row">
-                <CustomerButton primary>预约报告解读</CustomerButton>
-                <CustomerButton>获取首期建设方案</CustomerButton>
+                <CustomerButton primary>{hasHighReputationRisk ? "获取舆情核实清单与首期信任修复方案" : "预约报告解读"}</CustomerButton>
+                <CustomerButton>{hasHighReputationRisk ? "预约报告解读" : "获取首期建设方案"}</CustomerButton>
                 <CustomerButton muted>补充企业资料</CustomerButton>
               </div>
             </div>
 
             <div className="rounded-lg border border-emerald-900/10 bg-white p-5">
-              <p className="text-[14px] text-stone-500">GEO公开信息基础指数</p>
+              <p className="text-[14px] text-stone-500">综合诊断指数</p>
               <div className="mt-2 flex items-end gap-2">
                 <span className="text-[56px] font-semibold leading-none text-emerald-800">{report.score.overall ?? "未评分"}</span>
                 <span className="pb-2 text-[18px] text-stone-500">/100</span>
               </div>
               <p className="mt-2 text-[19px] font-semibold text-stone-900">{report.score.level}</p>
+              <div className="mt-4 grid grid-cols-1 gap-2 text-[14px] text-stone-700">
+                <MetricLine label="GEO公开信息基础指数" value={weightedFoundationScore === null ? "未评分" : `${weightedFoundationScore}分`} />
+                <MetricLine label="公开舆情与信任风险" value={`${reputationScore ?? "未检查"}分 / ${reputationRiskLabel(reputationSummary.riskLevel)}风险`} />
+                <MetricLine label="综合诊断指数" value={report.score.overall === null ? "未评分" : `${report.score.overall}分`} />
+              </div>
               <div className="mt-5 space-y-3">
                 {dimensions.map((dimension) => (
                   <NormalizedScoreBar key={dimension.id} label={shortDimensionTitle(dimension.title)} score={normalizedScore(dimension.score, dimension.maxScore)} />
                 ))}
               </div>
               <p className="mt-4 text-[14px] leading-[1.65] text-stone-500">
-                该指数用于判断企业公开信息是否容易被客户和AI检索、理解和引用，不代表企业实际服务质量、市场份额或AI平台官方排名。
+                综合诊断指数反映当前公开信息体系对客户搜索、AI理解、信任建立和咨询转化的综合支撑程度，不代表企业实际服务质量或司法结论。
               </p>
             </div>
           </div>
@@ -508,8 +515,8 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
             报告判断基于本次公开检索范围；未发现表示当前公开渠道中未检索到清晰信息，不代表企业现实中一定不存在相关资料。
           </p>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <CustomerButton primary>预约报告解读</CustomerButton>
-            <CustomerButton>获取首期建设方案</CustomerButton>
+            <CustomerButton primary>{hasHighReputationRisk ? "获取舆情核实清单与首期信任修复方案" : "预约报告解读"}</CustomerButton>
+            <CustomerButton>{hasHighReputationRisk ? "预约报告解读" : "获取首期建设方案"}</CustomerButton>
             <CustomerButton muted>补充企业资料</CustomerButton>
           </div>
         </CustomerSection>
@@ -521,14 +528,48 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
         <footer className="mt-6 border-t border-emerald-900/10 pt-4 text-center text-[14px] text-stone-500">{SERVICE_BRAND_NAME} · 企业GEO诊断报告 · {formatDate(vm.reportDate)}</footer>
       </div>
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-emerald-900/10 bg-[#f7f8f4]/95 px-4 py-3 backdrop-blur sm:hidden">
-        <button type="button" className="w-full rounded-lg bg-emerald-800 px-4 py-3 text-[16px] font-semibold text-white">预约报告解读</button>
+        <button type="button" className="w-full rounded-lg bg-emerald-800 px-4 py-3 text-[16px] font-semibold text-white">{hasHighReputationRisk ? "获取舆情核实清单与首期信任修复方案" : "预约报告解读"}</button>
       </div>
     </div>
   );
 }
 
-function customerSummary() {
+function customerSummary(hasHighReputationRisk = false) {
+  if (hasHighReputationRisk) {
+    return "当前公开搜索中已经出现可能影响客户信任和报名决策的企业风险信息，同时课程、师资、收费和服务说明仍不完整。建议第一阶段先核实风险信息、整理处理状态和公开说明，再建设课程内容、客户问答和咨询入口。";
+  }
   return "当前企业已经具备部分公开信息基础，但客户在进一步了解服务、专业能力、流程和咨询方式时，仍难以从公开渠道获得完整答案。建议优先统一企业信任信息和核心服务内容，再逐步覆盖客户高频问题。";
+}
+
+const SCORE_WEIGHTS: Record<string, number> = {
+  sourceFoundation: 0.2,
+  reputationAndPublicOpinion: 0.2,
+  contentAssets: 0.2,
+  customerScenarios: 0.15,
+  trustInformation: 0.15,
+  conversionPath: 0.1,
+};
+
+function weightedPublicFoundationScore(dimensions: NonNullable<LimitedReportDataV1["mvpReport"]>["score"]["dimensions"]): number | null {
+  let weighted = 0;
+  let weightSum = 0;
+  for (const dimension of dimensions) {
+    const score = normalizedScore(dimension.score, dimension.maxScore);
+    const weight = SCORE_WEIGHTS[dimension.id] ?? 0;
+    if (score === null || weight <= 0) continue;
+    weighted += score * weight;
+    weightSum += weight;
+  }
+  return weightSum > 0 ? Math.round(weighted / weightSum) : null;
+}
+
+function MetricLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded bg-stone-50 px-3 py-2">
+      <span>{label}</span>
+      <span className="font-semibold text-stone-950">{value}</span>
+    </div>
+  );
 }
 
 function normalizedScore(score: number | null | undefined, max: number | undefined) {
@@ -588,11 +629,18 @@ function ReputationCustomerSection({ report, dimension }: { report: NonNullable<
           <p className="text-[14px] text-stone-500">风险等级 {reputationRiskLabel(summary.riskLevel)}</p>
         </div>
         <p className="mt-2 text-[16px] leading-[1.72] text-stone-700">客户结论：{summary.summary}</p>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-[14px] text-stone-600 md:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 text-[14px] text-stone-600 md:grid-cols-5">
           <span>检索覆盖 {summary.searchCoverageConfidence}</span>
-          <span>主体关联 {summary.entityRelationConfidence}</span>
+          <span>名称匹配 {summary.nameMatchConfidence}</span>
+          <span>主体确认 {summary.underlyingEntityConfidence}</span>
+          <span>事件归属 {summary.eventAttributionConfidence}</span>
           <span>事实具体性 {summary.factualSpecificityConfidence}</span>
           <span>客户可见度 {summary.customerVisibilityConfidence}</span>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-2 text-[14px] text-stone-700 md:grid-cols-3">
+          <MetricLine label="底层风险线索" value={`${summary.underlyingNegativeEventCount}类`} />
+          <MetricLine label="客户可见入口" value={`${summary.customerVisibleEntryCount}个`} />
+          <MetricLine label="可追溯原始来源" value={`${summary.independentOriginalSourceCount}个`} />
         </div>
       </div>
 

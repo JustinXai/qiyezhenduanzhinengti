@@ -36,8 +36,14 @@ export interface ReputationPenaltyBreakdown {
   evidenceConfidence: EvidenceConfidence;
   searchCoverageConfidence: ConfidenceLevel;
   entityRelationConfidence: ConfidenceLevel;
+  nameMatchConfidence: ConfidenceLevel;
+  underlyingEntityConfidence: ConfidenceLevel;
+  eventAttributionConfidence: ConfidenceLevel;
   factualSpecificityConfidence: ConfidenceLevel;
   customerVisibilityConfidence: ConfidenceLevel;
+  underlyingNegativeEventCount: number;
+  customerVisibleEntryCount: number;
+  independentOriginalSourceCount: number;
 }
 
 const NEGATIVE_TERMS = ["投诉", "退费", "退款", "虚假宣传", "霸王条款", "纠纷", "合同", "课程缩水", "教学质量", "欺骗", "差评", "维权"];
@@ -142,6 +148,9 @@ function classifySignal(item: EvidenceItem, names: readonly string[], region: st
     riskTheme,
     evidenceId: item.id,
     observedAt: item.fetchedAt,
+    underlyingEventKey: negative ? eventKeyFromText(text, riskTheme) : undefined,
+    originalSource: negative && /法院|人民法院|court\.gov|gov\.cn|监管|行政处罚决定书|裁判文书网|wenshu/.test(`${item.sourceDomain} ${item.url}`) ? item.sourceDomain : undefined,
+    aggregatorSource: negative ? aggregatorSourceName(item.sourceDomain, item.url) : undefined,
   };
 }
 
@@ -169,6 +178,29 @@ function independentSourceKey(signal: ReputationSignalV1): string {
 
 function hasDirectAuthorityRisk(signals: readonly ReputationSignalV1[]): boolean {
   return signals.some((item) => /法院|人民法院|裁判文书网|wenshu|court\.gov|gov\.cn|监管局|市场监督管理局|行政处罚决定书|被执行人信息/.test(`${item.sourceName} ${item.url}`));
+}
+
+function isAggregatorSource(signal: ReputationSignalV1): boolean {
+  return /qcc|企查查|qixin|启信宝|tianyancha|天眼查|aiqicha|爱企查/.test(`${signal.sourceName} ${signal.url}`);
+}
+
+function aggregatorSourceName(sourceName: string, url: string): string | undefined {
+  if (/qcc|企查查/.test(`${sourceName} ${url}`)) return "企查查";
+  if (/qixin|启信宝/.test(`${sourceName} ${url}`)) return "启信宝";
+  if (/tianyancha|天眼查/.test(`${sourceName} ${url}`)) return "天眼查";
+  if (/aiqicha|爱企查/.test(`${sourceName} ${url}`)) return "爱企查";
+  return undefined;
+}
+
+function eventKeyFromText(text: string, riskTheme: string): string {
+  const caseNo = text.match(/[（(]?\d{4}[）)]?[\u4e00-\u9fa5]{0,8}(?:民初|民终|执|行初|刑初|裁|知民)[\u4e00-\u9fa5\d号第-]{2,}/)?.[0];
+  if (caseNo) return `case:${caseNo}`;
+  if (/司法案件|裁判文书|立案信息|开庭公告|自身风险|经营风险/.test(text)) return `aggregated:${riskTheme}`;
+  return `theme:${riskTheme}`;
+}
+
+function underlyingEventKey(signal: ReputationSignalV1): string {
+  return signal.underlyingEventKey ?? eventKeyFromText(`${signal.title} ${signal.snippet}`, signal.riskTheme);
 }
 
 function hasHighDecisionImpact(signals: readonly ReputationSignalV1[]): boolean {
@@ -215,6 +247,24 @@ function entityRelationConfidenceFor(signals: readonly ReputationSignalV1[]): Co
   return "LOW";
 }
 
+function nameMatchConfidenceFor(signals: readonly ReputationSignalV1[]): ConfidenceLevel {
+  return entityRelationConfidenceFor(signals);
+}
+
+function underlyingEntityConfidenceFor(signals: readonly ReputationSignalV1[]): ConfidenceLevel {
+  if (signals.length === 0) return "LOW";
+  const nameConfidence = nameMatchConfidenceFor(signals);
+  if (nameConfidence === "LOW") return "LOW";
+  return signals.some(isAggregatorSource) ? "MEDIUM" : nameConfidence;
+}
+
+function eventAttributionConfidenceFor(negativeSignals: readonly ReputationSignalV1[]): ConfidenceLevel {
+  if (negativeSignals.length === 0) return "LOW";
+  if (hasDirectAuthorityRisk(negativeSignals)) return "HIGH";
+  if (negativeSignals.some(isAggregatorSource)) return "MEDIUM";
+  return negativeSignals.some((signal) => signal.entityMatch === "HIGH") ? "MEDIUM" : "LOW";
+}
+
 function factualSpecificityConfidenceFor(negativeSignals: readonly ReputationSignalV1[]): ConfidenceLevel {
   if (negativeSignals.length === 0) return "LOW";
   const detailed = negativeSignals.filter((signal) => /案号|判决|裁定|执行标的|行政处罚决定书|投诉编号|订单|合同编号|已解决|处理结果/.test(`${signal.title} ${signal.snippet}`)).length;
@@ -251,6 +301,9 @@ export function reputationPenaltyBreakdown(
   const concreteNegativeThemes = Array.from(byTheme.keys()).slice(0, 3);
   const independentNegativeSourceCount = bySource.size;
   const validCustomerVisibleNegativeCount = validSignals.length;
+  const underlyingNegativeEventCount = new Set(validSignals.map(underlyingEventKey)).size;
+  const customerVisibleEntryCount = validCustomerVisibleNegativeCount;
+  const independentOriginalSourceCount = new Set(validSignals.map((signal) => signal.originalSource).filter(Boolean)).size;
   const baseNegativePenalty = validCustomerVisibleNegativeCount > 0 ? 20 : 0;
   const repeatedSourcePenalty = independentNegativeSourceCount >= 2 ? 5 : 0;
   const noResponsePenalty = validCustomerVisibleNegativeCount > 0 && responses.length === 0 ? 5 : 0;
@@ -288,8 +341,14 @@ export function reputationPenaltyBreakdown(
     evidenceConfidence: evidenceConfidenceFor(allSignals, sourceCoverage),
     searchCoverageConfidence: searchCoverageConfidenceFor(allSignals, sourceCoverage, searchedQueryCount),
     entityRelationConfidence: entityRelationConfidenceFor(validSignals.length > 0 ? validSignals : allSignals),
+    nameMatchConfidence: nameMatchConfidenceFor(validSignals.length > 0 ? validSignals : allSignals),
+    underlyingEntityConfidence: underlyingEntityConfidenceFor(validSignals.length > 0 ? validSignals : allSignals),
+    eventAttributionConfidence: eventAttributionConfidenceFor(validSignals),
     factualSpecificityConfidence: factualSpecificityConfidenceFor(validSignals),
     customerVisibilityConfidence: customerVisibilityConfidenceFor(validSignals.length > 0 ? validSignals : allSignals),
+    underlyingNegativeEventCount,
+    customerVisibleEntryCount,
+    independentOriginalSourceCount,
   };
 }
 
@@ -312,10 +371,14 @@ function scoreFromSignals(negativeSignals: readonly ReputationSignalV1[], positi
   return Math.max(0, Math.min(100, capped));
 }
 
-function summaryFor(negativeSignals: readonly ReputationSignalV1[], responses: readonly ReputationSignalV1[], score: number | null): string {
+function summaryFor(negativeSignals: readonly ReputationSignalV1[], responses: readonly ReputationSignalV1[], score: number | null, breakdown?: ReputationPenaltyBreakdown): string {
   if (negativeSignals.length === 0) return "本次公开检索匹配到相关公开信息，暂未发现明确负面风险信号。";
   const responseCopy = responses.length > 0 ? "同时检索到部分回应或处理线索。" : "暂未形成足够清晰的公开回应线索。";
-  return `本次公开检索发现${negativeSignals.length}条与投诉、争议或企业风险提示相关的舆情线索，口碑风险评分为${score ?? "未评分"}分。${responseCopy}`;
+  const themeCopy = breakdown?.concreteNegativeThemes.slice(0, 2).join("、") || "公开风险信息";
+  const entryCopy = breakdown
+    ? `其中${breakdown.customerVisibleEntryCount}个客户可见入口可被普通搜索触达，当前归并为${breakdown.underlyingNegativeEventCount}类底层风险线索，${breakdown.independentOriginalSourceCount > 0 ? `可追溯到${breakdown.independentOriginalSourceCount}个原始来源` : "尚未追溯到原始司法或官方详情"}`
+    : "相关事实仍需进一步核实";
+  return `本次公开检索发现${negativeSignals.length}条客户可见风险信息，主要涉及${themeCopy}。${entryCopy}。现有公开摘要尚不足以确认具体案件性质、责任关系和处理结果；由于客户搜索企业正规性时可能直接看到这些信息，且${responseCopy}口碑风险评分为${score ?? "未评分"}分。`;
 }
 
 export function buildReputationSnapshot(input: {
@@ -362,10 +425,16 @@ export function buildReputationSnapshot(input: {
     evidenceConfidence: breakdown.evidenceConfidence,
     searchCoverageConfidence: breakdown.searchCoverageConfidence,
     entityRelationConfidence: breakdown.entityRelationConfidence,
+    nameMatchConfidence: breakdown.nameMatchConfidence,
+    underlyingEntityConfidence: breakdown.underlyingEntityConfidence,
+    eventAttributionConfidence: breakdown.eventAttributionConfidence,
     factualSpecificityConfidence: breakdown.factualSpecificityConfidence,
     customerVisibilityConfidence: breakdown.customerVisibilityConfidence,
+    underlyingNegativeEventCount: breakdown.underlyingNegativeEventCount,
+    customerVisibleEntryCount: breakdown.customerVisibleEntryCount,
+    independentOriginalSourceCount: breakdown.independentOriginalSourceCount,
     riskLevel,
-    summary: summaryFor(complaintSignals, responseSignals, score),
+    summary: summaryFor(complaintSignals, responseSignals, score, breakdown),
     evidenceIds: Array.from(new Set(signals.map((item) => item.evidenceId))),
     generatedAt: input.generatedAt ?? new Date().toISOString(),
     version: "reputation-public-opinion-snapshot.v1",

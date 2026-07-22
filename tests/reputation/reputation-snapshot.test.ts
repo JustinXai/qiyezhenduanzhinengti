@@ -187,8 +187,14 @@ describe("reputation snapshot", () => {
     expect(snapshot.riskLevel).toBe("HIGH");
     expect(snapshot.searchCoverageConfidence).toBe("MEDIUM");
     expect(snapshot.entityRelationConfidence).toBe("HIGH");
+    expect(snapshot.nameMatchConfidence).toBe("HIGH");
+    expect(snapshot.underlyingEntityConfidence).toBe("MEDIUM");
+    expect(snapshot.eventAttributionConfidence).toBe("MEDIUM");
     expect(snapshot.factualSpecificityConfidence).toBe("MEDIUM");
     expect(snapshot.customerVisibilityConfidence).toBe("MEDIUM");
+    expect(snapshot.underlyingNegativeEventCount).toBe(1);
+    expect(snapshot.customerVisibleEntryCount).toBe(2);
+    expect(snapshot.independentOriginalSourceCount).toBe(0);
   });
 
   it("case 4: reputation score drop recalculates overall score and routes first 30 days to reputation containment", () => {

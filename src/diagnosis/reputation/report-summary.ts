@@ -34,6 +34,9 @@ export interface ReputationReportSummary {
   evidenceConfidence: "LOW" | "MEDIUM" | "HIGH";
   searchCoverageConfidence: "LOW" | "MEDIUM" | "HIGH";
   entityRelationConfidence: "LOW" | "MEDIUM" | "HIGH";
+  nameMatchConfidence: "LOW" | "MEDIUM" | "HIGH";
+  underlyingEntityConfidence: "LOW" | "MEDIUM" | "HIGH";
+  eventAttributionConfidence: "LOW" | "MEDIUM" | "HIGH";
   factualSpecificityConfidence: "LOW" | "MEDIUM" | "HIGH";
   customerVisibilityConfidence: "LOW" | "MEDIUM" | "HIGH";
   reputationNeutralBase: number;
@@ -41,6 +44,9 @@ export interface ReputationReportSummary {
   preNegativeReputationScore: number;
   validCustomerVisibleNegativeCount: number;
   independentNegativeSourceCount: number;
+  underlyingNegativeEventCount: number;
+  customerVisibleEntryCount: number;
+  independentOriginalSourceCount: number;
   summary: string;
   deductionExplanation: string;
   riskReasons: string[];
@@ -123,6 +129,9 @@ function summaryFor(input: {
   riskLevel: ReputationReportSummary["riskLevel"];
   issueThemes: readonly { theme: string; count: number }[];
   independentNegativeSourceCount: number;
+  underlyingNegativeEventCount: number;
+  customerVisibleEntryCount: number;
+  independentOriginalSourceCount: number;
   reputationDeduction: number;
   neutralBase: number;
 }): string {
@@ -131,9 +140,14 @@ function summaryFor(input: {
   }
   if (input.negativeSignalCount > 0) {
     const themes = input.issueThemes.map((item) => item.theme).slice(0, 3).join("、") || "公开争议";
-    const sourceCopy = input.independentNegativeSourceCount >= 2 ? "多个公开来源重复呈现" : "单一公开来源呈现";
+    const sourceCopy = input.customerVisibleEntryCount >= 2
+      ? `${input.customerVisibleEntryCount}个客户可见入口重复呈现`
+      : "单一客户可见入口呈现";
+    const eventCopy = input.independentOriginalSourceCount > 0
+      ? `可追溯到${input.independentOriginalSourceCount}个原始来源`
+      : `当前只能归并为${input.underlyingNegativeEventCount}类底层风险线索，尚未追溯到原始司法或官方详情`;
     const responseCopy = input.responseSignalCount > 0 ? "已有部分公开回应" : "暂未发现集中、清晰的企业公开回应";
-    return `本项从中性口碑基准${input.neutralBase}分开始计算。本次公开检索发现客户可见负面舆情，主要涉及${themes}，${sourceCopy}。${responseCopy}，因此舆情健康分扣除${input.reputationDeduction}分，风险等级为${riskLevelLabel(input.riskLevel)}。`;
+    return `本项从中性口碑基准${input.neutralBase}分开始计算。本次公开检索发现${input.negativeSignalCount}条客户可见负面舆情风险信息，主要涉及${themes}，${sourceCopy}；${eventCopy}。${responseCopy}，因此舆情健康分扣除${input.reputationDeduction}分，风险等级为${riskLevelLabel(input.riskLevel)}。`;
   }
   return `本次公开检索匹配到与企业或品牌相关的公开信息，暂未发现明确负面风险信号；这不等于网络上没有舆情，综合风险等级为${riskLevelLabel(input.riskLevel)}。`;
 }
@@ -147,6 +161,9 @@ function riskReasons(input: {
   officialCount: number;
   riskThemes: readonly string[];
   riskLevel: ReputationReportSummary["riskLevel"];
+  customerVisibleEntryCount: number;
+  underlyingNegativeEventCount: number;
+  independentOriginalSourceCount: number;
 }): string[] {
   if (input.matchedEvidenceCount === 0) {
     return ["未匹配到相关证据，风险等级只能按检索范围审慎判断。"];
@@ -167,6 +184,9 @@ function riskReasons(input: {
   }
   if (input.reputationDeduction > 0) {
     reasons.push(`舆情扣分为${input.reputationDeduction}分，按客户咨询、报名、购买和合作决策影响计算。`);
+  }
+  if (input.negativeSignalCount > 0) {
+    reasons.push(`当前区分为${input.customerVisibleEntryCount}个客户可见入口、${input.underlyingNegativeEventCount}类底层风险线索、${input.independentOriginalSourceCount}个可追溯原始来源。`);
   }
   if (input.mediaCount > 0 || input.officialCount > 0) {
     reasons.push(`证据中包含${input.mediaCount}条新闻媒体线索和${input.officialCount}条官方公开渠道线索。`);
@@ -191,7 +211,7 @@ function issueThemes(signals: readonly ReputationSignalV1[]): Array<{ theme: str
     theme,
     count: items.length,
     summary: /司法|企业风险/.test(theme)
-      ? "多个公开企业信息页面出现与该主体相关的司法或经营风险提示，具体案件事实、主体关系和当前处理状态仍需进一步核实。"
+      ? "已确认普通客户可能在公开企业信息入口看到与该名称相关的司法或经营风险提示；现有摘要尚不足以确认具体案件性质、责任关系、是否为同一底层事件和当前处理结果。"
       : "主要涉及用户反馈、服务体验或合同收费相关争议，当前仍需核实处理结果和企业说明。",
   }));
 }
@@ -232,6 +252,9 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     evidenceConfidence: "LOW",
     searchCoverageConfidence: "LOW",
     entityRelationConfidence: "LOW",
+    nameMatchConfidence: "LOW",
+    underlyingEntityConfidence: "LOW",
+    eventAttributionConfidence: "LOW",
     factualSpecificityConfidence: "LOW",
     customerVisibilityConfidence: "LOW",
     reputationNeutralBase: 65,
@@ -239,6 +262,9 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     preNegativeReputationScore: 65,
     validCustomerVisibleNegativeCount: 0,
     independentNegativeSourceCount: 0,
+    underlyingNegativeEventCount: 0,
+    customerVisibleEntryCount: 0,
+    independentOriginalSourceCount: 0,
     summary: "本次公开检索暂未匹配到相关证据；这不等于现实中不存在舆情，建议后续持续复查。",
     deductionExplanation: "本项未因明确负面舆情扣分。",
     riskReasons: ["缺少可用于展示的舆情证据。"],
@@ -269,6 +295,9 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     riskLevel: snapshot.riskLevel,
     issueThemes: themes,
     independentNegativeSourceCount: breakdown.independentNegativeSourceCount,
+    underlyingNegativeEventCount: breakdown.underlyingNegativeEventCount,
+    customerVisibleEntryCount: breakdown.customerVisibleEntryCount,
+    independentOriginalSourceCount: breakdown.independentOriginalSourceCount,
     reputationDeduction,
     neutralBase: breakdown.reputationNeutralBase,
   });
@@ -307,6 +336,9 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     evidenceConfidence: snapshot.evidenceConfidence ?? breakdown.evidenceConfidence,
     searchCoverageConfidence: snapshot.searchCoverageConfidence ?? breakdown.searchCoverageConfidence,
     entityRelationConfidence: snapshot.entityRelationConfidence ?? breakdown.entityRelationConfidence,
+    nameMatchConfidence: snapshot.nameMatchConfidence ?? breakdown.nameMatchConfidence,
+    underlyingEntityConfidence: snapshot.underlyingEntityConfidence ?? breakdown.underlyingEntityConfidence,
+    eventAttributionConfidence: snapshot.eventAttributionConfidence ?? breakdown.eventAttributionConfidence,
     factualSpecificityConfidence: snapshot.factualSpecificityConfidence ?? breakdown.factualSpecificityConfidence,
     customerVisibilityConfidence: snapshot.customerVisibilityConfidence ?? breakdown.customerVisibilityConfidence,
     reputationNeutralBase: snapshot.reputationNeutralBase ?? breakdown.reputationNeutralBase,
@@ -314,6 +346,9 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     preNegativeReputationScore: snapshot.preNegativeReputationScore ?? breakdown.preNegativeReputationScore,
     validCustomerVisibleNegativeCount: breakdown.validCustomerVisibleNegativeCount,
     independentNegativeSourceCount: breakdown.independentNegativeSourceCount,
+    underlyingNegativeEventCount: snapshot.underlyingNegativeEventCount ?? breakdown.underlyingNegativeEventCount,
+    customerVisibleEntryCount: snapshot.customerVisibleEntryCount ?? breakdown.customerVisibleEntryCount,
+    independentOriginalSourceCount: snapshot.independentOriginalSourceCount ?? breakdown.independentOriginalSourceCount,
     summary,
     deductionExplanation: deductionExplanation(reputationDeduction, themes, breakdown),
     riskReasons: riskReasons({
@@ -325,6 +360,9 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
       officialCount,
       riskThemes: snapshot.riskThemes,
       riskLevel: snapshot.riskLevel,
+      customerVisibleEntryCount: breakdown.customerVisibleEntryCount,
+      underlyingNegativeEventCount: breakdown.underlyingNegativeEventCount,
+      independentOriginalSourceCount: breakdown.independentOriginalSourceCount,
     }),
     issueThemes: themes,
     representativeEvidence,

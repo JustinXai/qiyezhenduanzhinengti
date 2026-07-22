@@ -154,6 +154,10 @@ export const ReputationSignalV1 = z.object({
   riskTheme: z.string(),
   evidenceId: z.string(),
   observedAt: z.string(),
+  underlyingEventKey: z.string().optional(),
+  originalSource: z.string().optional(),
+  aggregatorSource: z.string().optional(),
+  duplicateOf: z.string().optional(),
 });
 export type ReputationSignalV1 = z.infer<typeof ReputationSignalV1>;
 export const ReputationAndPublicOpinionSnapshotV1 = z.object({
@@ -177,8 +181,14 @@ export const ReputationAndPublicOpinionSnapshotV1 = z.object({
   evidenceConfidence: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   searchCoverageConfidence: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   entityRelationConfidence: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  nameMatchConfidence: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  underlyingEntityConfidence: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  eventAttributionConfidence: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   factualSpecificityConfidence: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   customerVisibilityConfidence: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  underlyingNegativeEventCount: z.number().int().nonnegative().optional(),
+  customerVisibleEntryCount: z.number().int().nonnegative().optional(),
+  independentOriginalSourceCount: z.number().int().nonnegative().optional(),
   riskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "UNKNOWN"]),
   summary: z.string(),
   evidenceIds: z.array(z.string()),
