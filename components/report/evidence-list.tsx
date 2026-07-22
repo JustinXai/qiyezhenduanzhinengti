@@ -36,6 +36,11 @@ export function EvidenceList({ items }: { items: readonly EvidenceItemView[] }) 
                       {item.languageLabel}
                     </span>
                   )}
+                  {item.acquisitionLabel && (
+                    <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                      {item.acquisitionLabel}
+                    </span>
+                  )}
                 </span>
               </span>
               <span className="shrink-0 text-xs text-neutral-400 group-open:hidden">展开</span>
@@ -56,6 +61,10 @@ export function EvidenceList({ items }: { items: readonly EvidenceItemView[] }) 
                 <div>
                   <dt className="inline text-neutral-400">获取时间:</dt>{" "}
                   <dd className="inline">{formatDate(item.fetchedAt)}</dd>
+                </div>
+                <div>
+                  <dt className="inline text-neutral-400">采集等级:</dt>{" "}
+                  <dd className="inline">{item.acquisitionLabel ?? item.acquisitionLevel}</dd>
                 </div>
               </dl>
               <a

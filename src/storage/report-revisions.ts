@@ -130,6 +130,7 @@ interface OriginalReportRow {
   id: string;
   diagnosis_id: string;
   canonical_json: string;
+  created_at: number;
 }
 
 interface PruneReasonRow {
@@ -197,7 +198,7 @@ export class SqliteReportRevisionRepository implements ReportRevisionRepository 
 
     const original = this.db
       .prepare(
-        `SELECT id, diagnosis_id, canonical_json FROM reports
+        `SELECT id, diagnosis_id, canonical_json, created_at FROM reports
          WHERE diagnosis_id = ? ORDER BY created_at DESC LIMIT 1`,
       )
       .get(diagnosisId) as OriginalReportRow | undefined;
@@ -257,7 +258,7 @@ export class SqliteReportRevisionRepository implements ReportRevisionRepository 
         .get(input.diagnosisId) as RevisionRow | undefined;
       const original = this.db
         .prepare(
-          `SELECT id, diagnosis_id, canonical_json FROM reports
+          `SELECT id, diagnosis_id, canonical_json, created_at FROM reports
            WHERE diagnosis_id = ? ORDER BY created_at DESC LIMIT 1`,
         )
         .get(input.diagnosisId) as OriginalReportRow | undefined;
@@ -283,7 +284,12 @@ export class SqliteReportRevisionRepository implements ReportRevisionRepository 
         canonicalJson: canonicalReportJson(canonical),
         originalReportHash: originalHash,
         newReportHash: newHash,
-        createdAt: this.now(),
+        createdAt: new Date(
+          Math.max(
+            this.now().getTime(),
+            ((currentRevision?.created_at ?? original.created_at) + 1) * 1000,
+          ),
+        ),
         prunedClaims: structuredClone(input.prunedClaims),
       };
       this.db

@@ -215,6 +215,13 @@ const DIMENSION_LABEL: Record<(typeof SCORE_DIMENSION_ORDER)[number], string> = 
 const MEASUREMENT_LABEL = ZH_MEASUREMENT_LABEL;
 const SUPPORT_PUBLIC_LABEL = ZH_SUPPORT_LABEL;
 const SOURCE_TYPE_PUBLIC_LABEL = ZH_SOURCE_TYPE_LABEL;
+const ACQUISITION_PUBLIC_LABEL = {
+  SEARCH_SNIPPET: "搜索摘要",
+  CRAWLED_PAGE: "已抓取正文",
+  OFFICIAL_PAGE: "已确认官方页",
+  CUSTOMER_SUPPLIED: "客户提供",
+  OFFICIAL_REGISTRY: "官方登记来源",
+} as const;
 
 function buildMeasurementStatusSummary(report: DiagnosisReport): string {
   const counts = new Map<keyof typeof MEASUREMENT_LABEL, number>();
@@ -381,12 +388,14 @@ export function toEvidenceViewModel(report: DiagnosisReport): EvidenceViewModel 
         sourceType: item.sourceType,
         authorityLevel: item.authorityLevel,
         supportLevel: item.supportLevel,
+        acquisitionLevel: item.acquisitionLevel,
         fetchedAt: item.fetchedAt,
         snippet: item.snippet,
         url: sanitizeEvidenceUrl(item.url),
         summaryZh: buildEvidenceSummaryZh(item),
         supportLabel: SUPPORT_PUBLIC_LABEL[item.supportLevel as Exclude<EvidenceSupportLevel, "UNSUPPORTED">],
         sourceTypeLabel: SOURCE_TYPE_PUBLIC_LABEL[item.sourceType],
+        acquisitionLabel: ACQUISITION_PUBLIC_LABEL[item.acquisitionLevel ?? "SEARCH_SNIPPET"],
         // 中文来源 / 英文官方补充 — only when the registry recorded a language.
         ...(item.language ? { languageLabel: ZH_LANGUAGE_LABEL[item.language] } : {}),
       })),

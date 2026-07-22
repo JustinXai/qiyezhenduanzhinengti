@@ -19,7 +19,12 @@
 // ============================================================================
 
 import type { WebSearchResultItem } from "../../providers/types";
-import type { EvidenceItem, EvidenceSourceType, EvidenceSupportLevel } from "../../contracts";
+import type {
+  EvidenceAcquisitionLevel,
+  EvidenceItem,
+  EvidenceSourceType,
+  EvidenceSupportLevel,
+} from "../../contracts";
 
 export interface EvidenceNormalizationContext {
   /**
@@ -103,6 +108,20 @@ function defaultAuthorityLevel(sourceType: EvidenceSourceType): string {
   return sourceType === "OBSERVED_WEB_EVIDENCE" ? AUTHORITY_MEDIA : AUTHORITY_OWNED;
 }
 
+function acquisitionLevelOf(item: WebSearchResultItem): EvidenceAcquisitionLevel {
+  const raw = (item as WebSearchResultItem & { acquisitionLevel?: unknown }).acquisitionLevel;
+  if (
+    raw === "CRAWLED_PAGE" ||
+    raw === "OFFICIAL_PAGE" ||
+    raw === "CUSTOMER_SUPPLIED" ||
+    raw === "OFFICIAL_REGISTRY"
+  ) {
+    return raw;
+  }
+  if (raw === "SEARCH_SNIPPET") return raw;
+  return "SEARCH_SNIPPET";
+}
+
 /**
  * Normalize raw web-search results into canonical EvidenceItems.
  *
@@ -131,6 +150,7 @@ export function normalizeEvidence(
 
     const sourceType = classifySourceType(parsed.host, ctx);
     const sourceDomain = canonicalHost(item.sourceDomain?.trim() || parsed.host);
+    const acquisitionLevel = acquisitionLevelOf(item);
 
     out.push({
       id: `ev_${fnv1a(parsed.url)}`,
@@ -142,6 +162,7 @@ export function normalizeEvidence(
       fetchedAt: item.fetchedAt,
       snippet: (item.snippet ?? "").trim(),
       url: parsed.url,
+      acquisitionLevel,
     });
   }
 

@@ -41,6 +41,9 @@ export interface HandlerResult {
 export interface DiagnosisView {
   diagnosisId: string;
   status: DiagnosisStatus;
+  executionMode: DiagnosisReportType["executionMode"] | null;
+  publicReportEligible: boolean;
+  publicReportStatus: DiagnosisReportType["publicReportStatus"] | null;
   report: DiagnosisReportType | null;
 }
 
@@ -124,6 +127,9 @@ export async function handleGetDiagnosis(
   const view: DiagnosisView = {
     diagnosisId: record.id,
     status: record.status,
+    executionMode: report?.executionMode ?? null,
+    publicReportEligible: report?.publicReportEligible ?? false,
+    publicReportStatus: report?.publicReportStatus ?? null,
     report,
   };
   return { status: 200, body: view };

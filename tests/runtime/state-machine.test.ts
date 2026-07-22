@@ -199,6 +199,77 @@ describe("diagnosis pipeline state machine", () => {
     expect((await adapter.getDiagnosisRequest(id))!.status).toBe("FAILED");
   });
 
+  it("does not mark FULL READY when DeepSeek usage is zero", async () => {
+    const { id, token } = await createRequest("diag_no_ds", "tok_no_ds");
+    const producer: ReportProducer = {
+      async produce() {
+        return {
+          ok: true,
+          report: buildSampleReport({ diagnosisId: id, publicToken: token }),
+          usage: [],
+        };
+      },
+    };
+    const result = await runDiagnosisPipeline(deps({ producer }), {
+      diagnosisId: id,
+      publicToken: token,
+      input: VALID_INPUT,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe("READY_LIMITED");
+    if (!result.ok) throw new Error("expected limited success");
+    expect(result.report.executionMode).toBe("LIMITED_PUBLIC_SCAN");
+    expect(result.report.publicReportEligible).toBe(false);
+  });
+
+  it("keeps search-snippet-only runs LIMITED and strips formal claims", async () => {
+    const { id, token } = await createRequest("diag_snippet", "tok_snippet");
+    const snippetReport = buildSampleReport({
+      diagnosisId: id,
+      publicToken: token,
+      evidence: buildSampleReport().evidence.map((item) => ({
+        ...item,
+        sourceType: "OBSERVED_WEB_EVIDENCE",
+        supportLevel: "CONTEXT_ONLY",
+        acquisitionLevel: "SEARCH_SNIPPET",
+      })),
+    });
+    const evidence: EvidencePipeline = {
+      async search() {
+        return { data: {}, usage: [{ provider: "bocha", stage: "SEARCHING", callCount: 1 }] };
+      },
+      async crawl() {
+        return { data: {}, usage: [{ provider: "crawler", stage: "CRAWLING", callCount: 0 }] };
+      },
+      async normalize() {
+        return { evidence: snippetReport.evidence };
+      },
+    };
+    const producer: ReportProducer = {
+      async produce() {
+        return {
+          ok: true,
+          report: snippetReport,
+          usage: [{ provider: "deepseek", stage: "ANALYZING", callCount: 1 }],
+        };
+      },
+    };
+
+    const result = await runDiagnosisPipeline(deps({ evidence, producer }), {
+      diagnosisId: id,
+      publicToken: token,
+      input: VALID_INPUT,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected limited success");
+    expect(result.status).toBe("READY_LIMITED");
+    expect(result.report.scores.overallScore).toBeNull();
+    expect(result.report.coreIssues).toEqual([]);
+    expect(result.report.geoOpportunities).toEqual([]);
+  });
+
   it("fails at VALIDATING_REPORT when the produced report is not canonical", async () => {
     const { id, token } = await createRequest("diag_inv", "tok_inv");
     const producer: ReportProducer = {

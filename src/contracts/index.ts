@@ -39,6 +39,15 @@ export const EvidenceSupportLevel = z.enum([
 ]);
 export type EvidenceSupportLevel = z.infer<typeof EvidenceSupportLevel>;
 
+export const EvidenceAcquisitionLevel = z.enum([
+  "SEARCH_SNIPPET",
+  "CRAWLED_PAGE",
+  "OFFICIAL_PAGE",
+  "CUSTOMER_SUPPLIED",
+  "OFFICIAL_REGISTRY",
+]);
+export type EvidenceAcquisitionLevel = z.infer<typeof EvidenceAcquisitionLevel>;
+
 export const ClaimType = z.enum(["DIAGNOSTIC_INFERENCE", "UNVERIFIED_HYPOTHESIS"]);
 export type ClaimType = z.infer<typeof ClaimType>;
 
@@ -65,8 +74,46 @@ export const EvidenceItem = z.object({
   normalizedDomain: z.string().optional(),
   /** Deterministic merge key (normalizedDomain + normalized title head). */
   dedupeKey: z.string().optional(),
+  /** Production control plane: how this evidence was acquired. */
+  acquisitionLevel: EvidenceAcquisitionLevel.optional(),
 });
 export type EvidenceItem = z.infer<typeof EvidenceItem>;
+
+export const DiagnosisExecutionMode = z.enum([
+  "FULL_DIAGNOSIS",
+  "LIMITED_PUBLIC_SCAN",
+  "NEEDS_CONFIRMATION",
+]);
+export type DiagnosisExecutionMode = z.infer<typeof DiagnosisExecutionMode>;
+
+export const PublicReportStatus = z.enum([
+  "FULL_READY",
+  "LIMITED_READY",
+  "NEEDS_CONFIRMATION",
+  "FAILED",
+]);
+export type PublicReportStatus = z.infer<typeof PublicReportStatus>;
+
+export const DiagnosisCompletionProfileV1 = z.object({
+  diagnosisId: z.string(),
+  entityResolutionStatus: z.string(),
+  searchCompleted: z.boolean(),
+  crawlCompleted: z.boolean(),
+  profileAnalysisCompleted: z.boolean(),
+  scoringAnalysisCompleted: z.boolean(),
+  aiVisibilityAnalysisCompleted: z.boolean(),
+  claimsAnalysisCompleted: z.boolean(),
+  claimEvidenceVerificationCompleted: z.boolean(),
+  truthGuardPassed: z.boolean(),
+  evidenceCoverageStatus: z.string(),
+  providerAvailabilityStatus: z.string(),
+  executionMode: DiagnosisExecutionMode,
+  publicReportEligible: z.boolean(),
+  completionReasons: z.array(z.string()),
+  evaluatedAt: z.string(),
+  algorithmVersion: z.literal("diagnosis-completion-profile.v1"),
+});
+export type DiagnosisCompletionProfileV1 = z.infer<typeof DiagnosisCompletionProfileV1>;
 
 // ---------------------------------------------------------------------------
 // Scoring (docs/SCORE_CONTRACT.md - weights are frozen, do not change)
@@ -248,6 +295,11 @@ export const DiagnosisReport = z.object({
   geoOpportunities: z.array(GeoOpportunity),
   demonstrationFix: DemonstrationFix.nullable(),
   evidence: z.array(EvidenceItem),
+  executionMode: DiagnosisExecutionMode.optional(),
+  publicReportEligible: z.boolean().optional(),
+  publicReportStatus: PublicReportStatus.optional(),
+  completionProfile: DiagnosisCompletionProfileV1.optional(),
+  reportProvenance: z.string().optional(),
 });
 export type DiagnosisReport = z.infer<typeof DiagnosisReport>;
 
@@ -319,6 +371,7 @@ export const EvidenceViewModel = z.object({
       sourceType: true,
       authorityLevel: true,
       supportLevel: true,
+      acquisitionLevel: true,
       fetchedAt: true,
       snippet: true,
       url: true,
@@ -333,6 +386,7 @@ export const EvidenceViewModel = z.object({
       sourceTypeLabel: z.string().optional(),
       /** 中文来源 / 英文官方补充 (from the recorded evidence language). */
       languageLabel: z.string().optional(),
+      acquisitionLabel: z.string().optional(),
     }),
   ),
 });

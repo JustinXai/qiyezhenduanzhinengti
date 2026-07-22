@@ -44,5 +44,13 @@ export default async function ReportPage({ params }: ReportPageProps) {
   }
 
   const { quick, deep, evidence } = presentReport(report);
-  return <ReportExperience quick={quick} deep={deep} evidence={evidence} />;
+  return (
+    <ReportExperience
+      quick={quick}
+      deep={deep}
+      evidence={evidence}
+      executionMode={report.executionMode}
+      publicReportEligible={report.publicReportEligible}
+    />
+  );
 }

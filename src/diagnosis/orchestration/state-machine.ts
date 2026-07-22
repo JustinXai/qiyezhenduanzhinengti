@@ -40,6 +40,10 @@ import {
 } from "../../runtime/diagnosis-input";
 import { publishGuard, pruneUnsupportedClaims } from "../../report/validation";
 import {
+  applyCompletionProfileToReport,
+  evaluateCompletionProfile,
+} from "./control-plane";
+import {
   createDeterministicVerifier,
   verifyReport,
   type VerifierStrategy,
@@ -159,7 +163,7 @@ export interface RunPipelineArgs {
 }
 
 export type PipelineResult =
-  | { ok: true; status: "READY"; report: DiagnosisReportType }
+  | { ok: true; status: "READY" | "READY_LIMITED"; report: DiagnosisReportType }
   | {
       ok: false;
       status: "FAILED";
@@ -177,6 +181,7 @@ export const PIPELINE_STAGES: readonly DiagnosisStatus[] = [
   "CLAIM_EVIDENCE_VERIFICATION",
   "VALIDATING_REPORT",
   "READY",
+  "READY_LIMITED",
 ] as const;
 
 /** Host(s) the request website belongs to (for coverage first-party scope). */
@@ -221,8 +226,23 @@ function toEvidenceRows(
     snippet: e.snippet,
     authorityLevel: e.authorityLevel,
     supportLevel: e.supportLevel,
+    acquisitionLevel: e.acquisitionLevel,
     fetchedAt: new Date(e.fetchedAt),
   }));
+}
+
+function executionProfileName(): string {
+  if (process.env.PROVIDER_MODE === "REAL") {
+    return process.env.PRODUCTION_DIAGNOSIS_PROFILE ?? "PRODUCTION_DIAGNOSIS_PROFILE";
+  }
+  return process.env.MOCK_PROFILE ?? "MOCK_PROFILE";
+}
+
+function hardLimitForProvider(provider: string): number | null {
+  if (provider === "bocha") return 12;
+  if (provider === "crawler") return 12;
+  if (provider === "deepseek") return 8;
+  return null;
 }
 
 /**
@@ -239,19 +259,26 @@ export async function runDiagnosisPipeline(
 
   const setStatus = (status: DiagnosisStatus) =>
     storage.updateDiagnosisStatus(diagnosisId, status);
+  const allUsage: ProviderUsageSample[] = [];
 
   const recordUsage = async (samples?: ProviderUsageSample[]) => {
     if (!samples) return;
+    allUsage.push(...samples);
     for (const s of samples) {
       await storage.recordProviderUsage({
         id: idFactory(),
         diagnosisId,
+        executionProfile: executionProfileName(),
         provider: s.provider,
         stage: s.stage,
         callCount: s.callCount,
+        hardLimit: hardLimitForProvider(s.provider),
         retryCount: s.retryCount,
+        status: s.errorCode ? "FAILED" : "COMPLETED",
         errorCode: s.errorCode ?? null,
         costEstimate: s.costEstimate ?? null,
+        startedAt: (deps.clock ?? (() => new Date()))(),
+        completedAt: (deps.clock ?? (() => new Date()))(),
       });
     }
   };
@@ -476,24 +503,46 @@ export async function runDiagnosisPipeline(
   // ClaimEvidenceRelations + coverage, NOT from EvidenceItem.supportLevel. A
   // non-ok result blocks READY — the model output never decides publish.
   const guard = publishGuard({ report: published, relations, coverage });
-  if (!guard.ok) {
-    return fail("VALIDATING_REPORT", {
-      code: "PUBLISH_GUARD_BLOCKED",
-      message: guard.violations
-        .map((v) => `${v.rule}${v.claimId ? `(${v.claimId})` : ""}: ${v.message}`)
-        .join("; "),
-    });
-  }
+  const normalizedEvidenceById = new Map(normalized.evidence.map((item) => [item.id, item]));
+  const reportForControl = DiagnosisReport.parse({
+    ...published,
+    evidence: published.evidence.map((item) => ({
+      ...item,
+      acquisitionLevel:
+        normalizedEvidenceById.get(item.id)?.acquisitionLevel ?? item.acquisitionLevel,
+    })),
+  });
+  const analysisStageRuns = storage.getAnalysisStageRuns
+    ? await storage.getAnalysisStageRuns(diagnosisId)
+    : undefined;
+  const profile = evaluateCompletionProfile({
+    diagnosisId,
+    input,
+    evidence: reportForControl.evidence,
+    coverage,
+    usage: allUsage,
+    analysisStageRuns,
+    report: reportForControl,
+    truthGuardPassed: guard.ok,
+    evaluatedAt: (deps.clock ?? (() => new Date()))().toISOString(),
+  });
+  const controlledReport = DiagnosisReport.parse(
+    applyCompletionProfileToReport(reportForControl, profile),
+  );
 
   await storage.saveReport({
     id: idFactory(),
     diagnosisId,
-    reportContractVersion: published.reportContractVersion,
-    scoreContractVersion: published.scoreContractVersion,
-    canonicalJson: JSON.stringify(published),
+    reportContractVersion: controlledReport.reportContractVersion,
+    scoreContractVersion: controlledReport.scoreContractVersion,
+    canonicalJson: JSON.stringify(controlledReport),
   });
 
-  // -- READY ------------------------------------------------------------------
-  await setStatus("READY");
-  return { ok: true, status: "READY", report: published };
+  // -- READY / READY_LIMITED --------------------------------------------------
+  if (profile.executionMode === "FULL_DIAGNOSIS") {
+    await setStatus("READY");
+    return { ok: true, status: "READY", report: controlledReport };
+  }
+  await setStatus("READY_LIMITED");
+  return { ok: true, status: "READY_LIMITED", report: controlledReport };
 }

@@ -14,7 +14,7 @@ import {
   THIRTY_MINUTE_POINTS,
 } from "../../src/product/customer-copy";
 
-export function CtaSection() {
+export function CtaSection({ limited = false }: { limited?: boolean }) {
   return (
     <div className="rounded-xl bg-neutral-900 p-4 text-white">
       <p className="text-sm leading-relaxed text-neutral-200">{CTA_DESCRIPTION}</p>
@@ -37,7 +37,7 @@ export function CtaSection() {
           data-testid="primary-cta-footer"
           className="flex-1 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-neutral-900 transition hover:bg-neutral-100"
         >
-          {PRIMARY_CTA_LABEL}
+          {limited ? "补充企业信息并继续诊断" : PRIMARY_CTA_LABEL}
         </button>
         <button
           type="button"

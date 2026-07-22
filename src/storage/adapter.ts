@@ -16,6 +16,8 @@ export type DiagnosisStatus =
   | "CLAIM_EVIDENCE_VERIFICATION"
   | "VALIDATING_REPORT"
   | "READY"
+  | "READY_LIMITED"
+  | "NEEDS_CONFIRMATION"
   | "FAILED";
 
 // ---------------------------------------------------------------------------
@@ -42,6 +44,7 @@ export interface EvidenceRecordInput {
   snippet: string | null;
   authorityLevel: string | null;
   supportLevel: string | null;
+  acquisitionLevel?: string | null;
   fetchedAt: Date;
 }
 
@@ -81,23 +84,33 @@ export interface ClaimEvidenceRelationRecord extends ClaimEvidenceRelationRecord
 export interface ProviderUsageInput {
   id: string;
   diagnosisId: string;
+  executionProfile?: string | null;
   provider: string;
   stage: string;
   callCount?: number;
+  hardLimit?: number | null;
   retryCount?: number;
+  status?: string | null;
   errorCode?: string | null;
   costEstimate?: number | null;
+  startedAt?: Date | null;
+  completedAt?: Date | null;
 }
 
 export interface ProviderUsageRecord {
   id: string;
   diagnosisId: string;
+  executionProfile: string | null;
   provider: string;
   stage: string;
   callCount: number;
+  hardLimit: number | null;
   retryCount: number;
+  status: string | null;
   errorCode: string | null;
   costEstimate: number | null;
+  startedAt: Date | null;
+  completedAt: Date | null;
   createdAt: Date;
 }
 

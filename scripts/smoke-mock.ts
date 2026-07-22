@@ -122,12 +122,17 @@ function createInMemoryStorage(): StorageAdapter {
       arr.push({
         id: input.id,
         diagnosisId: input.diagnosisId,
+        executionProfile: input.executionProfile ?? null,
         provider: input.provider,
         stage: input.stage,
         callCount: input.callCount ?? 0,
+        hardLimit: input.hardLimit ?? null,
         retryCount: input.retryCount ?? 0,
+        status: input.status ?? null,
         errorCode: input.errorCode ?? null,
         costEstimate: input.costEstimate ?? null,
+        startedAt: input.startedAt ?? null,
+        completedAt: input.completedAt ?? null,
         createdAt: epoch,
       });
       usage.set(input.diagnosisId, arr);

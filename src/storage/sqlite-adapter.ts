@@ -58,6 +58,7 @@ interface EvidenceRow {
   snippet: string | null;
   authority_level: string | null;
   support_level: string | null;
+  acquisition_level?: string | null;
   fetched_at: number;
 }
 
@@ -73,12 +74,17 @@ interface ReportRow {
 interface ProviderUsageRow {
   id: string;
   diagnosis_id: string;
+  execution_profile?: string | null;
   provider: string;
   stage: string;
   call_count: number;
+  hard_limit?: number | null;
   retry_count: number;
+  status?: string | null;
   error_code: string | null;
   cost_estimate: number | null;
+  started_at?: number | null;
+  completed_at?: number | null;
   created_at: number;
 }
 
@@ -276,10 +282,10 @@ export class SqliteStorageAdapter implements StorageAdapter {
     const stmt = this.db.prepare(
       `INSERT INTO evidence
          (id, diagnosis_id, source_type, source_domain, url, title, snippet,
-          authority_level, support_level, fetched_at)
+          authority_level, support_level, acquisition_level, fetched_at)
        VALUES
          (@id, @diagnosis_id, @source_type, @source_domain, @url, @title, @snippet,
-          @authority_level, @support_level, @fetched_at)
+          @authority_level, @support_level, @acquisition_level, @fetched_at)
        ON CONFLICT(id) DO UPDATE SET
          diagnosis_id = excluded.diagnosis_id,
          source_type = excluded.source_type,
@@ -289,6 +295,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
          snippet = excluded.snippet,
          authority_level = excluded.authority_level,
          support_level = excluded.support_level,
+         acquisition_level = excluded.acquisition_level,
          fetched_at = excluded.fetched_at`,
     );
     const insertAll = this.db.transaction((rows: EvidenceRecordInput[]) => {
@@ -303,6 +310,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
           snippet: it.snippet,
           authority_level: it.authorityLevel,
           support_level: it.supportLevel,
+          acquisition_level: it.acquisitionLevel ?? "SEARCH_SNIPPET",
           fetched_at: toDbTime(it.fetchedAt),
         });
       }
@@ -324,6 +332,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
       snippet: row.snippet,
       authorityLevel: row.authority_level,
       supportLevel: row.support_level,
+      acquisitionLevel: row.acquisition_level ?? "SEARCH_SNIPPET",
       fetchedAt: fromDbTime(row.fetched_at),
     }));
   }
@@ -359,7 +368,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
   async getReport(diagnosisId: string): Promise<StoredReport | null> {
     const row = this.db
       .prepare(
-        `SELECT * FROM reports WHERE diagnosis_id = ? ORDER BY created_at DESC LIMIT 1`,
+        `SELECT * FROM reports WHERE diagnosis_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
       )
       .get(diagnosisId) as ReportRow | undefined;
     if (!row) return null;
@@ -379,21 +388,28 @@ export class SqliteStorageAdapter implements StorageAdapter {
     this.db
       .prepare(
         `INSERT INTO provider_usage
-           (id, diagnosis_id, provider, stage, call_count, retry_count,
-            error_code, cost_estimate, created_at)
+           (id, diagnosis_id, execution_profile, provider, stage, call_count,
+            hard_limit, retry_count, status, error_code, cost_estimate,
+            started_at, completed_at, created_at)
          VALUES
-           (@id, @diagnosis_id, @provider, @stage, @call_count, @retry_count,
-            @error_code, @cost_estimate, @created_at)`,
+           (@id, @diagnosis_id, @execution_profile, @provider, @stage, @call_count,
+            @hard_limit, @retry_count, @status, @error_code, @cost_estimate,
+            @started_at, @completed_at, @created_at)`,
       )
       .run({
         id: input.id,
         diagnosis_id: input.diagnosisId,
+        execution_profile: input.executionProfile ?? null,
         provider: input.provider,
         stage: input.stage,
         call_count: input.callCount ?? 0,
+        hard_limit: input.hardLimit ?? null,
         retry_count: input.retryCount ?? 0,
+        status: input.status ?? null,
         error_code: input.errorCode ?? null,
         cost_estimate: input.costEstimate ?? null,
+        started_at: input.startedAt ? toDbTime(input.startedAt) : null,
+        completed_at: input.completedAt ? toDbTime(input.completedAt) : null,
         created_at: toDbTime(this.now()),
       });
   }
@@ -407,12 +423,20 @@ export class SqliteStorageAdapter implements StorageAdapter {
     return rows.map((row) => ({
       id: row.id,
       diagnosisId: row.diagnosis_id,
+      executionProfile: row.execution_profile ?? null,
       provider: row.provider,
       stage: row.stage,
       callCount: row.call_count,
+      hardLimit: row.hard_limit ?? null,
       retryCount: row.retry_count,
+      status: row.status ?? null,
       errorCode: row.error_code,
       costEstimate: row.cost_estimate,
+      startedAt: row.started_at === null || row.started_at === undefined ? null : fromDbTime(row.started_at),
+      completedAt:
+        row.completed_at === null || row.completed_at === undefined
+          ? null
+          : fromDbTime(row.completed_at),
       createdAt: fromDbTime(row.created_at),
     }));
   }

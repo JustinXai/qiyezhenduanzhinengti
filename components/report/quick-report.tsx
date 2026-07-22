@@ -15,6 +15,7 @@ interface QuickReportProps {
   vm: QuickReportViewModel;
   /** Switch to the full (Deep) diagnosis view — the "完整诊断入口" (§1). */
   onOpenDeep: () => void;
+  limited?: boolean;
 }
 
 interface QuickModule {
@@ -31,7 +32,7 @@ interface QuickModule {
  *   - titles reflect the REAL item count (never a fixed "三个核心问题").
  * All selection/limits are already applied by the presentation service.
  */
-export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
+export function QuickReport({ vm, onOpenDeep, limited = false }: QuickReportProps) {
   const modules: QuickModule[] = [];
 
   // 决策摘要 — always present.
@@ -76,7 +77,7 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
             data-testid="primary-cta"
             className="flex-1 rounded-lg bg-neutral-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
           >
-            {PRIMARY_CTA_LABEL}
+            {limited ? "补充企业信息并继续诊断" : PRIMARY_CTA_LABEL}
           </button>
           <button
             type="button"
@@ -184,7 +185,7 @@ export function QuickReport({ vm, onOpenDeep }: QuickReportProps) {
   }
 
   modules.push({ key: "roadmap", title: "三阶段路线图", body: <Roadmap /> });
-  modules.push({ key: "cta", title: "下一步", body: <CtaSection /> });
+  modules.push({ key: "cta", title: "下一步", body: <CtaSection limited={limited} /> });
 
   return (
     <div className="space-y-1">

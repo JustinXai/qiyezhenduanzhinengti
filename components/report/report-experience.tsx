@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type {
+  DiagnosisExecutionMode,
   DeepReportViewModel,
   EvidenceViewModel,
   QuickReportViewModel,
@@ -22,6 +23,8 @@ interface ReportExperienceProps {
   quick: QuickReportViewModel;
   deep: DeepReportViewModel;
   evidence: EvidenceViewModel;
+  executionMode?: DiagnosisExecutionMode;
+  publicReportEligible?: boolean;
 }
 
 /**
@@ -29,11 +32,26 @@ interface ReportExperienceProps {
  * local state over already-computed view models — it NEVER re-fetches, re-scores
  * or creates a new task (docs/ARCHITECTURE.md). Quick is the default view.
  */
-export function ReportExperience({ quick, deep, evidence }: ReportExperienceProps) {
+export function ReportExperience({
+  quick,
+  deep,
+  evidence,
+  executionMode = "FULL_DIAGNOSIS",
+  publicReportEligible = true,
+}: ReportExperienceProps) {
   const [view, setView] = useState<ViewKey>("quick");
+  const limited = executionMode === "LIMITED_PUBLIC_SCAN" || !publicReportEligible;
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col bg-white">
+      {limited && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+          <p className="text-sm font-semibold">企业公开信息基础扫描</p>
+          <p className="mt-1 text-xs leading-relaxed">
+            当前仅完成基础公开信息扫描。由于企业官网、正文证据或分析阶段尚不完整，本结果不构成正式企业诊断报告。
+          </p>
+        </div>
+      )}
       <nav className="sticky top-0 z-10 flex gap-1 border-b border-neutral-200 bg-white/95 px-4 py-2 backdrop-blur">
         {TABS.map((tab) => {
           const active = view === tab.key;
@@ -56,7 +74,9 @@ export function ReportExperience({ quick, deep, evidence }: ReportExperienceProp
       </nav>
 
       <main className="flex-1 px-4 py-4">
-        {view === "quick" && <QuickReport vm={quick} onOpenDeep={() => setView("deep")} />}
+        {view === "quick" && (
+          <QuickReport vm={quick} onOpenDeep={() => setView("deep")} limited={limited} />
+        )}
         {view === "deep" && <DeepReport vm={deep} />}
         {view === "evidence" && <EvidenceView vm={evidence} />}
       </main>

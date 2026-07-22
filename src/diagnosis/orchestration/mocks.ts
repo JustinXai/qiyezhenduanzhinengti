@@ -38,7 +38,11 @@ export function createMockEvidencePipeline(opts?: {
       };
     },
     async normalize() {
-      const cloned = structuredClone(evidence);
+      const cloned: EvidenceItem[] = structuredClone(evidence).map((item) => ({
+        ...item,
+        acquisitionLevel:
+          item.sourceType === "FIRST_PARTY_EVIDENCE" ? "CRAWLED_PAGE" as const : "SEARCH_SNIPPET" as const,
+      }));
       const firstPartyDomains = [
         ...new Set(
           cloned

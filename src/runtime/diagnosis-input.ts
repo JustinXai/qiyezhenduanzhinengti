@@ -2,8 +2,8 @@
 //
 // The frozen canonical contracts (src/contracts/index.ts) describe the OUTPUT
 // report shape only; the request payload that starts a diagnosis is a runtime
-// concern owned by Agent E. Keep it minimal: a website is the one hard
-// requirement, everything else is optional context the engine may use.
+// concern owned by Agent E. A confirmed website enables full diagnosis; a
+// name-only request is accepted but must remain LIMITED/NEEDS_CONFIRMATION.
 
 import { z } from "zod";
 
@@ -39,11 +39,15 @@ export type CompetitorInput = z.infer<typeof CompetitorInputSchema>;
 
 export const DiagnosisInputSchema = z
   .object({
-    website: z.string().url(),
+    website: z.union([z.string().url(), z.literal("")]).default(""),
     brandName: z.string().min(1).max(200).optional(),
     industry: z.string().min(1).max(200).optional(),
     productOrService: z.string().min(1).max(1000).optional(),
     targetRegion: z.string().min(1).max(200).optional(),
+    customerQuestions: z
+      .array(z.object({ question: z.string().min(1).max(1000) }).strict())
+      .max(20)
+      .optional(),
     // Backward compatible: a string[] still validates because each element
     // matches the string branch of CompetitorInputSchema.
     competitors: z.array(CompetitorInputSchema).max(20).optional(),

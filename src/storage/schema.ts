@@ -22,6 +22,7 @@ export const evidence = sqliteTable("evidence", {
   snippet: text("snippet"),
   authorityLevel: text("authority_level"),
   supportLevel: text("support_level"), // DIRECT_SUPPORT | PARTIAL_SUPPORT | CONTEXT_ONLY | UNSUPPORTED
+  acquisitionLevel: text("acquisition_level"),
   fetchedAt: integer("fetched_at", { mode: "timestamp" }).notNull(),
 });
 
@@ -37,12 +38,17 @@ export const reports = sqliteTable("reports", {
 export const providerUsage = sqliteTable("provider_usage", {
   id: text("id").primaryKey(),
   diagnosisId: text("diagnosis_id").notNull(),
+  executionProfile: text("execution_profile"),
   provider: text("provider").notNull(), // bocha | deepseek
   stage: text("stage").notNull(),
   callCount: integer("call_count").notNull().default(0),
+  hardLimit: integer("hard_limit"),
   retryCount: integer("retry_count").notNull().default(0),
+  status: text("status"),
   errorCode: text("error_code"),
   costEstimate: real("cost_estimate"),
+  startedAt: integer("started_at", { mode: "timestamp" }),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 

@@ -376,8 +376,9 @@ export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): Evid
           title: r.title || hit.title,
           snippet: hit.text || r.snippet,
           fetchedAt: hit.fetchedAt,
+          acquisitionLevel: "CRAWLED_PAGE",
         };
-      });
+      }) as WebSearchResultItem[];
       const homeKey = ctx.input.website.toLowerCase();
       const homeHit = crawled.get(homeKey);
       if (homeHit && !enriched.some((r) => r.url.toLowerCase() === homeKey)) {
@@ -387,7 +388,8 @@ export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): Evid
           snippet: homeHit.text,
           sourceDomain: hostOf(ctx.input.website),
           fetchedAt: homeHit.fetchedAt,
-        });
+          acquisitionLevel: "OFFICIAL_PAGE",
+        } as WebSearchResultItem);
       }
 
       return { data: { ...data, results: enriched }, usage };
