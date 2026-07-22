@@ -40,7 +40,7 @@ function snapshot(overrides: Partial<ReputationAndPublicOpinionSnapshotV1> = {})
     neutralSignals: signals.filter((item) => item.sentiment === "NEUTRAL"),
     riskThemes: signals.filter((item) => item.sentiment === "NEGATIVE" || item.sentiment === "MIXED").map((item) => item.riskTheme),
     responseSignals: signals.filter((item) => item.signalType === "COMPANY_RESPONSE" || item.resolutionStatus === "RESPONDED" || item.resolutionStatus === "RESOLVED"),
-    overallReputationScore: 82,
+    overallReputationScore: 65,
     riskLevel: "LOW",
     summary: "legacy summary",
     evidenceIds: signals.map((item) => item.evidenceId),
@@ -81,17 +81,20 @@ describe("reputation report summary", () => {
       responseSignals: [response],
       neutralSignals: [response, neutral],
       evidenceIds: ["ev_neg", "ev_response", "ev_news", "ev_4", "ev_5", "ev_6", "ev_7"],
-      overallReputationScore: 62,
+      overallReputationScore: 40,
       riskLevel: "MEDIUM",
     }));
     expect(summary.searchedQueryCount).toBe(8);
     expect(summary.matchedEvidenceCount).toBe(7);
     expect(summary.negativeSignalCount).toBe(1);
     expect(summary.companyResponseCount).toBeGreaterThan(0);
-    expect(summary.reputationDeduction).toBe(20);
+    expect(summary.reputationDeduction).toBe(25);
+    expect(summary.reputationNeutralBase).toBe(65);
+    expect(summary.positiveReputationBonus).toBe(0);
     expect(summary.validCustomerVisibleNegativeCount).toBe(1);
     expect(summary.issueThemes[0]?.theme).toBe("退费争议");
-    expect(summary.deductionExplanation).toContain("扣除 20 分");
+    expect(summary.deductionExplanation).toContain("中性基础：65分");
+    expect(summary.deductionExplanation).toContain("高决策影响：-5分");
     expect(summary.summary).toContain("客户可见负面舆情");
     expect(summary.summary).toContain("风险等级为中");
     expect(summary.summary).not.toContain("未发现舆情");
@@ -120,13 +123,14 @@ describe("reputation report summary", () => {
       responseSignals: [],
       riskThemes: ["司法案件与公开企业风险信息"],
       evidenceIds: ["ev_qixin", "ev_registry"],
-      overallReputationScore: 57,
-      riskLevel: "MEDIUM",
+      overallReputationScore: 35,
+      riskLevel: "HIGH",
     }));
 
     expect(summary.negativeSignalCount).toBe(1);
     expect(summary.companyResponseCount).toBe(0);
-    expect(summary.reputationDeduction).toBe(25);
+    expect(summary.reputationDeduction).toBe(30);
+    expect(summary.factualSpecificityConfidence).not.toBe("HIGH");
     expect(summary.issueThemes).toEqual([
       expect.objectContaining({ theme: "司法案件与公开企业风险信息", count: 1 }),
     ]);
@@ -175,7 +179,7 @@ describe("reputation report summary", () => {
       responseSignals: [response],
       evidenceIds: ["ev_neg", "ev_resp"],
       riskThemes: ["合同争议"],
-      riskLevel: "MEDIUM",
+      riskLevel: "HIGH",
     }));
     const rendered = [summary.summary, ...summary.riskReasons, ...summary.representativeEvidence.map((item) => item.summary)].join("\n");
     expect(rendered).toContain("投诉、争议");

@@ -42,11 +42,14 @@ describe("reputation snapshot", () => {
       generatedAt: "2026-07-22T00:00:00.000Z",
     });
     expect(snapshot.summary).toBe("本次公开检索匹配到相关公开信息，暂未发现明确负面风险信号。");
+    expect(snapshot.overallReputationScore).toBe(65);
+    expect(snapshot.reputationNeutralBase).toBe(65);
+    expect(snapshot.positiveReputationBonus).toBe(0);
     expect(snapshot.summary).not.toContain("没有投诉");
     expect(snapshot.summary).not.toContain("口碑良好");
   });
 
-  it("case 1: valid customer-visible negative gets minimum conversion penalty and MEDIUM risk", () => {
+  it("case 1: valid customer-visible negative starts from neutral baseline and becomes HIGH risk", () => {
     const report = buildUniversalLimitedReport(
       {
         brandName: "成都万学海文教育科技有限公司",
@@ -61,16 +64,20 @@ describe("reputation snapshot", () => {
       { diagnosisId: "diag_rep" },
     );
     const mvp = report.mvpReport!;
-    expect(mvp.reputation?.riskLevel).toBe("MEDIUM");
-    expect(mvp.reputation?.overallReputationScore).toBe(57);
-    expect(mvp.reputation?.reputationHealthScore).toBe(57);
+    expect(mvp.reputation?.riskLevel).toBe("HIGH");
+    expect(mvp.reputation?.overallReputationScore).toBe(35);
+    expect(mvp.reputation?.reputationHealthScore).toBe(35);
+    expect(mvp.reputation?.reputationNeutralBase).toBe(65);
+    expect(mvp.reputation?.positiveReputationBonus).toBe(0);
+    expect(mvp.reputation?.preNegativeReputationScore).toBe(65);
     expect(mvp.reputation?.evidenceConfidence).toBe("MEDIUM");
+    expect(mvp.reputation?.factualSpecificityConfidence).toBe("MEDIUM");
     expect(mvp.reputation?.complaintSignals).toHaveLength(1);
     expect(mvp.questionSource).toBe("SYSTEM_GENERATED");
     expect(mvp.overview.topProblems.join(" ")).toMatch(/舆情|争议|风险提示/);
     expect(mvp.coreIssues[0]?.title).toBe("公开舆情影响客户信任");
     expect(mvp.coreIssues[0]?.priority).toBe("P0");
-    expect(mvp.contentPlans[0]?.title).toBe("舆情回应与信任修复方案");
+    expect(mvp.contentPlans[0]?.title).toBe("舆情核实与信任修复");
   });
 
   it("does not treat registry navigation risk words or trademark pages as negative responses", () => {
@@ -109,8 +116,9 @@ describe("reputation snapshot", () => {
 
     expect(snapshot.complaintSignals.map((item) => item.evidenceId)).toEqual(["ev_qixin"]);
     expect(snapshot.responseSignals).toHaveLength(0);
-    expect(snapshot.overallReputationScore).toBe(57);
-    expect(snapshot.riskLevel).toBe("MEDIUM");
+    expect(snapshot.overallReputationScore).toBe(35);
+    expect(snapshot.riskLevel).toBe("HIGH");
+    expect(snapshot.factualSpecificityConfidence).toBe("MEDIUM");
   });
 
   it("case 2: weak registry navigation risk words do not trigger conversion penalty", () => {
@@ -134,11 +142,12 @@ describe("reputation snapshot", () => {
     });
 
     expect(weak.complaintSignals).toHaveLength(0);
-    expect(weak.overallReputationScore).toBe(82);
+    expect(weak.overallReputationScore).toBe(65);
     expect(weak.riskLevel).toBe("LOW");
+    expect(weak.reputationNeutralBase).toBe(65);
   });
 
-  it("case 3: multiple independent sources add repeated-source penalty without collapsing to 4 points", () => {
+  it("case 3: multiple independent sources add repeated-source and decision-impact penalties without authority severity", () => {
     const snapshot = buildReputationSnapshot({
       diagnosisId: "diag_rep",
       diagnosisInput: { brandName: "成都万学海文教育科技有限公司", website: "", industry: "教育培训" },
@@ -174,8 +183,12 @@ describe("reputation snapshot", () => {
 
     expect(snapshot.complaintSignals).toHaveLength(2);
     expect(snapshot.riskThemes).toEqual(["司法案件与公开企业风险信息"]);
-    expect(snapshot.overallReputationScore).toBe(52);
-    expect(snapshot.riskLevel).toBe("MEDIUM");
+    expect(snapshot.overallReputationScore).toBe(30);
+    expect(snapshot.riskLevel).toBe("HIGH");
+    expect(snapshot.searchCoverageConfidence).toBe("MEDIUM");
+    expect(snapshot.entityRelationConfidence).toBe("HIGH");
+    expect(snapshot.factualSpecificityConfidence).toBe("MEDIUM");
+    expect(snapshot.customerVisibilityConfidence).toBe("MEDIUM");
   });
 
   it("case 4: reputation score drop recalculates overall score and routes first 30 days to reputation containment", () => {
@@ -208,12 +221,13 @@ describe("reputation snapshot", () => {
     );
     const mvp = report.mvpReport!;
 
-    expect(mvp.reputation?.overallReputationScore).toBe(52);
+    expect(mvp.reputation?.overallReputationScore).toBe(30);
     expect(mvp.score.overall).not.toBeNull();
-    expect(mvp.score.overall).toBeLessThan(56);
+    expect(mvp.score.overall).toBeLessThanOrEqual(40);
+    expect(mvp.score.level).toBe("当前存在高优先级信任风险");
     expect(mvp.overview.topProblems[0]).toContain("公开舆情影响客户信任");
     expect(mvp.coreIssues[0]?.title).toBe("公开舆情影响客户信任");
-    expect(mvp.roadmap[0]?.companyActions.join(" ")).toContain("逐条核实负面信息");
+    expect(mvp.roadmap[0]?.companyActions.join(" ")).toContain("逐条核实风险证据");
     expect(mvp.roadmap[0]?.acceptanceCriteria.join(" ")).toContain("不是用正面内容掩盖争议");
   });
 });

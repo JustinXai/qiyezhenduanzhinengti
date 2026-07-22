@@ -32,6 +32,13 @@ export interface ReputationReportSummary {
   responseSignalCount: number;
   reputationDeduction: number;
   evidenceConfidence: "LOW" | "MEDIUM" | "HIGH";
+  searchCoverageConfidence: "LOW" | "MEDIUM" | "HIGH";
+  entityRelationConfidence: "LOW" | "MEDIUM" | "HIGH";
+  factualSpecificityConfidence: "LOW" | "MEDIUM" | "HIGH";
+  customerVisibilityConfidence: "LOW" | "MEDIUM" | "HIGH";
+  reputationNeutralBase: number;
+  positiveReputationBonus: number;
+  preNegativeReputationScore: number;
   validCustomerVisibleNegativeCount: number;
   independentNegativeSourceCount: number;
   summary: string;
@@ -117,6 +124,7 @@ function summaryFor(input: {
   issueThemes: readonly { theme: string; count: number }[];
   independentNegativeSourceCount: number;
   reputationDeduction: number;
+  neutralBase: number;
 }): string {
   if (input.matchedEvidenceCount === 0) {
     return "本次公开检索暂未匹配到与企业或品牌相关的舆情证据；这不等于现实中不存在舆情，建议后续持续复查。";
@@ -125,7 +133,7 @@ function summaryFor(input: {
     const themes = input.issueThemes.map((item) => item.theme).slice(0, 3).join("、") || "公开争议";
     const sourceCopy = input.independentNegativeSourceCount >= 2 ? "多个公开来源重复呈现" : "单一公开来源呈现";
     const responseCopy = input.responseSignalCount > 0 ? "已有部分公开回应" : "暂未发现集中、清晰的企业公开回应";
-    return `本次公开检索发现客户可见负面舆情，主要涉及${themes}，${sourceCopy}。${responseCopy}，因此舆情健康分扣除${input.reputationDeduction}分，风险等级为${riskLevelLabel(input.riskLevel)}。`;
+    return `本项从中性口碑基准${input.neutralBase}分开始计算。本次公开检索发现客户可见负面舆情，主要涉及${themes}，${sourceCopy}。${responseCopy}，因此舆情健康分扣除${input.reputationDeduction}分，风险等级为${riskLevelLabel(input.riskLevel)}。`;
   }
   return `本次公开检索匹配到与企业或品牌相关的公开信息，暂未发现明确负面风险信号；这不等于网络上没有舆情，综合风险等级为${riskLevelLabel(input.riskLevel)}。`;
 }
@@ -183,15 +191,27 @@ function issueThemes(signals: readonly ReputationSignalV1[]): Array<{ theme: str
     theme,
     count: items.length,
     summary: /司法|企业风险/.test(theme)
-      ? "主要涉及司法案件、立案、开庭公告或公开企业风险信息，当前摘要未提供完整案件细节，建议进一步核实具体内容和处理状态。"
+      ? "多个公开企业信息页面出现与该主体相关的司法或经营风险提示，具体案件事实、主体关系和当前处理状态仍需进一步核实。"
       : "主要涉及用户反馈、服务体验或合同收费相关争议，当前仍需核实处理结果和企业说明。",
   }));
 }
 
-function deductionExplanation(deduction: number, themes: readonly { theme: string; count: number }[]): string {
+function deductionExplanation(
+  deduction: number,
+  themes: readonly { theme: string; count: number }[],
+  breakdown: ReturnType<typeof reputationPenaltyBreakdown>,
+): string {
   if (deduction <= 0) return "本项未因明确负面舆情扣分。";
   const names = themes.map((item) => item.theme).slice(0, 2).join("、") || "公开舆情风险";
-  return `本项因发现客户可见的${names}扣除 ${deduction} 分，其中企业未形成清晰公开回应会进一步增加信任风险。`;
+  const lines = [
+    `中性基础：${breakdown.reputationNeutralBase}分`,
+    `有效负面影响：-${breakdown.baseNegativePenalty}分`,
+    `多个来源重复：-${breakdown.repeatedSourcePenalty}分`,
+    `缺少公开回应：-${breakdown.noResponsePenalty}分`,
+    `高决策影响：-${breakdown.customerDecisionImpactPenalty}分`,
+  ];
+  if (breakdown.authoritySeverityPenalty > 0) lines.push(`权威确认严重度：-${breakdown.authoritySeverityPenalty}分`);
+  return `本项从中性口碑基准开始计算。因发现客户可见的${names}，本次口碑健康分受到明显扣减。${lines.join("；")}。`;
 }
 
 export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinionSnapshotV1 | undefined): ReputationReportSummary {
@@ -210,6 +230,13 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     responseSignalCount: 0,
     reputationDeduction: 0,
     evidenceConfidence: "LOW",
+    searchCoverageConfidence: "LOW",
+    entityRelationConfidence: "LOW",
+    factualSpecificityConfidence: "LOW",
+    customerVisibilityConfidence: "LOW",
+    reputationNeutralBase: 65,
+    positiveReputationBonus: 0,
+    preNegativeReputationScore: 65,
     validCustomerVisibleNegativeCount: 0,
     independentNegativeSourceCount: 0,
     summary: "本次公开检索暂未匹配到相关证据；这不等于现实中不存在舆情，建议后续持续复查。",
@@ -227,7 +254,7 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
   const positiveSignalCount = snapshot.positiveSignals.length;
   const neutralSignalCount = snapshot.neutralSignals.length;
   const responseSignalCount = snapshot.responseSignals.length;
-  const breakdown = reputationPenaltyBreakdown(snapshot.complaintSignals, snapshot.responseSignals, signals, snapshot.sourceCoverage);
+  const breakdown = reputationPenaltyBreakdown(snapshot.complaintSignals, snapshot.responseSignals, signals, snapshot.sourceCoverage, snapshot.reputationNeutralBase ?? 65, snapshot.searchedQueries.length);
   const reputationDeduction = breakdown.totalPenalty;
   const complaintCount = sourceCategoryCount(signals, "黑猫投诉") + sourceCategoryCount(signals, "消费投诉平台");
   const mediaCount = sourceCategoryCount(signals, "新闻媒体");
@@ -243,6 +270,7 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     issueThemes: themes,
     independentNegativeSourceCount: breakdown.independentNegativeSourceCount,
     reputationDeduction,
+    neutralBase: breakdown.reputationNeutralBase,
   });
   const categoryRows = [
     { label: "投诉平台", count: complaintCount },
@@ -277,10 +305,17 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     responseSignalCount,
     reputationDeduction,
     evidenceConfidence: snapshot.evidenceConfidence ?? breakdown.evidenceConfidence,
+    searchCoverageConfidence: snapshot.searchCoverageConfidence ?? breakdown.searchCoverageConfidence,
+    entityRelationConfidence: snapshot.entityRelationConfidence ?? breakdown.entityRelationConfidence,
+    factualSpecificityConfidence: snapshot.factualSpecificityConfidence ?? breakdown.factualSpecificityConfidence,
+    customerVisibilityConfidence: snapshot.customerVisibilityConfidence ?? breakdown.customerVisibilityConfidence,
+    reputationNeutralBase: snapshot.reputationNeutralBase ?? breakdown.reputationNeutralBase,
+    positiveReputationBonus: snapshot.positiveReputationBonus ?? breakdown.positiveReputationBonus,
+    preNegativeReputationScore: snapshot.preNegativeReputationScore ?? breakdown.preNegativeReputationScore,
     validCustomerVisibleNegativeCount: breakdown.validCustomerVisibleNegativeCount,
     independentNegativeSourceCount: breakdown.independentNegativeSourceCount,
     summary,
-    deductionExplanation: deductionExplanation(reputationDeduction, themes),
+    deductionExplanation: deductionExplanation(reputationDeduction, themes, breakdown),
     riskReasons: riskReasons({
       matchedEvidenceCount,
       negativeSignalCount,

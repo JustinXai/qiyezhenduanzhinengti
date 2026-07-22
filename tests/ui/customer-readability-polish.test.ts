@@ -124,7 +124,14 @@ function reputationSnapshot(): ReputationAndPublicOpinionSnapshotV1 {
     riskThemes: ["退费争议"],
     overallReputationScore: 62,
     reputationHealthScore: 62,
+    reputationNeutralBase: 65,
+    positiveReputationBonus: 0,
+    preNegativeReputationScore: 65,
     evidenceConfidence: "HIGH",
+    searchCoverageConfidence: "HIGH",
+    entityRelationConfidence: "HIGH",
+    factualSpecificityConfidence: "MEDIUM",
+    customerVisibilityConfidence: "HIGH",
     riskLevel: "MEDIUM",
     summary: "legacy",
     evidenceIds: ["ev_negative", "ev_response", "ev_news", "ev_4", "ev_5", "ev_6", "ev_7"],
@@ -193,7 +200,9 @@ describe("customer readability polish report", () => {
     expect(html).toContain("客户可见负面舆情");
     expect(html).toContain("风险等级为中");
     expect(html).toContain("主要舆情情况");
-    expect(html).toContain("本项因发现客户可见的退费争议扣除 20 分");
+    expect(html).toContain("中性基础：65分");
+    expect(html).toContain("高决策影响：-5分");
+    expect(html).toContain("事实具体性 MEDIUM");
     expect(html).toContain("企业回应");
     expect(html).toContain("查看原文链接");
     expect(html).toContain("[overflow-wrap:anywhere]");

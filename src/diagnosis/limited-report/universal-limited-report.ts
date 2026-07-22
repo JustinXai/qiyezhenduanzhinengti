@@ -419,6 +419,15 @@ function overallScore(dimensions: MvpGeoDiagnosticReportV1["score"]["dimensions"
   return weightSum > 0 ? Math.round(weighted / weightSum) : null;
 }
 
+function criticalRiskCap(reputation: ReputationAndPublicOpinionSnapshotV1): number | null {
+  const reputationScore = reputation.reputationHealthScore ?? reputation.overallReputationScore;
+  if (reputationScore === null) return null;
+  const hasP0ReputationRisk = reputation.complaintSignals.length > 0 && reputation.riskLevel !== "UNKNOWN";
+  if (reputationScore <= 35 && reputation.riskLevel === "HIGH") return 40;
+  if (reputationScore <= 44 && hasP0ReputationRisk) return 45;
+  return null;
+}
+
 function topMissingFindings(dimensions: MvpGeoDiagnosticReportV1["score"]["dimensions"], limit: number) {
   return dimensions
     .flatMap((dimension) => dimension.findings.map((finding) => ({ dimension, finding })))
@@ -489,7 +498,9 @@ function reputationScoreDimension(snapshot: ReputationAndPublicOpinionSnapshotV1
   const responseCount = snapshot.responseSignals.length;
   const sourceCount = snapshot.sourceCoverage.length;
   const riskThemeCount = snapshot.riskThemes.length;
-  const evidenceConfidence = snapshot.evidenceConfidence ?? (sourceCount >= 2 && snapshot.evidenceIds.length >= 5 ? "HIGH" : sourceCount > 0 ? "MEDIUM" : "LOW");
+  const searchCoverageConfidence = snapshot.searchCoverageConfidence ?? (sourceCount >= 2 && snapshot.evidenceIds.length >= 5 ? "HIGH" : sourceCount > 0 ? "MEDIUM" : "LOW");
+  const factualSpecificityConfidence = snapshot.factualSpecificityConfidence ?? "LOW";
+  const customerVisibilityConfidence = snapshot.customerVisibilityConfidence ?? (snapshot.evidenceIds.length >= 3 ? "HIGH" : snapshot.evidenceIds.length > 0 ? "MEDIUM" : "LOW");
   const findings = [
     {
       title: "公开投诉与负面舆情集中度",
@@ -505,7 +516,7 @@ function reputationScoreDimension(snapshot: ReputationAndPublicOpinionSnapshotV1
       status: riskThemeCount === 0 ? "CLEARLY_FOUND" as const : riskThemeCount <= 2 ? "PARTIALLY_FOUND" as const : "NOT_FOUND_IN_CHECKED_SCOPE" as const,
       score: riskThemeCount === 0 ? 100 : riskThemeCount <= 2 ? 50 : 0,
       evidenceIds: snapshot.complaintSignals.map((item) => item.evidenceId),
-      currentStatus: riskThemeCount === 0 ? "本次检索未形成集中争议主题。" : `风险主题集中在${snapshot.riskThemes.slice(0, 3).join("、")}。`,
+      currentStatus: riskThemeCount === 0 ? "本次检索未形成集中争议主题。" : `风险主题集中在${snapshot.riskThemes.slice(0, 3).join("、")}；具体事实置信度为${factualSpecificityConfidence}。`,
       impact: "争议主题如果没有被主动说明，客户容易只看到片段化负面信息。",
       recommendation: "将争议高频点转化为服务流程、合同边界和售后处理说明。",
     },
@@ -532,7 +543,7 @@ function reputationScoreDimension(snapshot: ReputationAndPublicOpinionSnapshotV1
       status: sourceCount >= 4 ? "CLEARLY_FOUND" as const : sourceCount >= 2 ? "PARTIALLY_FOUND" as const : "NOT_FOUND_IN_CHECKED_SCOPE" as const,
       score: sourceCount >= 4 ? 100 : sourceCount >= 2 ? 50 : 0,
       evidenceIds: snapshot.evidenceIds,
-      currentStatus: sourceCount > 0 ? `本次证据置信度为${evidenceConfidence}，覆盖${snapshot.sourceCoverage.join("、")}等公开来源。` : "本次舆情检索来源覆盖有限。",
+      currentStatus: sourceCount > 0 ? `本次检索覆盖置信度为${searchCoverageConfidence}，客户可见度置信度为${customerVisibilityConfidence}，覆盖${snapshot.sourceCoverage.join("、")}等公开来源。` : "本次舆情检索来源覆盖有限。",
       impact: "来源覆盖只影响证据置信度，不用于抬高舆情健康分。",
       recommendation: "持续跟踪投诉平台、社交平台、媒体报道和官方公开渠道，并与舆情健康分分开解释。",
     },
@@ -616,12 +627,12 @@ function buildCoreIssues(report: MvpGeoDiagnosticReportV1): MvpGeoDiagnosticRepo
 
 function withPriorities(policy: PolicyDefinition, reputation?: ReputationAndPublicOpinionSnapshotV1): MvpGeoDiagnosticReportV1["contentPlans"] {
   const reputationPlan: Omit<MvpGeoDiagnosticReportV1["contentPlans"][number], "priority"> = {
-    title: "舆情回应与信任修复方案",
-    buildContent: "整理公开投诉、退款、合同条款、教学服务争议和企业回应口径，形成客户可理解的服务边界与处理说明。",
+    title: "舆情核实与信任修复",
+    buildContent: "逐条核实公开风险证据、主体关联、处理状态和企业回应口径，形成客户可理解的服务边界与统一说明入口。",
     solvesProblem: "公开负面舆情影响品牌信任",
     recommendedCarrier: "官网信任说明页、服务协议摘要、售后FAQ、咨询前说明",
-    requiredMaterials: ["投诉和争议主题清单", "退款及合同边界", "服务流程说明", "企业可公开回应规则"],
-    deliverables: ["舆情主题整理", "回应口径结构", "信任修复内容页", "售后争议FAQ"],
+    requiredMaterials: ["风险证据清单", "主体关联确认", "事实与处理状态", "企业可公开回应规则"],
+    deliverables: ["舆情证据核实表", "回应口径结构", "信任修复内容页", "售后争议FAQ"],
   };
   const basePlans = reputation && (reputation.riskLevel !== "LOW" || reputation.complaintSignals.length > 0)
     ? [reputationPlan, ...policy.plans.filter((plan) => plan.title !== reputationPlan.title)]
@@ -654,8 +665,11 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
     ...baseDimensions.slice(1),
   ];
   const completion = completionRate(dimensions);
-  const overall = overallScore(dimensions, completion);
-  const level = scoreLevel(overall);
+  const weightedOverall = overallScore(dimensions, completion);
+  const cap = criticalRiskCap(reputation);
+  const overall = weightedOverall === null ? null : Math.min(weightedOverall, cap ?? weightedOverall);
+  const hasCriticalReputationRisk = cap !== null;
+  const level = hasCriticalReputationRisk ? "当前存在高优先级信任风险" : scoreLevel(overall);
   const topMissing = topMissingFindings(dimensions, 3);
   const companyName = input.brandName ?? "待确认企业";
   const industry = input.industry ?? policy.label;
@@ -664,6 +678,7 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
   const questions = industryQuestions(policy, input);
   const questionSource = (input.customerQuestions ?? []).some((item) => item.question?.trim()) ? "USER_PROVIDED" : "SYSTEM_GENERATED";
   const hasReputationRisk = reputation.complaintSignals.length > 0;
+  const firstReputationAction = "先核实和处理公开负面舆情，整理事实、处理状态和统一回应入口。";
   const isEducation = policy === EDUCATION_POLICY;
 
   const report: MvpGeoDiagnosticReportV1 = {
@@ -682,7 +697,9 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
       reportDate,
       overallEvaluation: overall === null
         ? `${companyName}本次检查完成度为${completion}%，暂不输出总分。`
-        : `${companyName}当前GEO公开信息基础指数为${overall}分，属于“${level}”。公开信息可以开始作为诊断依据，但仍存在明显建设空间。`,
+        : hasCriticalReputationRisk
+          ? `${companyName}当前GEO公开信息基础指数为${overall}分，属于“${level}”。公开搜索中已经出现可能影响客户报名、付款或合作判断的风险信息，需要先完成事实核实、处理状态整理和统一公开回应，再系统建设课程、服务和客户问题内容。`
+          : `${companyName}当前GEO公开信息基础指数为${overall}分，属于“${level}”。公开信息可以开始作为诊断依据，但仍存在明显建设空间。`,
       topProblems: [
         ...(hasReputationRisk ? ["公开舆情影响客户信任，需要优先核实事实、处理状态和公开回应口径。"] : []),
         ...topMissing.map((entry) => entry.finding.title),
@@ -701,14 +718,14 @@ function buildMvpReport(input: DiagnosisInput, evidence: readonly EvidenceItem[]
     coreIssues: [],
     contentPlans: withPriorities(policy, reputation),
     roadmap: [
-        { stage: "0-30天", companyActions: hasReputationRisk ? ["逐条核实负面信息的事实、主体关联和当前处理状态。", "整理企业可以公开的说明、回应口径、收费报名退费和学习服务边界。"] : ["确认企业主体、品牌名称、地址、联系方式和可公开资料。", "提供课程、师资、服务流程和咨询报名规则。"], xingmeiDeliverables: hasReputationRisk ? ["完成舆情证据复核、主题归类和回应入口结构。", "输出机构正规性、收费退费、服务边界和公开回应文案。"] : ["完成公开信源清单和页面结构。", "输出机构身份、课程服务和咨询入口文案。"], acceptanceCriteria: hasReputationRisk ? ["每条负面信息都有事实核实结果和处理状态记录。", "客户能看到统一公开回应入口，而不是用正面内容掩盖争议。"] : ["客户搜索品牌名能看到统一基础信息。", "官网、地图或官方账号至少形成一个清晰入口。"] },
+        { stage: "0-30天", companyActions: hasReputationRisk ? ["逐条核实风险证据、主体关联、具体事实和当前处理状态。", "整理企业可以公开的说明、回应口径、收费报名退费和学习服务边界。", "建立统一公开说明入口，再启动普通GEO内容建设。"] : ["确认企业主体、品牌名称、地址、联系方式和可公开资料。", "提供课程、师资、服务流程和咨询报名规则。"], xingmeiDeliverables: hasReputationRisk ? ["完成舆情证据复核、主题归类和回应入口结构。", "输出机构正规性、收费退费、服务边界和公开回应文案。"] : ["完成公开信源清单和页面结构。", "输出机构身份、课程服务和咨询入口文案。"], acceptanceCriteria: hasReputationRisk ? ["每条负面信息都有事实核实结果和处理状态记录。", "客户能看到统一公开回应入口，而不是用正面内容掩盖争议。"] : ["客户搜索品牌名能看到统一基础信息。", "官网、地图或官方账号至少形成一个清晰入口。"] },
       { stage: "31-60天", companyActions: hasReputationRisk ? ["发布退款规则、学习服务流程和常见争议FAQ。", "补充学员服务、售后处理说明、真实案例和处理结果材料。"] : ["补充客户高频问题、课程流程、服务注意事项和案例评价材料。", "确认可公开的收费、报名、退费和学习服务规则。"], xingmeiDeliverables: ["建设客户决策FAQ、课程页和信任信息页。", "完成行业典型搜索场景内容覆盖。"], acceptanceCriteria: ["客户搜索课程、班型和校区时能找到结构化说明。", "客户对收费、退费和服务问题能看到清晰边界。"] },
       { stage: "61-90天", companyActions: hasReputationRisk ? ["复查舆情变化，跟踪相同问题是否继续出现。", "更新公开回应、客户问题内容和处理结果材料。"] : ["按月提供新增课程、案例和客户问题。", "配合复测公开信息表现并校正内容。"], xingmeiDeliverables: ["持续发布、测试、更新和优化内容资产。", "输出阶段复盘和下一轮建设建议。"], acceptanceCriteria: ["核心内容持续更新。", "重点问题和转化入口完成复测，不承诺排名或经营结果。"] },
     ],
     conclusion: [
-      overall === null ? `本次检查完成度为${completion}%，需要先补齐检查范围。` : `${companyName}当前分数为${overall}分，最大问题是公开信息入口和客户决策内容仍不够集中。`,
+      overall === null ? `本次检查完成度为${completion}%，需要先补齐检查范围。` : hasCriticalReputationRisk ? `${companyName}当前分数为${overall}分，最先要处理的是公开舆情造成的信任阻断。` : `${companyName}当前分数为${overall}分，最大问题是公开信息入口和客户决策内容仍不够集中。`,
       "最大机会在于把企业真实资料、公开口碑和争议回应整理成可检索、可理解、可引用的GEO内容资产。",
-      "第一阶段应优先补齐企业身份、官方入口、服务项目、预约咨询和信任信息，再进入持续内容发布和复测。",
+      hasReputationRisk ? `${firstReputationAction}随后再补齐企业身份、服务项目、预约咨询和信任信息。` : "第一阶段应优先补齐企业身份、官方入口、服务项目、预约咨询和信任信息，再进入持续内容发布和复测。",
     ],
     reputation,
     questionSource,

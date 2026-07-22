@@ -15,9 +15,13 @@ type Sentiment = ReputationSignalV1["sentiment"];
 type ResolutionStatus = ReputationSignalV1["resolutionStatus"];
 type EntityMatch = ReputationSignalV1["entityMatch"];
 type EvidenceConfidence = NonNullable<ReputationAndPublicOpinionSnapshotV1["evidenceConfidence"]>;
+type ConfidenceLevel = "LOW" | "MEDIUM" | "HIGH";
 
 export interface ReputationPenaltyBreakdown {
   baseScore: number;
+  reputationNeutralBase: number;
+  positiveReputationBonus: number;
+  preNegativeReputationScore: number;
   validCustomerVisibleNegativeCount: number;
   invalidOrWeakSignalCount: number;
   independentNegativeSourceCount: number;
@@ -25,16 +29,22 @@ export interface ReputationPenaltyBreakdown {
   baseNegativePenalty: number;
   repeatedSourcePenalty: number;
   noResponsePenalty: number;
+  customerDecisionImpactPenalty: number;
   authoritySeverityPenalty: number;
   totalPenalty: number;
   scoreCap: number | null;
   evidenceConfidence: EvidenceConfidence;
+  searchCoverageConfidence: ConfidenceLevel;
+  entityRelationConfidence: ConfidenceLevel;
+  factualSpecificityConfidence: ConfidenceLevel;
+  customerVisibilityConfidence: ConfidenceLevel;
 }
 
 const NEGATIVE_TERMS = ["投诉", "退费", "退款", "虚假宣传", "霸王条款", "纠纷", "合同", "课程缩水", "教学质量", "欺骗", "差评", "维权"];
 const POSITIVE_TERMS = ["好评", "满意", "推荐", "靠谱", "优质", "认可", "口碑好"];
 const OFFICIAL_REGISTRY_DOMAINS = ["qcc.com", "tianyancha.com", "qizhidao.com", "qixin.com", "aiqicha.baidu.com"];
 const NEGATED_RESPONSE_PATTERN = /(?:暂未|未见|没有|缺少|未发现|无)(?:.{0,8})(?:回应|回复|处理|解决|协商)/;
+const NEUTRAL_REPUTATION_BASE_SCORE = 65;
 
 function clean(value: string | undefined | null): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
@@ -161,10 +171,63 @@ function hasDirectAuthorityRisk(signals: readonly ReputationSignalV1[]): boolean
   return signals.some((item) => /法院|人民法院|裁判文书网|wenshu|court\.gov|gov\.cn|监管局|市场监督管理局|行政处罚决定书|被执行人信息/.test(`${item.sourceName} ${item.url}`));
 }
 
+function hasHighDecisionImpact(signals: readonly ReputationSignalV1[]): boolean {
+  return signals.some((signal) =>
+    /正规|付款|退款|退费|合同|履约|服务|司法|经营风险|报名|合作|课程|执行/.test(`${signal.riskTheme} ${signal.title} ${signal.snippet}`),
+  );
+}
+
+function positiveReputationBonus(signals: readonly ReputationSignalV1[]): number {
+  const independentPositiveThemes = new Set<string>();
+  for (const signal of signals) {
+    const text = `${signal.title} ${signal.snippet}`;
+    const isTrustBuilding = signal.sentiment === "POSITIVE"
+      && signal.signalType === "POSITIVE_REVIEW"
+      && (signal.entityMatch === "HIGH" || signal.entityMatch === "MEDIUM")
+      && !/(官网|官方网站|公司简介|企业介绍|工商|注册资本|统一社会信用|存续|小微企业)/.test(text)
+      && /^https?:\/\//.test(signal.url);
+    if (isTrustBuilding) {
+      independentPositiveThemes.add(`${independentSourceKey(signal)}:${signal.riskTheme || signal.signalType}`);
+    }
+  }
+  return Math.min(20, independentPositiveThemes.size * 4);
+}
+
 function evidenceConfidenceFor(signals: readonly ReputationSignalV1[], sourceCoverage: readonly string[]): EvidenceConfidence {
   const uniqueSources = new Set(signals.map(independentSourceKey)).size;
   if (signals.length >= 5 && (uniqueSources >= 2 || sourceCoverage.length >= 2)) return "HIGH";
   if (signals.length >= 2 || sourceCoverage.length >= 1) return "MEDIUM";
+  return "LOW";
+}
+
+function searchCoverageConfidenceFor(signals: readonly ReputationSignalV1[], sourceCoverage: readonly string[], searchedQueryCount = 0): ConfidenceLevel {
+  const uniqueSources = new Set(signals.map(independentSourceKey)).size;
+  if (signals.length >= 5 && (sourceCoverage.length >= 2 || uniqueSources >= 2) && searchedQueryCount >= 4) return "HIGH";
+  if (signals.length >= 2 || sourceCoverage.length >= 1 || searchedQueryCount >= 2) return "MEDIUM";
+  return "LOW";
+}
+
+function entityRelationConfidenceFor(signals: readonly ReputationSignalV1[]): ConfidenceLevel {
+  if (signals.length === 0) return "LOW";
+  const highCount = signals.filter((signal) => signal.entityMatch === "HIGH").length;
+  if (highCount === signals.length || highCount >= 2) return "HIGH";
+  if (signals.some((signal) => signal.entityMatch === "HIGH" || signal.entityMatch === "MEDIUM")) return "MEDIUM";
+  return "LOW";
+}
+
+function factualSpecificityConfidenceFor(negativeSignals: readonly ReputationSignalV1[]): ConfidenceLevel {
+  if (negativeSignals.length === 0) return "LOW";
+  const detailed = negativeSignals.filter((signal) => /案号|判决|裁定|执行标的|行政处罚决定书|投诉编号|订单|合同编号|已解决|处理结果/.test(`${signal.title} ${signal.snippet}`)).length;
+  if (detailed >= 2 || hasDirectAuthorityRisk(negativeSignals)) return "HIGH";
+  if (negativeSignals.some((signal) => hasConcreteNegativeIssue(`${signal.title} ${signal.snippet}`))) return "MEDIUM";
+  return "LOW";
+}
+
+function customerVisibilityConfidenceFor(signals: readonly ReputationSignalV1[]): ConfidenceLevel {
+  if (signals.length === 0) return "LOW";
+  const visibleCount = signals.filter((signal) => /^https?:\/\//.test(signal.url) && (signal.entityMatch === "HIGH" || signal.entityMatch === "MEDIUM")).length;
+  if (visibleCount >= 3) return "HIGH";
+  if (visibleCount > 0) return "MEDIUM";
   return "LOW";
 }
 
@@ -173,7 +236,8 @@ export function reputationPenaltyBreakdown(
   responses: readonly ReputationSignalV1[],
   allSignals: readonly ReputationSignalV1[] = negativeSignals,
   sourceCoverage: readonly string[] = [],
-  baseScore = 82,
+  baseScore = NEUTRAL_REPUTATION_BASE_SCORE,
+  searchedQueryCount = 0,
 ): ReputationPenaltyBreakdown {
   const validSignals = negativeSignals.filter(isCustomerVisibleNegative);
   const byTheme = new Map<string, ReputationSignalV1[]>();
@@ -190,20 +254,26 @@ export function reputationPenaltyBreakdown(
   const baseNegativePenalty = validCustomerVisibleNegativeCount > 0 ? 20 : 0;
   const repeatedSourcePenalty = independentNegativeSourceCount >= 2 ? 5 : 0;
   const noResponsePenalty = validCustomerVisibleNegativeCount > 0 && responses.length === 0 ? 5 : 0;
+  const customerDecisionImpactPenalty = validCustomerVisibleNegativeCount > 0 && hasHighDecisionImpact(validSignals) ? 5 : 0;
   const directAuthority = hasDirectAuthorityRisk(validSignals);
   const authoritySeverityPenalty = directAuthority ? 10 : 0;
+  const bonus = positiveReputationBonus(allSignals);
+  const preNegativeReputationScore = Math.min(100, baseScore + bonus);
   const totalPenalty = validCustomerVisibleNegativeCount > 0
-    ? Math.min(45, Math.max(20, baseNegativePenalty + repeatedSourcePenalty + noResponsePenalty + authoritySeverityPenalty))
+    ? Math.min(45, Math.max(20, baseNegativePenalty + repeatedSourcePenalty + noResponsePenalty + customerDecisionImpactPenalty + authoritySeverityPenalty))
     : 0;
   const scoreCap = directAuthority
-    ? 50
+    ? 45
     : independentNegativeSourceCount >= 2 && responses.length === 0
-      ? 57
+      ? 44
       : validCustomerVisibleNegativeCount > 0
-        ? 62
+        ? 45
         : null;
   return {
     baseScore,
+    reputationNeutralBase: baseScore,
+    positiveReputationBonus: bonus,
+    preNegativeReputationScore,
     validCustomerVisibleNegativeCount,
     invalidOrWeakSignalCount: Math.max(0, negativeSignals.length - validCustomerVisibleNegativeCount),
     independentNegativeSourceCount,
@@ -211,10 +281,15 @@ export function reputationPenaltyBreakdown(
     baseNegativePenalty,
     repeatedSourcePenalty,
     noResponsePenalty,
+    customerDecisionImpactPenalty,
     authoritySeverityPenalty,
     totalPenalty,
     scoreCap,
     evidenceConfidence: evidenceConfidenceFor(allSignals, sourceCoverage),
+    searchCoverageConfidence: searchCoverageConfidenceFor(allSignals, sourceCoverage, searchedQueryCount),
+    entityRelationConfidence: entityRelationConfidenceFor(validSignals.length > 0 ? validSignals : allSignals),
+    factualSpecificityConfidence: factualSpecificityConfidenceFor(validSignals),
+    customerVisibilityConfidence: customerVisibilityConfidenceFor(validSignals.length > 0 ? validSignals : allSignals),
   };
 }
 
@@ -224,14 +299,15 @@ export function reputationDeductionFromSignals(negativeSignals: readonly Reputat
 
 function riskLevelFromPenalty(score: number, breakdown: ReputationPenaltyBreakdown): ReputationAndPublicOpinionSnapshotV1["riskLevel"] {
   if (breakdown.validCustomerVisibleNegativeCount === 0) return "LOW";
-  if (score < 45 || breakdown.authoritySeverityPenalty >= 10 || breakdown.concreteNegativeThemes.length >= 2) return "HIGH";
+  if (breakdown.independentNegativeSourceCount >= 2 && breakdown.noResponsePenalty > 0) return "HIGH";
+  if (score <= 44 || breakdown.authoritySeverityPenalty >= 10 || breakdown.customerDecisionImpactPenalty > 0) return "HIGH";
   return "MEDIUM";
 }
 
 function scoreFromSignals(negativeSignals: readonly ReputationSignalV1[], positives: readonly ReputationSignalV1[], responses: readonly ReputationSignalV1[], allSignals: readonly ReputationSignalV1[], sourceCoverage: readonly string[]): number {
   const breakdown = reputationPenaltyBreakdown(negativeSignals, responses, allSignals, sourceCoverage);
-  const responseCredit = responses.length > 0 ? Math.min(3, responses.length) : 0;
-  const raw = breakdown.baseScore - breakdown.totalPenalty + responseCredit;
+  void positives;
+  const raw = breakdown.preNegativeReputationScore - breakdown.totalPenalty;
   const capped = breakdown.scoreCap === null ? raw : Math.min(raw, breakdown.scoreCap);
   return Math.max(0, Math.min(100, capped));
 }
@@ -263,7 +339,7 @@ export function buildReputationSnapshot(input: {
     signals.some((signal) => signal.sourceCategory === category),
   );
   const score = scoreFromSignals(complaintSignals, positiveSignals, responseSignals, signals, sourceCoverage);
-  const breakdown = reputationPenaltyBreakdown(complaintSignals, responseSignals, signals, sourceCoverage);
+  const breakdown = reputationPenaltyBreakdown(complaintSignals, responseSignals, signals, sourceCoverage, NEUTRAL_REPUTATION_BASE_SCORE, input.searchedQueries.length);
   const riskLevel = riskLevelFromPenalty(score, breakdown);
   return {
     diagnosisId: input.diagnosisId,
@@ -280,7 +356,14 @@ export function buildReputationSnapshot(input: {
     responseSignals,
     overallReputationScore: score,
     reputationHealthScore: score,
+    reputationNeutralBase: breakdown.reputationNeutralBase,
+    positiveReputationBonus: breakdown.positiveReputationBonus,
+    preNegativeReputationScore: breakdown.preNegativeReputationScore,
     evidenceConfidence: breakdown.evidenceConfidence,
+    searchCoverageConfidence: breakdown.searchCoverageConfidence,
+    entityRelationConfidence: breakdown.entityRelationConfidence,
+    factualSpecificityConfidence: breakdown.factualSpecificityConfidence,
+    customerVisibilityConfidence: breakdown.customerVisibilityConfidence,
     riskLevel,
     summary: summaryFor(complaintSignals, responseSignals, score),
     evidenceIds: Array.from(new Set(signals.map((item) => item.evidenceId))),

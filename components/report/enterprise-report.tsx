@@ -381,6 +381,10 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
     improvement: report.coreIssues.filter((issue) => issue.priority === "P1"),
     continuous: report.coreIssues.filter((issue) => issue.priority === "P2"),
   };
+  const hasHighReputationRisk = reputationSummary.negativeSignalCount > 0 && reputationSummary.riskLevel === "HIGH";
+  const firstRecommendedAction = hasHighReputationRisk
+    ? "先核实和处理公开负面舆情，整理事实、处理状态和统一回应入口。"
+    : "优先完成企业信任信息、核心服务说明和客户高频问题内容的统一梳理，让客户在搜索后能更快理解企业、建立信任并发起咨询。";
   return (
     <div className="min-h-screen bg-[#f7f8f4] pb-20 text-[16px] leading-[1.75] text-stone-800 md:text-[17px] md:leading-[1.72]">
       <div className="mx-auto max-w-[1040px] px-4 py-6 sm:px-6 lg:px-8">
@@ -410,7 +414,7 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
               <div className="rounded-lg border border-emerald-900/10 bg-emerald-50 p-4">
                 <p className="text-[14px] font-medium text-emerald-900">当前建议先启动的一件事</p>
                 <p className="mt-2 text-[16px] leading-[1.7] text-stone-800">
-                  优先完成企业信任信息、核心服务说明和客户高频问题内容的统一梳理，让客户在搜索后能更快理解企业、建立信任并发起咨询。
+                  {firstRecommendedAction}
                 </p>
               </div>
               {reputationSummary.negativeSignalCount > 0 ? (
@@ -584,6 +588,12 @@ function ReputationCustomerSection({ report, dimension }: { report: NonNullable<
           <p className="text-[14px] text-stone-500">风险等级 {reputationRiskLabel(summary.riskLevel)}</p>
         </div>
         <p className="mt-2 text-[16px] leading-[1.72] text-stone-700">客户结论：{summary.summary}</p>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-[14px] text-stone-600 md:grid-cols-4">
+          <span>检索覆盖 {summary.searchCoverageConfidence}</span>
+          <span>主体关联 {summary.entityRelationConfidence}</span>
+          <span>事实具体性 {summary.factualSpecificityConfidence}</span>
+          <span>客户可见度 {summary.customerVisibilityConfidence}</span>
+        </div>
       </div>
 
       {summary.issueThemes.length > 0 ? (
