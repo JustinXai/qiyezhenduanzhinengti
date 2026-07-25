@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { mergeSearchResults, shouldSupplementSearch } from "../../src/diagnosis/search/search-supplement";
+import {
+  filterSearchResultsForDiagnosis,
+  mergeSearchResults,
+  shouldSupplementSearch,
+} from "../../src/diagnosis/search/search-supplement";
 import type { WebSearchResultItem } from "../../src/providers/types";
 
 function item(overrides: Partial<WebSearchResultItem>): WebSearchResultItem {
@@ -50,5 +54,34 @@ describe("search supplement trigger", () => {
       "https://brand.example.com/a",
       "https://brand.example.com/b",
     ]);
+  });
+
+  it("filters same-name companies and generic documents from the evidence pool", () => {
+    const filtered = filterSearchResultsForDiagnosis(
+      [
+        item({
+          title: "北京智邦智程科技发展有限公司 LaunchMind AI 项目介绍",
+          url: "https://www.iu-talents.com/launchmind",
+        }),
+        item({
+          title: "北京智邦国际软件技术有限公司",
+          url: "https://www.zbintel.com/",
+          snippet: "企业管理软件",
+        }),
+        item({
+          title: "货物交付流程",
+          url: "https://generic.example.com/delivery",
+          snippet: "订单确认和交付流程参考",
+        }),
+      ],
+      {
+        brandName: "北京智邦智程科技发展有限公司",
+        websiteHost: "iu-talents.com",
+        industry: "青少年职业与创业教育",
+        productOrService: "LaunchMind AI 职业和创业教育",
+      },
+    );
+
+    expect(filtered.map((entry) => entry.url)).toEqual(["https://www.iu-talents.com/launchmind"]);
   });
 });

@@ -36,7 +36,11 @@ import {
   type GuardedCrawler,
 } from "../../security/crawler/guarded-crawler";
 import { planSearchQueries } from "../search/query-planner";
-import { mergeSearchResults, shouldSupplementSearch } from "../search/search-supplement";
+import {
+  filterSearchResultsForDiagnosis,
+  mergeSearchResults,
+  shouldSupplementSearch,
+} from "../search/search-supplement";
 import { normalizeEvidence } from "../evidence/normalize";
 import { curateEvidence } from "../evidence/tiering";
 import { resolveCompetitors } from "../competitors/resolve";
@@ -426,8 +430,17 @@ export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): Evid
         );
       }
 
+      const relevantResults = filterSearchResultsForDiagnosis(results, {
+        brandName: resolvedBrand(input),
+        websiteHost: host,
+        industry: input.industry ?? "",
+        productOrService: input.productOrService ?? "",
+        competitors: competitorNames(input.competitors),
+        competitorDomains: resolution.resolvedDomains,
+      });
+
       const data: RealSearchData = {
-        results,
+        results: relevantResults,
         companyDomains: host ? [host] : [],
         competitorDomains: resolution.resolvedDomains,
         executedQueries,
