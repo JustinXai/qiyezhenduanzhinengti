@@ -150,9 +150,16 @@ describe("customer readability polish report", () => {
   it("turns insufficient-evidence scans into a GEO service start page, not a report", () => {
     const html = renderCustomerReport();
     expect(html).toContain("企业GEO建设启动建议");
+    expect(html).toContain("风险警示");
+    expect(html).toContain("资料缺失型");
+    expect(html).toContain("当前客户感知风险");
+    expect(html).toContain("非经营评分，是公开信息成交阻力判断");
     expect(html).toContain("暂不生成诊断报告");
     expect(html).toContain("需要先补齐可被客户和AI引用的公开资料基础");
     expect(html).toContain("数字化和网络化基础还没有形成");
+    expect(html).toContain("这属于哪一种GEO成交风险");
+    expect(html).toContain("舆情阻断型");
+    expect(html).toContain("可见度不足型");
     expect(html).toContain("GEO成交准备度缺口");
     expect(html).toContain("AI可见度曝光");
     expect(html).toContain("舆情与信任阻力");
@@ -161,6 +168,10 @@ describe("customer readability polish report", () => {
     expect(html).toContain("首期应搭配服务");
     expect(html).toContain("报告要回答客户为什么现在需要买GEO服务");
     expect(html).toContain("首期GEO服务应该先做什么");
+    expect(html).toContain("30/60/90天GEO建设计划");
+    expect(html).toContain("0-30天");
+    expect(html).toContain("31-60天");
+    expect(html).toContain("61-90天");
     expect(html).toContain("预约GEO建设沟通");
     expect(html).not.toContain("综合诊断指数");
     expect(html).not.toContain("评分结构");

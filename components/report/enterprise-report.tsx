@@ -521,7 +521,9 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
         industry={report.overview.industry}
         region={report.overview.region}
         reportDate={report.overview.reportDate}
+        readinessScore={limited.readinessScore}
         contentPlans={report.contentPlans}
+        roadmap={report.roadmap}
         requestedMaterials={limited.requestedMaterials}
         reputation={report.reputation}
       />
@@ -702,14 +704,18 @@ function InsufficientEvidenceGEOPage({
   industry,
   region,
   reportDate,
+  readinessScore,
   contentPlans,
+  roadmap,
   requestedMaterials,
   reputation,
 }: {
   companyName: string;
   industry: string;
   region: string;
+  readinessScore: LimitedReportDataV1["readinessScore"];
   contentPlans: NonNullable<LimitedReportDataV1["mvpReport"]>["contentPlans"];
+  roadmap: NonNullable<LimitedReportDataV1["mvpReport"]>["roadmap"];
   requestedMaterials: LimitedReportDataV1["requestedMaterials"];
   reputation?: ReputationAndPublicOpinionSnapshotV1;
   reportDate: string;
@@ -717,6 +723,7 @@ function InsufficientEvidenceGEOPage({
   const primaryPlans = contentPlans.slice(0, 4);
   const materials = requestedMaterials.slice(0, 6);
   const salesReadinessRows = buildLimitedSalesReadinessRows(reputation);
+  const situation = limitedReportSituation(readinessScore, reputation);
   return (
     <div className="min-h-screen bg-slate-50 pb-16 text-[16px] leading-[1.75] text-slate-800 md:text-[17px] md:leading-[1.72] print:bg-white">
       <div className="mx-auto max-w-[980px] px-4 py-6 sm:px-6 lg:px-8">
@@ -732,7 +739,7 @@ function InsufficientEvidenceGEOPage({
           <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-[680px]">
-                <p className="text-[14px] font-semibold text-emerald-800">暂不生成诊断报告</p>
+                <p className="text-[14px] font-semibold text-rose-700">风险警示 · {situation.label} · 暂不生成诊断报告</p>
                 <h1 className="mt-2 break-words text-[28px] font-semibold leading-[1.18] text-slate-950 md:text-[38px]">
                   {companyName} 需要先补齐可被客户和AI引用的公开资料基础
                 </h1>
@@ -741,15 +748,17 @@ function InsufficientEvidenceGEOPage({
                   <span className="rounded border border-slate-200 bg-white px-3 py-1">{region}</span>
                 </div>
                 <p className="mt-4 text-[18px] leading-[1.75] text-slate-700">
-                  本次公开资料不足以支撑一份可信诊断报告。对企业来说，这不是分数问题，而是数字化和网络化基础还没有形成：客户搜索时难以一次看清企业是谁、提供什么、是否可信、如何咨询；AI问答也缺少稳定、可引用的企业事实材料。
+                  {situation.summary}
                 </p>
               </div>
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 lg:w-[260px]">
-                <p className="text-[14px] font-semibold">当前最适合推进</p>
-                <p className="mt-2 text-[24px] font-semibold leading-tight">GEO基础建设</p>
-                <p className="mt-2 text-[14px] leading-[1.65]">
-                  先把企业真实资料整理成官网、客户问题、服务说明和信任内容，再进行正式诊断和复测。
-                </p>
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-950 lg:w-[280px]">
+                <p className="text-[14px] font-semibold">当前客户感知风险</p>
+                <p className="mt-2 text-[40px] font-semibold leading-none">{situation.riskScore}</p>
+                <p className="mt-1 text-[13px] font-medium text-rose-700">非经营评分，是公开信息成交阻力判断</p>
+                <div className="mt-3 h-2 overflow-hidden rounded bg-white">
+                  <div className="h-full rounded bg-rose-700" style={{ width: `${situation.riskScore}%` }} />
+                </div>
+                <p className="mt-3 text-[15px] font-semibold leading-[1.55]">{situation.primaryAction}</p>
               </div>
             </div>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -759,11 +768,11 @@ function InsufficientEvidenceGEOPage({
           </section>
 
           <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
-            <h2 className="text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">为什么不能直接给出报告</h2>
+            <h2 className="text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">这属于哪一种GEO成交风险</h2>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <InsightCard title="客户看不到完整答案" body="公开入口不足时，客户需要在多个页面和平台之间拼接信息，咨询前的理解和信任成本会变高。" />
-              <InsightCard title="AI缺少可引用材料" body="AI问答更容易引用结构清晰、来源稳定的公开内容；企业资料分散时，回答容易停留在模糊介绍。" />
-              <InsightCard title="诊断结论无法稳固" body="没有足够正文、官网或可核验来源时，强行输出分数和结论会误导客户，也无法指导后续建设。" />
+              <SituationCard active={situation.kind === "NO_DATA"} title="1. 资料缺失型" body="客户和AI找不到足够资料，不能判断企业是谁、做什么、凭什么可信。重点不是打低分，而是先把可被引用的数字化信源建起来。" />
+              <SituationCard active={situation.kind === "BAD_REPUTATION"} title="2. 舆情阻断型" body="客户能搜到企业，但负面、投诉、退费或争议信息更醒目。先处理事实核实、回应说明和信任修复，否则曝光越多阻力越大。" />
+              <SituationCard active={situation.kind === "LOW_VISIBILITY"} title="3. 可见度不足型" body="企业有部分资料，舆情也不算差，但AI和客户问题覆盖弱。需要建设内容资产、FAQ、案例和咨询路径，把曝光转成咨询。" />
             </div>
           </section>
 
@@ -805,6 +814,16 @@ function InsufficientEvidenceGEOPage({
             <h2 className="text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">首期GEO服务应该先做什么</h2>
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
               {primaryPlans.map((plan) => <PlanBlock key={plan.title} plan={plan} />)}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
+            <h2 className="text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">30/60/90天GEO建设计划</h2>
+            <p className="mt-2 text-[16px] leading-[1.7] text-slate-600">
+              这不是内部项目排期，而是给客户看的建设路径：先解决“看不到”，再解决“看不懂、不信任”，最后进入持续复测。
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {roadmap.map((stage, index) => <RoadmapStage key={stage.stage} stage={stage} index={index} />)}
             </div>
           </section>
 
@@ -875,6 +894,50 @@ function buildLimitedSalesReadinessRows(reputation?: ReputationAndPublicOpinionS
       servicePackage: "咨询入口页 + 首访诊断表 + 销售链接包",
     },
   ];
+}
+
+function SituationCard({ active, title, body }: { active: boolean; title: string; body: string }) {
+  return (
+    <article className={`rounded-lg border p-4 ${active ? "border-rose-200 bg-rose-50 text-rose-950" : "border-slate-200 bg-white text-slate-800"}`}>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-[18px] font-semibold md:text-[19px]">{title}</h3>
+        {active && <span className="rounded bg-white px-2.5 py-1 text-[13px] font-semibold text-rose-800">当前状态</span>}
+      </div>
+      <p className={`mt-2 text-[16px] leading-[1.72] ${active ? "text-rose-900" : "text-slate-600"}`}>{body}</p>
+    </article>
+  );
+}
+
+function limitedReportSituation(
+  readinessScore: LimitedReportDataV1["readinessScore"],
+  reputation?: ReputationAndPublicOpinionSnapshotV1,
+) {
+  const hasReputationRisk = Boolean(reputation && reputation.complaintSignals.length > 0 && reputation.riskLevel !== "UNKNOWN");
+  if (hasReputationRisk) {
+    return {
+      kind: "BAD_REPUTATION" as const,
+      label: "舆情阻断型",
+      riskScore: 90,
+      primaryAction: "先做舆情核实、回应口径和信任修复，再扩大AI曝光。",
+      summary: "本次公开资料还不足以支撑正式诊断，同时已经出现客户可见的风险或争议信号。对企业来说，问题不是简单低分，而是客户搜索后可能先看到阻力：如果没有统一回应、事实说明和信任内容，AI可见度越高，客户疑虑也会被同步放大。",
+    };
+  }
+  if (readinessScore.checkedWeight < 0.35 || readinessScore.score === null) {
+    return {
+      kind: "NO_DATA" as const,
+      label: "资料缺失型",
+      riskScore: 85,
+      primaryAction: "先把企业事实、服务说明、信任依据和咨询入口做成可引用信源。",
+      summary: "本次公开资料不足以支撑一份可信诊断报告。对企业来说，这不是分数问题，而是数字化和网络化基础还没有形成：客户搜索时难以一次看清企业是谁、提供什么、是否可信、如何咨询；AI问答也缺少稳定、可引用的企业事实材料。",
+    };
+  }
+  return {
+    kind: "LOW_VISIBILITY" as const,
+    label: "可见度不足型",
+    riskScore: 72,
+    primaryAction: "围绕客户高频问题补齐内容资产，并持续复测AI问答表现。",
+    summary: "企业已经有一定公开资料，也没有形成高风险舆情结论，但客户和AI仍难以获得完整、结构化、可引用的答案。此时报告重点应从基础建档转向客户问题覆盖、服务内容表达、案例信任和咨询转化路径建设。",
+  };
 }
 
 function customerSummary(hasHighReputationRisk = false) {
