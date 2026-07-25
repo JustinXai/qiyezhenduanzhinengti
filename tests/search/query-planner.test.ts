@@ -53,14 +53,15 @@ describe("planSearchQueries", () => {
     expect(categories.has("COMPETITOR_COMPARISON")).toBe(true);
   });
 
-  it("keeps reputation queries before purchase and competitor queries", () => {
+  it("puts sales-readiness queries before reputation and competitor queries", () => {
     const queries = planSearchQueries(makeProfile());
     const firstReputation = queries.findIndex((q) => q.category === "REPUTATION_REVIEW");
     const firstPurchase = queries.findIndex((q) => q.category === "PURCHASE_DECISION");
     const firstCompetitor = queries.findIndex((q) => q.category === "COMPETITOR_COMPARISON");
     expect(firstReputation).toBeGreaterThan(-1);
-    expect(firstPurchase).toBeGreaterThan(firstReputation);
-    expect(firstCompetitor).toBeGreaterThan(firstReputation);
+    expect(firstPurchase).toBeGreaterThan(-1);
+    expect(firstPurchase).toBeLessThan(firstReputation);
+    expect(firstCompetitor).toBeGreaterThan(firstPurchase);
   });
 
   it("includes a bare brand query and a competitor comparison for each competitor", () => {
@@ -75,6 +76,9 @@ describe("planSearchQueries", () => {
     const queries = planSearchQueries(makeProfile());
     const purchase = queries.filter((q) => q.category === "PURCHASE_DECISION").map((q) => q.query);
     expect(purchase).toContain("官网未明确说明典型交付周期");
+    expect(purchase).toContain("示例智能装备 适合谁 不适合谁");
+    expect(purchase).toContain("示例智能装备 团队 资质");
+    expect(purchase).toContain("示例智能装备 交付流程 交付物");
   });
 
   it("handles an empty competitor list without producing competitor queries", () => {

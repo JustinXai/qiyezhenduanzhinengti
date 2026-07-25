@@ -66,6 +66,34 @@ function clean(value: string | undefined | null): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function buildSalesReadinessQueries(profile: CompanyProfileInput): string[] {
+  const brand = clean(profile.brandName);
+  const productOrService = clean(profile.productOrService);
+  const unresolvedQuestions = (profile.unresolvedQuestions ?? []).map(clean).filter(Boolean).slice(0, 3);
+  const queries: string[] = [];
+
+  if (brand) {
+    queries.push(
+      `${brand} 适合谁 不适合谁`,
+      `${brand} 团队 资质`,
+      `${brand} 交付流程 交付物`,
+      `${brand} 案例 评价`,
+      `${brand} 隐私 说明`,
+      `${brand} 收费 价格`,
+    );
+  }
+
+  if (productOrService && brand) {
+    queries.push(
+      `${brand} ${productOrService} 交付`,
+      `${brand} ${productOrService} 适合谁`,
+    );
+  }
+
+  queries.push(...unresolvedQuestions);
+  return queries;
+}
+
 // ---------------------------------------------------------------------------
 // Official-domain resolution queries (Agent I).
 //
@@ -149,26 +177,31 @@ export function planSearchQueries(
     if (productOrService) {
       push(`${brand} ${productOrService}`, "BRAND_DIRECT");
     }
+  }
+
+  // --- 成交准备度 / 客户决策 -----------------------------------------------
+  // Prioritize the questions that determine whether GEO can be sold:
+  // who it fits, what is delivered, who is behind it, and what evidence exists.
+  if (brand) {
+    for (const query of buildSalesReadinessQueries(profile)) {
+      push(query, "PURCHASE_DECISION");
+    }
+  }
+
+  // Keep a minimal dedicated reputation bucket in the main plan so the output
+  // still contains the trust-vs-conversion signal without crowding out the
+  // sales-readiness questions above.
+  if (brand) {
     for (const query of buildReputationQueries({
       brandName: brand,
       industry,
       productOrService,
       targetRegion: region,
-    }, 4)) {
+    }, 1)) {
       push(query, "REPUTATION_REVIEW");
     }
   }
 
-  // --- 信任证据 / 渠道 / 社区 (Round-5.1 §五 中文桶 6/8/9) -------------------
-  // Chinese trust, marketplace and community buckets so the domestic web is the
-  // PRIMARY evidence source (ZH_CN_PRIMARY_WITH_OFFICIAL_FALLBACK).
-  if (brand) {
-    push(`${brand} 案例 资质 认证`, "BRAND_DIRECT");
-    push(`${brand} 旗舰店`, "BRAND_DIRECT");
-    push(`${brand} 知乎 评测`, "BRAND_DIRECT");
-    push(`${brand} 售后 服务 保障`, "BRAND_DIRECT");
-    push(`${brand} 渠道 经销 合作`, "BRAND_DIRECT");
-  }
   if (productOrService) {
     push(`${productOrService} 使用场景`, "PURCHASE_DECISION");
   }

@@ -416,7 +416,7 @@ describe("ZH_CN_PRIMARY_WITH_OFFICIAL_FALLBACK query policy", () => {
       unresolvedQuestions: [],
     }).map((q) => q.query);
     const joined = queries.join("\n");
-    for (const marker of ["官网", "口碑", "案例", "旗舰店", "知乎", "媒体", "如何选择", "对比"]) {
+    for (const marker of ["官网", "口碑", "案例", "适合谁", "团队", "交付", "收费", "如何选择", "对比"]) {
       expect(joined).toContain(marker);
     }
   });
