@@ -61,9 +61,8 @@ function hasCrawledEvidence(evidence: readonly EvidenceItem[]): boolean {
   );
 }
 
-function hasPublishedDiagnosticContent(report: DiagnosisReport): boolean {
+function hasActionableDiagnosticContent(report: DiagnosisReport): boolean {
   return (
-    report.strengths.length > 0 ||
     report.coreIssues.length > 0 ||
     report.geoOpportunities.length > 0 ||
     report.competitorGaps.length > 0 ||
@@ -136,7 +135,7 @@ export function evaluateCompletionProfile(
   if (!input.coverage.boundaryEstablished) reasons.push("EVIDENCE_COVERAGE_NOT_ESTABLISHED");
   if (providerFailed) reasons.push("PROVIDER_UNAVAILABLE_OR_FAILED");
   if ((input.report.scores.scoreCoverage ?? 0) < 0.7) reasons.push("SCORE_COVERAGE_BELOW_THRESHOLD");
-  if (!hasPublishedDiagnosticContent(input.report)) reasons.push("NO_PUBLISHED_DIAGNOSTIC_CONTENT");
+  if (!hasActionableDiagnosticContent(input.report)) reasons.push("NO_ACTIONABLE_DIAGNOSTIC_CONTENT");
 
   const full =
     hasWebsite &&
@@ -152,7 +151,7 @@ export function evaluateCompletionProfile(
     input.coverage.boundaryEstablished &&
     !providerFailed &&
     (input.report.scores.scoreCoverage ?? 0) >= 0.7 &&
-    hasPublishedDiagnosticContent(input.report);
+    hasActionableDiagnosticContent(input.report);
 
   return {
     diagnosisId: input.diagnosisId,
