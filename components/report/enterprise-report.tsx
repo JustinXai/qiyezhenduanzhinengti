@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { EnterpriseReportViewModel, LimitedReportDataV1 } from "../../src/contracts";
+import type { EnterpriseReportViewModel, LimitedReportDataV1, ReputationAndPublicOpinionSnapshotV1 } from "../../src/contracts";
 import { ScoreHeadline } from "./score-card";
 import { formatDate } from "./labels";
 import { PRIMARY_CTA_LABEL, SECONDARY_CTA_LABEL, SERVICE_BRAND_NAME } from "../../src/product/customer-copy";
@@ -112,6 +112,7 @@ export function EnterpriseReport({ vm }: EnterpriseReportProps) {
               {vm.enterpriseStatusDescription ?? vm.topStrength?.statement ?? "企业已在公开渠道具备基础信息展示。"}
             </p>
           </div>
+          <FullSalesReadinessBlock vm={vm} />
         </Section>
 
         {/* Module 03: 客户需求与信息机会 */}
@@ -217,6 +218,69 @@ function Section({ index, title, children, className = "" }: SectionProps) {
       <div className="p-4">{children}</div>
     </section>
   );
+}
+
+function FullSalesReadinessBlock({ vm }: { vm: EnterpriseReportViewModel }) {
+  const rows = buildFullSalesReadinessRows(vm);
+  return (
+    <div className="mt-4 rounded-lg border border-neutral-200 bg-white p-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold text-emerald-700">销售判断</p>
+          <h3 className="mt-1 text-base font-semibold text-neutral-900">GEO成交准备度</h3>
+        </div>
+        <p className="max-w-[360px] text-xs leading-relaxed text-neutral-500">
+          报告要回答客户为什么现在需要买GEO服务，而不是只看分数。
+        </p>
+      </div>
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {rows.map((row) => (
+          <article key={row.title} className="rounded-lg border border-neutral-100 bg-neutral-50 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold text-neutral-900">{row.title}</h4>
+              <span className="rounded bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-500">{row.status}</span>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-neutral-600">{row.salesImpact}</p>
+            <p className="mt-2 rounded bg-emerald-50 px-2 py-1.5 text-xs font-medium leading-relaxed text-emerald-900">
+              应卖服务：{row.servicePackage}
+            </p>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function buildFullSalesReadinessRows(vm: EnterpriseReportViewModel) {
+  const hasMeasuredAi = vm.measurementComposition.measuredWeight > 0;
+  const hasContentPlans = vm.contentAssetPlans.length > 0;
+  const hasCompetitorSignal = Boolean(vm.competitorObservations && vm.competitorObservations.length > 0);
+  return [
+    {
+      title: "AI可见度曝光",
+      status: hasMeasuredAi ? "已纳入诊断" : "需持续复测",
+      salesImpact: "企业需要把品牌事实、服务解释和客户问题整理成稳定页面，才有机会被AI和搜索正确引用。",
+      servicePackage: "AI问题库、品牌事实页、服务页、阶段复测",
+    },
+    {
+      title: "舆情与信任阻力",
+      status: "必须保留",
+      salesImpact: "客户搜索后是否继续咨询，取决于公开舆情、案例、资质、服务边界和回应机制是否能消除顾虑。",
+      servicePackage: "舆情核实、信任内容资产、公开回应入口",
+    },
+    {
+      title: "客户决策阻力",
+      status: hasContentPlans ? "已有方向" : "需补内容",
+      salesImpact: "如果客户关心的问题没有公开答案，销售就要反复解释，成交周期会被拉长。",
+      servicePackage: "客户FAQ、适合人群说明、案例与交付页",
+    },
+    {
+      title: "竞争与转化路径",
+      status: hasCompetitorSignal ? "已有观察" : "证据不足",
+      salesImpact: "客户会拿同行公开信息做比较；企业也需要清晰咨询入口，把搜索曝光转成可跟进线索。",
+      servicePackage: "同行信源对照、咨询入口页、销售链接包",
+    },
+  ];
 }
 
 function HighlightItem({ label, text }: { label: string; text: string }) {
@@ -459,6 +523,7 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
         reportDate={report.overview.reportDate}
         contentPlans={report.contentPlans}
         requestedMaterials={limited.requestedMaterials}
+        reputation={report.reputation}
       />
     );
   }
@@ -639,16 +704,19 @@ function InsufficientEvidenceGEOPage({
   reportDate,
   contentPlans,
   requestedMaterials,
+  reputation,
 }: {
   companyName: string;
   industry: string;
   region: string;
   contentPlans: NonNullable<LimitedReportDataV1["mvpReport"]>["contentPlans"];
   requestedMaterials: LimitedReportDataV1["requestedMaterials"];
+  reputation?: ReputationAndPublicOpinionSnapshotV1;
   reportDate: string;
 }) {
   const primaryPlans = contentPlans.slice(0, 4);
   const materials = requestedMaterials.slice(0, 6);
+  const salesReadinessRows = buildLimitedSalesReadinessRows(reputation);
   return (
     <div className="min-h-screen bg-slate-50 pb-16 text-[16px] leading-[1.75] text-slate-800 md:text-[17px] md:leading-[1.72] print:bg-white">
       <div className="mx-auto max-w-[980px] px-4 py-6 sm:px-6 lg:px-8">
@@ -700,6 +768,40 @@ function InsufficientEvidenceGEOPage({
           </section>
 
           <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-[14px] font-semibold text-emerald-800">销售判断</p>
+                <h2 className="mt-1 text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">GEO成交准备度缺口</h2>
+              </div>
+              <p className="max-w-[360px] text-[15px] leading-[1.65] text-slate-500">
+                我们要卖的不是一份报告，而是让客户和AI能正确理解、引用、信任并发起咨询的公开信息系统。
+              </p>
+            </div>
+            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
+              {salesReadinessRows.map((row) => (
+                <div key={row.title} className="grid grid-cols-1 border-b border-slate-200 last:border-b-0 lg:grid-cols-[170px_minmax(0,1fr)_minmax(0,1fr)_220px]">
+                  <div className="bg-slate-50 p-4">
+                    <p className="text-[16px] font-semibold text-slate-950">{row.title}</p>
+                    <p className="mt-1 text-[13px] font-medium text-slate-500">{row.status}</p>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-[13px] font-semibold text-slate-500">当前缺口</p>
+                    <p className="mt-1 text-[15px] leading-[1.65] text-slate-700">{row.currentGap}</p>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-[13px] font-semibold text-slate-500">为什么影响成交</p>
+                    <p className="mt-1 text-[15px] leading-[1.65] text-slate-700">{row.salesImpact}</p>
+                  </div>
+                  <div className="bg-emerald-50 p-4">
+                    <p className="text-[13px] font-semibold text-emerald-800">首期应卖服务</p>
+                    <p className="mt-1 text-[15px] font-medium leading-[1.65] text-emerald-950">{row.servicePackage}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
             <h2 className="text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">首期GEO服务应该先做什么</h2>
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
               {primaryPlans.map((plan) => <PlanBlock key={plan.title} plan={plan} />)}
@@ -735,6 +837,44 @@ function InsufficientEvidenceGEOPage({
       </div>
     </div>
   );
+}
+
+function buildLimitedSalesReadinessRows(reputation?: ReputationAndPublicOpinionSnapshotV1) {
+  const hasReputationRisk = Boolean(reputation && reputation.complaintSignals.length > 0 && reputation.riskLevel !== "UNKNOWN");
+  return [
+    {
+      title: "AI可见度曝光",
+      status: "需要先建信源",
+      currentGap: "公开资料还没有形成稳定、结构化、可引用的企业事实页和客户问题答案页。",
+      salesImpact: "AI和搜索只能引用已公开、可抓取、表达清楚的内容；信息分散时，客户问AI也难得到正确介绍。",
+      servicePackage: "品牌事实页 + AI问答内容库 + 阶段复测",
+    },
+    {
+      title: "舆情与信任阻力",
+      status: hasReputationRisk ? "优先核实" : "仍需建设",
+      currentGap: hasReputationRisk
+        ? "本次公开检索已经出现客户可见风险信号，需要先核实事实、处理状态和公开回应口径。"
+        : "本次未形成明确负面结论，但公开正向口碑、案例、服务边界和回应机制仍不足。",
+      salesImpact: hasReputationRisk
+        ? "客户搜索到风险信息后，会先暂停咨询或要求销售解释；没有统一回应入口会直接拉高成交阻力。"
+        : "没有负面不等于足够可信；高客单服务仍需要案例、团队、边界和公开评价来降低顾虑。",
+      servicePackage: hasReputationRisk ? "舆情核实 + 回应说明页 + 信任修复内容" : "信任内容资产 + 案例评价结构 + 服务边界说明",
+    },
+    {
+      title: "客户决策阻力",
+      status: "解释链不足",
+      currentGap: "客户还难以一次看清企业主体、服务对象、具体交付、团队依据、收费边界和隐私规则。",
+      salesImpact: "这些问题不在公开页面被回答，销售就要反复人工解释，客户也更容易转去比较信息更完整的同行。",
+      servicePackage: "项目页 + FAQ + 适合人群/不适合人群说明",
+    },
+    {
+      title: "咨询转化路径",
+      status: "入口需重建",
+      currentGap: "公开入口没有把客户从了解、判断、提问自然带到预约咨询或首访诊断。",
+      salesImpact: "客户即使产生兴趣，也缺少明确下一步；这会让曝光停留在浏览，不能沉淀成可跟进线索。",
+      servicePackage: "咨询入口页 + 首访诊断表 + 销售链接包",
+    },
+  ];
 }
 
 function customerSummary(hasHighReputationRisk = false) {

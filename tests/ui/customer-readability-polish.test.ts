@@ -5,6 +5,7 @@ import { EnterpriseReport } from "../../components/report/enterprise-report";
 import { buildLimitedCanonicalReport } from "../../src/diagnosis/limited-report/universal-limited-report";
 import { toEnterpriseReportViewModel } from "../../src/report/presentation/report-presentation-service";
 import type { EvidenceItem, ReputationAndPublicOpinionSnapshotV1 } from "../../src/contracts";
+import { buildSampleReport } from "../../src/fixtures/sample-report";
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -152,6 +153,13 @@ describe("customer readability polish report", () => {
     expect(html).toContain("暂不生成诊断报告");
     expect(html).toContain("需要先补齐可被客户和AI引用的公开资料基础");
     expect(html).toContain("数字化和网络化基础还没有形成");
+    expect(html).toContain("GEO成交准备度缺口");
+    expect(html).toContain("AI可见度曝光");
+    expect(html).toContain("舆情与信任阻力");
+    expect(html).toContain("客户决策阻力");
+    expect(html).toContain("咨询转化路径");
+    expect(html).toContain("首期应卖服务");
+    expect(html).toContain("我们要卖的不是一份报告");
     expect(html).toContain("首期GEO服务应该先做什么");
     expect(html).toContain("预约GEO建设沟通");
     expect(html).not.toContain("综合诊断指数");
@@ -240,5 +248,18 @@ describe("customer readability polish report", () => {
     for (const banned of ["面诊", "治疗效果", "随访", "禁忌", "品质工艺", "规格选购", "购买和合作入口", "产品体系"]) {
       expect(html).not.toContain(banned);
     }
+  });
+
+  it("keeps GEO sales-readiness blocks in formal enterprise reports", () => {
+    const html = renderToStaticMarkup(
+      createElement(EnterpriseReport, { vm: toEnterpriseReportViewModel(buildSampleReport()) }),
+    );
+    expect(html).toContain("GEO成交准备度");
+    expect(html).toContain("AI可见度曝光");
+    expect(html).toContain("舆情与信任阻力");
+    expect(html).toContain("客户决策阻力");
+    expect(html).toContain("竞争与转化路径");
+    expect(html).toContain("应卖服务");
+    expect(html).toContain("报告要回答客户为什么现在需要买GEO服务");
   });
 });
