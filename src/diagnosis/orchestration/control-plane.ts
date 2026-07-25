@@ -6,6 +6,7 @@ import type {
 import type { EvidenceCoverage } from "../../contracts/claim-evidence";
 import type { AnalysisStageRunRecord } from "../../storage/adapter";
 import type { DiagnosisInput } from "../../runtime/diagnosis-input";
+import { buildUniversalLimitedReport } from "../limited-report/universal-limited-report";
 import type { ProviderUsageSample } from "./state-machine";
 
 export const COMPLETION_PROFILE_ALGORITHM_VERSION =
@@ -177,6 +178,11 @@ export function evaluateCompletionProfile(
 export function applyCompletionProfileToReport(
   report: DiagnosisReport,
   profile: DiagnosisCompletionProfileV1,
+  options: {
+    input?: DiagnosisInput;
+    searchCompleted?: boolean;
+    generatedAt?: string;
+  } = {},
 ): DiagnosisReport {
   if (profile.executionMode === "FULL_DIAGNOSIS") {
     return {
@@ -196,6 +202,16 @@ export function applyCompletionProfileToReport(
         ? "CONTEXT_ONLY"
         : item.supportLevel,
   }));
+  const limitedReport =
+    report.limitedReport ??
+    (options.input
+      ? buildUniversalLimitedReport(
+          options.input,
+          limitedEvidence,
+          options.searchCompleted ?? profile.searchCompleted,
+          options.generatedAt ?? report.generatedAt,
+        )
+      : undefined);
 
   return {
     ...report,
@@ -210,5 +226,6 @@ export function applyCompletionProfileToReport(
     publicReportStatus: "LIMITED_READY",
     completionProfile: profile,
     reportProvenance: report.reportProvenance ?? "REAL_PROVIDER_CANONICAL",
+    ...(limitedReport ? { limitedReport } : {}),
   };
 }

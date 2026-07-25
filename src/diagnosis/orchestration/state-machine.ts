@@ -603,7 +603,13 @@ export async function runDiagnosisPipeline(
       report: limitedBase, truthGuardPassed: false,
       evaluatedAt: (deps.clock ?? (() => new Date()))().toISOString(),
     });
-    const limited = DiagnosisReport.parse(applyCompletionProfileToReport(limitedBase, profile));
+    const limited = DiagnosisReport.parse(
+      applyCompletionProfileToReport(limitedBase, profile, {
+        input,
+        searchCompleted: allUsage.some((usage) => usage.stage === "SEARCHING" && (usage.callCount ?? 0) > 0),
+        generatedAt: limitedBase.generatedAt,
+      }),
+    );
     await setStatus("VALIDATING_REPORT");
     await storage.saveReport({
       id: idFactory(), diagnosisId, reportContractVersion: limited.reportContractVersion,
@@ -1083,7 +1089,11 @@ export async function runDiagnosisPipeline(
     evaluatedAt: (deps.clock ?? (() => new Date()))().toISOString(),
   });
   const controlledReport = DiagnosisReport.parse(
-    applyCompletionProfileToReport(published, completionProfile),
+    applyCompletionProfileToReport(published, completionProfile, {
+      input,
+      searchCompleted: completionProfile.searchCompleted,
+      generatedAt: published.generatedAt,
+    }),
   );
 
   await storage.saveReport({

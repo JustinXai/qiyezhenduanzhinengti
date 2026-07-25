@@ -256,6 +256,8 @@ describe("diagnosis pipeline state machine", () => {
     expect(result.report.completionProfile?.completionReasons).toContain(
       "NO_ACTIONABLE_DIAGNOSTIC_CONTENT",
     );
+    expect(result.report.limitedReport?.contentAssetPlans.length).toBeGreaterThanOrEqual(2);
+    expect(result.report.limitedReport?.requestedMaterials.length).toBeGreaterThan(0);
   });
 
   it("does not mark FULL READY when only strengths survive publication", async () => {
@@ -290,6 +292,8 @@ describe("diagnosis pipeline state machine", () => {
     expect(result.report.completionProfile?.completionReasons).toContain(
       "NO_ACTIONABLE_DIAGNOSTIC_CONTENT",
     );
+    expect(result.report.limitedReport?.contentAssetPlans.length).toBeGreaterThanOrEqual(2);
+    expect(result.report.limitedReport?.requestedMaterials.length).toBeGreaterThan(0);
   });
 
   it("keeps search-snippet-only runs LIMITED and strips formal claims", async () => {
