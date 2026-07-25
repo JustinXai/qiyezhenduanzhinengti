@@ -450,6 +450,18 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
   const weightedFoundationScore = weightedPublicFoundationScore(dimensions);
   const reputationScore = normalizedScore(dimensions[1]?.score, dimensions[1]?.maxScore);
   const buildingDimensions = [dimensions[0], dimensions[2], dimensions[3], dimensions[4], dimensions[5]].filter((dimension): dimension is NonNullable<Dimension> => Boolean(dimension));
+  if (report.score.overall === null) {
+    return (
+      <InsufficientEvidenceGEOPage
+        companyName={report.overview.companyName}
+        industry={report.overview.industry}
+        region={report.overview.region}
+        reportDate={report.overview.reportDate}
+        contentPlans={report.contentPlans}
+        requestedMaterials={limited.requestedMaterials}
+      />
+    );
+  }
   const navGroups = reportNavGroups();
   return (
     <div className="min-h-screen bg-slate-50 pb-20 text-[16px] leading-[1.75] text-slate-800 md:text-[17px] md:leading-[1.72] print:bg-white print:pb-0">
@@ -457,9 +469,9 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
         <header className="mb-5 flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between print:border-slate-300">
           <div>
             <p className="text-[14px] font-medium text-slate-700">{SERVICE_BRAND_NAME}</p>
-            <p className="mt-1 text-[14px] text-slate-500">企业GEO诊断报告</p>
+            <p className="mt-1 text-[14px] text-slate-500">企业公开信息基础扫描</p>
           </div>
-          <p className="text-[14px] text-slate-500">报告日期 {formatDate(report.overview.reportDate)}</p>
+          <p className="text-[14px] text-slate-500">扫描日期 {formatDate(report.overview.reportDate)}</p>
         </header>
 
         <div className="sticky top-0 z-10 mb-5 lg:hidden print:hidden">
@@ -620,6 +632,111 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
   );
 }
 
+function InsufficientEvidenceGEOPage({
+  companyName,
+  industry,
+  region,
+  reportDate,
+  contentPlans,
+  requestedMaterials,
+}: {
+  companyName: string;
+  industry: string;
+  region: string;
+  contentPlans: NonNullable<LimitedReportDataV1["mvpReport"]>["contentPlans"];
+  requestedMaterials: LimitedReportDataV1["requestedMaterials"];
+  reportDate: string;
+}) {
+  const primaryPlans = contentPlans.slice(0, 4);
+  const materials = requestedMaterials.slice(0, 6);
+  return (
+    <div className="min-h-screen bg-slate-50 pb-16 text-[16px] leading-[1.75] text-slate-800 md:text-[17px] md:leading-[1.72] print:bg-white">
+      <div className="mx-auto max-w-[980px] px-4 py-6 sm:px-6 lg:px-8">
+        <header className="mb-5 flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[14px] font-medium text-slate-700">{SERVICE_BRAND_NAME}</p>
+            <p className="mt-1 text-[14px] text-slate-500">企业GEO建设启动建议</p>
+          </div>
+          <p className="text-[14px] text-slate-500">生成日期 {formatDate(reportDate)}</p>
+        </header>
+
+        <main className="space-y-6">
+          <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-[680px]">
+                <p className="text-[14px] font-semibold text-emerald-800">暂不生成诊断报告</p>
+                <h1 className="mt-2 break-words text-[28px] font-semibold leading-[1.18] text-slate-950 md:text-[38px]">
+                  {companyName} 需要先补齐可被客户和AI引用的公开资料基础
+                </h1>
+                <div className="mt-3 flex flex-wrap gap-2 text-[14px] text-slate-600">
+                  <span className="rounded border border-slate-200 bg-white px-3 py-1">{industry}</span>
+                  <span className="rounded border border-slate-200 bg-white px-3 py-1">{region}</span>
+                </div>
+                <p className="mt-4 text-[18px] leading-[1.75] text-slate-700">
+                  本次公开资料不足以支撑一份可信诊断报告。对企业来说，这不是分数问题，而是数字化和网络化基础还没有形成：客户搜索时难以一次看清企业是谁、提供什么、是否可信、如何咨询；AI问答也缺少稳定、可引用的企业事实材料。
+                </p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 lg:w-[260px]">
+                <p className="text-[14px] font-semibold">当前最适合推进</p>
+                <p className="mt-2 text-[24px] font-semibold leading-tight">GEO基础建设</p>
+                <p className="mt-2 text-[14px] leading-[1.65]">
+                  先把企业真实资料整理成官网、客户问题、服务说明和信任内容，再进行正式诊断和复测。
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <CustomerButton primary>预约GEO建设沟通</CustomerButton>
+              <CustomerButton>获取企业GEO优化方案</CustomerButton>
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
+            <h2 className="text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">为什么不能直接给出报告</h2>
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <InsightCard title="客户看不到完整答案" body="公开入口不足时，客户需要在多个页面和平台之间拼接信息，咨询前的理解和信任成本会变高。" />
+              <InsightCard title="AI缺少可引用材料" body="AI问答更容易引用结构清晰、来源稳定的公开内容；企业资料分散时，回答容易停留在模糊介绍。" />
+              <InsightCard title="诊断结论无法稳固" body="没有足够正文、官网或可核验来源时，强行输出分数和结论会误导客户，也无法指导后续建设。" />
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
+            <h2 className="text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">首期GEO服务应该先做什么</h2>
+            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {primaryPlans.map((plan) => <PlanBlock key={plan.title} plan={plan} />)}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
+            <h2 className="text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">企业只需要先准备这些材料</h2>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {materials.map((item) => (
+                <div key={item} className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-[16px] font-medium text-slate-800">
+                  {item}
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 rounded-lg bg-emerald-50 p-4 text-[16px] leading-[1.7] text-stone-800">
+              建设完成后，再用同一套公开资料进行正式GEO诊断、客户问题覆盖检查和AI问答样本测试，报告才有可解释、可复测、可执行的价值。
+            </p>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
+            <h2 className="text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">星媄数据可以交付什么</h2>
+            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <CooperationCard />
+              <XingmeiDeliveryCard />
+            </div>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <CustomerButton primary>预约GEO建设沟通</CustomerButton>
+              <CustomerButton>获取企业GEO优化方案</CustomerButton>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  );
+}
+
 function customerSummary(hasHighReputationRisk = false) {
   if (hasHighReputationRisk) {
     return "当前公开搜索中已经出现可能影响客户信任和报名决策的企业风险信息，同时课程、师资、收费和服务说明仍不完整。建议第一阶段先核实风险信息、整理处理状态和公开说明，再建设课程内容、客户问答和咨询入口。";
@@ -719,12 +836,14 @@ function HeroMetricStack({
           <p className="text-[14px] font-semibold text-slate-500">综合诊断指数</p>
           <div className="mt-2 flex items-end gap-2">
             <span className="text-[58px] font-semibold leading-none text-slate-950 md:text-[64px]">{overallScore ?? "未评分"}</span>
-            <span className="pb-2 text-[20px] text-slate-500">/100</span>
+            {overallScore !== null && <span className="pb-2 text-[20px] text-slate-500">/100</span>}
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded bg-slate-100">
             <div className="h-full rounded bg-slate-800" style={{ width: `${overallScore ?? 0}%` }} />
           </div>
-          <p className="mt-3 text-[19px] font-semibold text-slate-900">{scoreLevel}</p>
+          <p className="mt-3 text-[19px] font-semibold text-slate-900">
+            {overallScore === null ? "证据不足，暂不评分" : scoreLevel}
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-1 xl:grid-cols-1">
           <SnapshotPill label="公开建设" value={weightedScore === null ? "未评分" : `${weightedScore}分`} tone="slate" />
@@ -736,7 +855,7 @@ function HeroMetricStack({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[14px] font-semibold text-rose-800">舆情与口碑</p>
-            <p className="mt-1 text-[28px] font-semibold leading-none text-rose-950">{reputationScore ?? "未检查"}分</p>
+            <p className="mt-1 text-[28px] font-semibold leading-none text-rose-950">{reputationScore === null ? "未评分" : `${reputationScore}分`}</p>
           </div>
           <span className="rounded bg-white px-2.5 py-1 text-[13px] font-semibold text-rose-800">客户搜索与信任风险：{reputationRiskLabel(riskLevel)}</span>
         </div>
@@ -767,7 +886,7 @@ function ScoreExplanation({ weightedScore, overallScore, hasCriticalRisk }: { we
         <MetricLine label="基础加权结果" value={weightedScore === null ? "未评分" : `${weightedScore}分`} />
         <MetricLine label="关键风险校正" value={hasCriticalRisk ? "P0信任风险触发综合分上限40分" : "未触发关键风险上限"} />
         <MetricLine label="最终综合诊断指数" value={overallScore === null ? "未评分" : `${overallScore}分`} />
-        <p>综合分不是六项简单平均，而是包含维度权重；P0关键风险会触发上限。本评分用于诊断启发，不是第三方权威评级。</p>
+        <p>{overallScore === null ? "当前证据覆盖不足，系统不会输出综合诊断指数；请补充官网、正文页面或可核验公开来源后复测。" : "综合分不是六项简单平均，而是包含维度权重；P0关键风险会触发上限。本评分用于诊断启发，不是第三方权威评级。"}</p>
       </div>
     </details>
   );

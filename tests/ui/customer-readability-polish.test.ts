@@ -43,6 +43,11 @@ function renderCustomerReport() {
 }
 
 function renderCustomerReportWithReputation(snapshot: ReputationAndPublicOpinionSnapshotV1) {
+  const verifiedEvidence = evidence.map((item) => ({
+    ...item,
+    sourceType: "FIRST_PARTY_EVIDENCE" as const,
+    acquisitionLevel: "CRAWLED_PAGE" as const,
+  }));
   const report = buildLimitedCanonicalReport({
     diagnosisId: "diag_customer_rep",
     publicToken: "tok_customer_rep",
@@ -54,7 +59,7 @@ function renderCustomerReportWithReputation(snapshot: ReputationAndPublicOpinion
       targetRegion: "四川省成都市",
       customerQuestions: [{ question: "退费和课程服务如何保障？" }],
     },
-    evidence,
+    evidence: verifiedEvidence,
     searchCompleted: true,
     generatedAt: "2026-07-22T00:00:00.000Z",
   });
@@ -141,18 +146,17 @@ function reputationSnapshot(): ReputationAndPublicOpinionSnapshotV1 {
 }
 
 describe("customer readability polish report", () => {
-  it("renders normalized dimension scores and customer-facing priority labels", () => {
+  it("turns insufficient-evidence scans into a GEO service start page, not a report", () => {
     const html = renderCustomerReport();
-    expect(html).toContain("综合诊断指数");
-    expect(html).toContain("评分结构");
-    expect(html).toContain("公开信息建设能力");
-    expect(html).toContain("舆情与口碑");
-    expect(html).toContain("查看评分说明");
-    expect(html).toContain("基础信源");
-    expect(html).toMatch(/基础信源[\s\S]*\d+分/);
-    expect(html).toContain("立即处理");
-    expect(html).toContain("重点完善");
-    expect(html).toContain("持续建设");
+    expect(html).toContain("企业GEO建设启动建议");
+    expect(html).toContain("暂不生成诊断报告");
+    expect(html).toContain("需要先补齐可被客户和AI引用的公开资料基础");
+    expect(html).toContain("数字化和网络化基础还没有形成");
+    expect(html).toContain("首期GEO服务应该先做什么");
+    expect(html).toContain("预约GEO建设沟通");
+    expect(html).not.toContain("综合诊断指数");
+    expect(html).not.toContain("评分结构");
+    expect(html).not.toContain("证据附件");
     expect(html).not.toContain("★★★★★");
   });
 
@@ -231,7 +235,8 @@ describe("customer readability polish report", () => {
     const html = renderToStaticMarkup(createElement(EnterpriseReport, { vm: toEnterpriseReportViewModel(report) }));
     expect(html).toContain("课程与服务体系");
     expect(html).toContain("师资与教学服务");
-    expect(html).toContain("咨询、试听和报名流程说明");
+    expect(html).toContain("收费、报名和退费 FAQ");
+    expect(html).toContain("课程和班型清单");
     for (const banned of ["面诊", "治疗效果", "随访", "禁忌", "品质工艺", "规格选购", "购买和合作入口", "产品体系"]) {
       expect(html).not.toContain(banned);
     }

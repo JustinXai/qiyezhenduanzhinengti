@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildUniversalLimitedReport } from "../../src/diagnosis/limited-report/universal-limited-report";
+import {
+  buildLimitedCanonicalReport,
+  buildUniversalLimitedReport,
+} from "../../src/diagnosis/limited-report/universal-limited-report";
 import type { EvidenceItem } from "../../src/contracts";
 
 const snippets: EvidenceItem[] = [{
@@ -26,15 +29,32 @@ describe("universal limited report", () => {
     expect(report.sourceCoverageMatrix.every((slot) => slot.status === "NOT_CHECKED")).toBe(true);
   });
 
-  it("scores completed public checks with clear, partial, and missing statuses", () => {
+  it("does not score search-snippet-only partial matches as measured checks", () => {
     const report = buildUniversalLimitedReport({ brandName: "任意企业", website: "", industry: "品牌服务" }, snippets, true);
     const mvp = report.mvpReport!;
-    expect(mvp.score.completionRate).toBe(100);
-    expect(mvp.score.overall).not.toBeNull();
+    expect(mvp.score.completionRate).toBeLessThan(80);
+    expect(mvp.score.overall).toBeNull();
     expect(mvp.score.dimensions).toHaveLength(6);
     expect(mvp.score.dimensions[1]?.id).toBe("reputationAndPublicOpinion");
-    expect(mvp.reputation?.summary).toContain("暂未发现明确负面风险信号");
-    expect(mvp.score.dimensions.flatMap((dimension) => dimension.findings).some((finding) => finding.status === "NOT_FOUND_IN_CHECKED_SCOPE" && finding.score === 0)).toBe(true);
+    expect(mvp.score.dimensions[1]?.score).toBeNull();
+    expect(mvp.score.dimensions.flatMap((dimension) => dimension.findings).some((finding) => finding.status === "NOT_FOUND_IN_CHECKED_SCOPE" && finding.score === null)).toBe(true);
+    expect(mvp.score.dimensions.flatMap((dimension) => dimension.findings).some((finding) => finding.status === "PARTIALLY_FOUND" && finding.score === null)).toBe(true);
+  });
+
+  it("keeps limited canonical scoring conservative and AI visibility unmeasured", () => {
+    const report = buildLimitedCanonicalReport({
+      diagnosisId: "diag_limited",
+      publicToken: "tok_limited",
+      input: { brandName: "任意企业", website: "", industry: "品牌服务" },
+      evidence: snippets,
+      searchCompleted: true,
+      generatedAt: "2026-07-22T00:00:00.000Z",
+    });
+    expect(report.publicReportEligible).toBe(false);
+    expect(report.scores.overallScore).toBeNull();
+    expect(report.scores.scoreCoverage).toBeLessThan(0.7);
+    expect(report.scores.aiVisibility.score).toBeNull();
+    expect(report.scores.aiVisibility.measurementStatus).toBe("INSUFFICIENT_EVIDENCE");
   });
 
   it("uses education language for education training reports", () => {

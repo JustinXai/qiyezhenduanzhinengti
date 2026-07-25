@@ -320,8 +320,8 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     resolutionStatus: signal.resolutionStatus,
   }));
   const result: ReputationReportSummary = {
-    score: snapshot.overallReputationScore,
-    riskLevel: snapshot.riskLevel,
+    score: matchedEvidenceCount === 0 ? null : snapshot.overallReputationScore,
+    riskLevel: matchedEvidenceCount === 0 ? "UNKNOWN" : snapshot.riskLevel,
     searchedQueryCount: snapshot.searchedQueries.length,
     matchedEvidenceCount,
     complaintCount,

@@ -13,6 +13,7 @@ import { REPORT_CONTRACT_VERSION, SCORE_CONTRACT_VERSION } from "../../contracts
 import type { DiagnosisInput } from "../../runtime/diagnosis-input";
 import { buildReputationQueries } from "../reputation/policy";
 import { buildReputationSnapshot } from "../reputation/snapshot";
+import { computeScoreBlock } from "../../report/validation/score-calculator";
 
 type CheckItem = {
   title: string;
@@ -321,6 +322,25 @@ function hasOfficialEvidence(ids: readonly string[], evidence: readonly Evidence
   });
 }
 
+function hasVerifiedEvidence(ids: readonly string[], evidence: readonly EvidenceItem[]): boolean {
+  return ids.some((id) => {
+    const item = evidence.find((candidate) => candidate.id === id);
+    return item?.acquisitionLevel === "CRAWLED_PAGE" ||
+      item?.acquisitionLevel === "OFFICIAL_PAGE" ||
+      item?.acquisitionLevel === "OFFICIAL_REGISTRY" ||
+      item?.sourceType === "FIRST_PARTY_EVIDENCE";
+  });
+}
+
+function hasAnyVerifiedEvidence(evidence: readonly EvidenceItem[]): boolean {
+  return evidence.some((item) =>
+    item.acquisitionLevel === "CRAWLED_PAGE" ||
+    item.acquisitionLevel === "OFFICIAL_PAGE" ||
+    item.acquisitionLevel === "OFFICIAL_REGISTRY" ||
+    item.sourceType === "FIRST_PARTY_EVIDENCE",
+  );
+}
+
 function statusScore(status: MvpGeoScoreFindingStatus): number | null {
   if (status === "CLEARLY_FOUND") return 100;
   if (status === "PARTIALLY_FOUND") return 50;
@@ -352,6 +372,7 @@ function currentCopy(status: MvpGeoScoreFindingStatus, title: string): string {
 }
 
 function scoreDimensions(policy: PolicyDefinition, input: DiagnosisInput, evidence: readonly EvidenceItem[], searchCompleted: boolean): MvpGeoDiagnosticReportV1["score"]["dimensions"] {
+  const verifiedBoundary = hasAnyVerifiedEvidence(evidence);
   return policy.dimensions.map((dimension) => {
     const itemMax = dimension.maxScore / dimension.items.length;
     let earned = 0;
@@ -366,14 +387,16 @@ function scoreDimensions(policy: PolicyDefinition, input: DiagnosisInput, eviden
             ? "CLEARLY_FOUND"
             : "PARTIALLY_FOUND";
       const score = statusScore(status);
-      if (score !== null) {
+      const measured = score !== null && verifiedBoundary && (status === "NOT_FOUND_IN_CHECKED_SCOPE" || hasVerifiedEvidence(evidenceIds, evidence));
+      const displayScore = measured ? score : null;
+      if (displayScore !== null) {
         checkedMax += itemMax;
-        earned += (score / 100) * itemMax;
+        earned += (displayScore / 100) * itemMax;
       }
       return {
         title: item.title,
         status,
-        score,
+        score: displayScore,
         evidenceIds,
         currentStatus: currentCopy(status, item.title),
         impact: item.impact,
@@ -473,7 +496,7 @@ function industryQuestions(policy: PolicyDefinition, input: DiagnosisInput): str
 }
 
 function reputationScoreDimension(snapshot: ReputationAndPublicOpinionSnapshotV1, searchCompleted: boolean): MvpGeoDiagnosticReportV1["score"]["dimensions"][number] {
-  if (!searchCompleted) {
+  if (!searchCompleted || snapshot.evidenceIds.length === 0) {
     const titles = ["公开投诉与负面舆情集中度", "争议主题清晰度", "企业公开回应线索", "正向评价与第三方口碑", "舆情来源覆盖"];
     return {
       id: "reputationAndPublicOpinion",
@@ -487,9 +510,11 @@ function reputationScoreDimension(snapshot: ReputationAndPublicOpinionSnapshotV1
         status: "NOT_CHECKED" as const,
         score: null,
         evidenceIds: [],
-        currentStatus: `本次尚未执行${title}检查。`,
+        currentStatus: searchCompleted
+          ? `本次尚未匹配到可用于判断${title}的明确证据。`
+          : `本次尚未执行${title}检查。`,
         impact: "舆情与口碑会影响客户搜索后的信任判断。",
-        recommendation: "完成舆情检索后再判断投诉、评价和回应情况。",
+        recommendation: "补充可核验的公开来源后，再判断投诉、评价和回应情况。",
       })),
     };
   }
@@ -871,6 +896,12 @@ function canonicalScoreDimension(score: number | null, maxScore: number, evidenc
   };
 }
 
+function dimensionEvidenceIds(
+  dimension: MvpGeoDiagnosticReportV1["score"]["dimensions"][number] | undefined,
+): string[] {
+  return Array.from(new Set(dimension?.findings.flatMap((finding) => finding.evidenceIds) ?? []));
+}
+
 export function buildLimitedCanonicalReport(args: {
   diagnosisId: string;
   publicToken: string;
@@ -882,7 +913,19 @@ export function buildLimitedCanonicalReport(args: {
   const limitedReport = buildUniversalLimitedReport(args.input, args.evidence, args.searchCompleted, args.generatedAt);
   const dimensions = limitedReport.mvpReport!.score.dimensions;
   const byId = new Map(dimensions.map((dimension) => [dimension.id, dimension]));
-  const evidenceIds = args.evidence.map((item) => item.id);
+  const scoreDimensions = {
+    companyClarity: canonicalScoreDimension(byId.get("sourceFoundation")?.score ?? null, 25, dimensionEvidenceIds(byId.get("sourceFoundation"))),
+    websiteCompleteness: canonicalScoreDimension(byId.get("contentAssets")?.score ?? null, 25, dimensionEvidenceIds(byId.get("contentAssets"))),
+    customerQuestionCoverage: canonicalScoreDimension(byId.get("customerScenarios")?.score ?? null, 20, dimensionEvidenceIds(byId.get("customerScenarios"))),
+    trustEvidence: canonicalScoreDimension(byId.get("trustInformation")?.score ?? null, 20, dimensionEvidenceIds(byId.get("trustInformation"))),
+    aiVisibility: {
+      score: null,
+      measurementStatus: "INSUFFICIENT_EVIDENCE" as const,
+      confidence: 0,
+      evidenceIds: [],
+    },
+  };
+  const computedScore = computeScoreBlock(scoreDimensions);
   return {
     reportContractVersion: REPORT_CONTRACT_VERSION,
     scoreContractVersion: SCORE_CONTRACT_VERSION,
@@ -900,13 +943,9 @@ export function buildLimitedCanonicalReport(args: {
       unresolvedQuestions: [],
     },
     scores: {
-      companyClarity: canonicalScoreDimension(byId.get("sourceFoundation")?.score ?? null, 25, evidenceIds),
-      websiteCompleteness: canonicalScoreDimension(byId.get("contentAssets")?.score ?? null, 25, evidenceIds),
-      customerQuestionCoverage: canonicalScoreDimension(byId.get("customerScenarios")?.score ?? null, 20, evidenceIds),
-      trustEvidence: canonicalScoreDimension(byId.get("trustInformation")?.score ?? null, 20, evidenceIds),
-      aiVisibility: canonicalScoreDimension(byId.get("conversionPath")?.score ?? null, 10, evidenceIds),
-      overallScore: limitedReport.mvpReport!.score.overall,
-      scoreCoverage: limitedReport.mvpReport!.score.completionRate / 100,
+      ...scoreDimensions,
+      overallScore: computedScore.overallScore,
+      scoreCoverage: computedScore.scoreCoverage,
     },
     aiVisibilityTests: [],
     strengths: [],
@@ -918,7 +957,7 @@ export function buildLimitedCanonicalReport(args: {
     questionCoverageGaps: [],
     evidence: args.evidence,
     executionMode: "LIMITED_PUBLIC_SCAN",
-    publicReportEligible: true,
+    publicReportEligible: false,
     publicReportStatus: "LIMITED_READY",
     reportProvenance: "FAST_MVP_GEO_DIAGNOSTIC_REPORT_V1",
     limitedReport,
