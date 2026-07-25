@@ -168,6 +168,8 @@ describe("customer readability polish report", () => {
     expect(html).toContain("舆情与信任阻力");
     expect(html).toContain("客户决策阻力");
     expect(html).toContain("咨询转化路径");
+    expect(html).toContain("text-rose-800");
+    expect(html).toContain("text-rose-950");
     expect(html).toContain("首期应搭配服务");
     expect(html).toContain("报告要回答客户为什么现在需要买GEO服务");
     expect(html).toContain("首期GEO服务应该先做什么");

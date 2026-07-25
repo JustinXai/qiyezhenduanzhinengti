@@ -798,9 +798,9 @@ function InsufficientEvidenceGEOPage({
                     <p className="text-[16px] font-semibold text-slate-950">{row.title}</p>
                     <p className="mt-1 text-[13px] font-medium text-slate-500">{row.status}</p>
                   </div>
-                  <div className="p-4">
-                    <p className="text-[13px] font-semibold text-slate-500">当前缺口</p>
-                    <p className="mt-1 text-[15px] leading-[1.65] text-slate-700">{row.currentGap}</p>
+                  <div className="border-l-0 border-rose-100 bg-rose-50/70 p-4 lg:border-l">
+                    <p className="text-[13px] font-semibold text-rose-800">当前缺口</p>
+                    <p className="mt-1 text-[15px] font-medium leading-[1.65] text-rose-950">{row.currentGap}</p>
                   </div>
                   <div className="p-4">
                     <p className="text-[13px] font-semibold text-slate-500">为什么影响成交</p>
