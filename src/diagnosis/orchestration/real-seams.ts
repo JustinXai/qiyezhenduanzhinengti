@@ -26,6 +26,7 @@ import type {
   WebSearchResultItem,
 } from "../../providers/types";
 import { createBochaProvider } from "../../providers/bocha/bocha-adapter";
+import { createDoubaoSearchProvider } from "../../providers/doubao/doubao-adapter";
 import {
   createDeepSeekProvider,
   deepSeekConfigFromEnv,
@@ -35,6 +36,7 @@ import {
   type GuardedCrawler,
 } from "../../security/crawler/guarded-crawler";
 import { planSearchQueries } from "../search/query-planner";
+import { mergeSearchResults, shouldSupplementSearch } from "../search/search-supplement";
 import { normalizeEvidence } from "../evidence/normalize";
 import { curateEvidence } from "../evidence/tiering";
 import { resolveCompetitors } from "../competitors/resolve";
@@ -199,6 +201,55 @@ export function budgetedSearchProvider(
   };
 }
 
+async function searchWithSupplement(
+  bocha: WebSearchProvider,
+  doubao: WebSearchProvider | null,
+  query: string,
+  limit: number,
+): Promise<{
+  results: WebSearchResultItem[];
+  usedDoubao: boolean;
+  primaryOk: boolean;
+  primaryErrorCode?: string;
+  fallbackOk?: boolean;
+  fallbackErrorCode?: string;
+}> {
+  const primary = await bocha.search(query, { limit });
+  if (!primary.ok) {
+    if (!doubao) return { results: [], usedDoubao: false, primaryOk: false, primaryErrorCode: primary.error.code };
+    const fallback = await doubao.search(query, { limit });
+    return fallback.ok
+      ? { results: fallback.results, usedDoubao: true, primaryOk: false, primaryErrorCode: primary.error.code, fallbackOk: true }
+      : {
+          results: [],
+          usedDoubao: true,
+          primaryOk: false,
+          primaryErrorCode: primary.error.code,
+          fallbackOk: false,
+          fallbackErrorCode: fallback.error.code,
+        };
+  }
+  if (!doubao || !shouldSupplementSearch(query, primary.results)) {
+    return { results: primary.results, usedDoubao: false, primaryOk: true };
+  }
+  const fallback = await doubao.search(query, { limit });
+  if (!fallback.ok) {
+    return {
+      results: primary.results,
+      usedDoubao: true,
+      primaryOk: true,
+      fallbackOk: false,
+      fallbackErrorCode: fallback.error.code,
+    };
+  }
+  return {
+    results: mergeSearchResults(primary.results, fallback.results),
+    usedDoubao: true,
+    primaryOk: true,
+    fallbackOk: true,
+  };
+}
+
 /** Budget-guarded StructuredCompletionProvider. */
 export function budgetedCompletionProvider(
   inner: StructuredCompletionProvider,
@@ -283,6 +334,7 @@ function stableHash(value: unknown): string {
 
 export interface RealEvidencePipelineDeps {
   bocha: WebSearchProvider;
+  doubao?: WebSearchProvider | null;
   crawler: GuardedCrawler;
   tracker: CanaryBudgetTracker;
   now?: () => string;
@@ -291,6 +343,7 @@ export interface RealEvidencePipelineDeps {
 export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): EvidencePipeline {
   const now = deps.now ?? (() => new Date().toISOString());
   const bocha = budgetedSearchProvider(deps.bocha, deps.tracker);
+  const doubao = deps.doubao ?? null;
   const profile = deps.tracker.profile;
 
   return {
@@ -298,15 +351,25 @@ export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): Evid
       const { input } = ctx;
       const host = hostOf(input.website);
       const usage: ProviderUsageSample[] = [];
+      let resolutionDoubaoCalls = 0;
 
       // --- Competitor resolution: one REAL search per name-only competitor. ---
       const resolution = await resolveCompetitors(input.competitors, {
-        search: bocha,
+        search: {
+          async search(query, opts) {
+            const result = await searchWithSupplement(bocha, doubao, query, opts?.limit ?? profile.perQueryLimit);
+            if (result.usedDoubao) resolutionDoubaoCalls += 1;
+            return { ok: true as const, results: result.results };
+          },
+        },
         searchLimit: profile.perQueryLimit,
       });
       const resolutionCalls = resolution.resolutions.filter((r) => r.providedDomain === null).length;
       if (resolutionCalls > 0) {
         usage.push({ provider: "bocha", stage: "SEARCHING", callCount: resolutionCalls });
+      }
+      if (resolutionDoubaoCalls > 0) {
+        usage.push({ provider: "doubao", stage: "SEARCHING", callCount: resolutionDoubaoCalls });
       }
 
       // --- Planned queries over the REAL provider (capped, no retries). --------
@@ -328,11 +391,24 @@ export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): Evid
       const executedQueries: string[] = [];
       let searchFailures = 0;
       for (const pq of planned) {
-        const res = await bocha.search(pq.query, { limit: profile.perQueryLimit });
-        if (res.ok) {
+        const searchResult = await searchWithSupplement(bocha, doubao, pq.query, profile.perQueryLimit);
+        usage.push({
+          provider: "bocha",
+          stage: "SEARCHING",
+          callCount: 1,
+          errorCode: searchResult.primaryOk ? null : searchResult.primaryErrorCode ?? "PROVIDER_UNKNOWN",
+        });
+        if (searchResult.usedDoubao) {
+          usage.push({
+            provider: "doubao",
+            stage: "SEARCHING",
+            callCount: 1,
+            errorCode: searchResult.fallbackOk === false ? searchResult.fallbackErrorCode ?? "PROVIDER_UNKNOWN" : null,
+          });
+        }
+        if (searchResult.results.length > 0) {
           executedQueries.push(pq.query);
-          usage.push({ provider: "bocha", stage: "SEARCHING", callCount: 1 });
-          for (const item of res.results) {
+          for (const item of searchResult.results) {
             const key = item.url.toLowerCase();
             if (!seen.has(key)) {
               seen.add(key);
@@ -341,12 +417,6 @@ export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): Evid
           }
         } else {
           searchFailures += 1;
-          usage.push({
-            provider: "bocha",
-            stage: "SEARCHING",
-            callCount: 1,
-            errorCode: res.error.code,
-          });
         }
       }
 
@@ -646,11 +716,18 @@ export function createRealSeams(env: NodeJS.ProcessEnv = process.env): RealSeams
     apiKey: env.BOCHA_API_KEY,
     maxRetries: TECHNICAL_COMPANY_CANARY_V1.bocha.retries,
   });
+  const doubao = env.DOUBAO_SEARCH_API_KEY
+    ? createDoubaoSearchProvider({
+        apiKey: env.DOUBAO_SEARCH_API_KEY,
+        apiKeyId: env.DOUBAO_SEARCH_API_KEY_ID,
+        maxRetries: 1,
+      })
+    : null;
   const dsConfig = deepSeekConfigFromEnv(env);
   const deepseek = createDeepSeekProvider(dsConfig, { fetch: globalThis.fetch });
   const crawler = createGuardedCrawler();
   return {
-    evidence: createRealEvidencePipeline({ bocha, crawler, tracker }),
+    evidence: createRealEvidencePipeline({ bocha, doubao, crawler, tracker }),
     producer: createRealReportProducer({
       deepseek,
       tracker,

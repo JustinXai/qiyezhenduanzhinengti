@@ -158,8 +158,8 @@ describe("customer readability polish report", () => {
     expect(html).toContain("舆情与信任阻力");
     expect(html).toContain("客户决策阻力");
     expect(html).toContain("咨询转化路径");
-    expect(html).toContain("首期应卖服务");
-    expect(html).toContain("我们要卖的不是一份报告");
+    expect(html).toContain("首期应搭配服务");
+    expect(html).toContain("报告要回答客户为什么现在需要买GEO服务");
     expect(html).toContain("首期GEO服务应该先做什么");
     expect(html).toContain("预约GEO建设沟通");
     expect(html).not.toContain("综合诊断指数");
@@ -259,7 +259,7 @@ describe("customer readability polish report", () => {
     expect(html).toContain("舆情与信任阻力");
     expect(html).toContain("客户决策阻力");
     expect(html).toContain("竞争与转化路径");
-    expect(html).toContain("应卖服务");
+    expect(html).toContain("首期应搭配服务");
     expect(html).toContain("报告要回答客户为什么现在需要买GEO服务");
   });
 });

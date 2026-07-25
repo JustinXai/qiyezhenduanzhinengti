@@ -242,7 +242,7 @@ function FullSalesReadinessBlock({ vm }: { vm: EnterpriseReportViewModel }) {
             </div>
             <p className="mt-2 text-xs leading-relaxed text-neutral-600">{row.salesImpact}</p>
             <p className="mt-2 rounded bg-emerald-50 px-2 py-1.5 text-xs font-medium leading-relaxed text-emerald-900">
-              应卖服务：{row.servicePackage}
+              首期应搭配服务：{row.servicePackage}
             </p>
           </article>
         ))}
@@ -774,7 +774,7 @@ function InsufficientEvidenceGEOPage({
                 <h2 className="mt-1 text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">GEO成交准备度缺口</h2>
               </div>
               <p className="max-w-[360px] text-[15px] leading-[1.65] text-slate-500">
-                我们要卖的不是一份报告，而是让客户和AI能正确理解、引用、信任并发起咨询的公开信息系统。
+                报告要回答客户为什么现在需要买GEO服务，而不是只看分数。
               </p>
             </div>
             <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
@@ -793,7 +793,7 @@ function InsufficientEvidenceGEOPage({
                     <p className="mt-1 text-[15px] leading-[1.65] text-slate-700">{row.salesImpact}</p>
                   </div>
                   <div className="bg-emerald-50 p-4">
-                    <p className="text-[13px] font-semibold text-emerald-800">首期应卖服务</p>
+                    <p className="text-[13px] font-semibold text-emerald-800">首期应搭配服务</p>
                     <p className="mt-1 text-[15px] font-medium leading-[1.65] text-emerald-950">{row.servicePackage}</p>
                   </div>
                 </div>
