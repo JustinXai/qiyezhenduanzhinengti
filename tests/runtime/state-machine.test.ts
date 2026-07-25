@@ -223,6 +223,41 @@ describe("diagnosis pipeline state machine", () => {
     expect(result.report.publicReportEligible).toBe(false);
   });
 
+  it("does not mark FULL READY when publication leaves no diagnostic content", async () => {
+    const { id, token } = await createRequest("diag_no_content", "tok_no_content");
+    const producer: ReportProducer = {
+      async produce() {
+        return {
+          ok: true,
+          report: buildSampleReport({
+            diagnosisId: id,
+            publicToken: token,
+            strengths: [],
+            coreIssues: [],
+            geoOpportunities: [],
+            competitorGaps: [],
+            demonstrationFix: null,
+          }),
+          usage: [{ provider: "deepseek", stage: "ANALYZING", callCount: 1 }],
+        };
+      },
+    };
+    const result = await runDiagnosisPipeline(deps({ producer }), {
+      diagnosisId: id,
+      publicToken: token,
+      input: VALID_INPUT,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected limited success");
+    expect(result.status).toBe("READY_LIMITED");
+    expect(result.report.executionMode).toBe("LIMITED_PUBLIC_SCAN");
+    expect(result.report.publicReportEligible).toBe(false);
+    expect(result.report.completionProfile?.completionReasons).toContain(
+      "NO_PUBLISHED_DIAGNOSTIC_CONTENT",
+    );
+  });
+
   it("keeps search-snippet-only runs LIMITED and strips formal claims", async () => {
     const { id, token } = await createRequest("diag_snippet", "tok_snippet");
     const snippetReport = buildSampleReport({
