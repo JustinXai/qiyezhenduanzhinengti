@@ -616,9 +616,6 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
           </main>
         </div>
       </div>
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-emerald-900/10 bg-[#f7f8f4]/95 px-4 py-3 backdrop-blur sm:hidden print:hidden">
-        <button type="button" className="w-full rounded-lg bg-emerald-800 px-4 py-3 text-[16px] font-semibold text-white">{hasHighReputationRisk ? "获取舆情核实清单与首期信任修复方案" : "预约报告解读"}</button>
-      </div>
     </div>
   );
 }
