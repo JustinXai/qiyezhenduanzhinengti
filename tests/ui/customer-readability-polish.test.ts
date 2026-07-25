@@ -152,8 +152,11 @@ describe("customer readability polish report", () => {
     expect(html).toContain("企业GEO建设启动建议");
     expect(html).toContain("风险警示");
     expect(html).toContain("资料缺失型");
-    expect(html).toContain("当前客户感知风险");
-    expect(html).toContain("非经营评分，是公开信息成交阻力判断");
+    expect(html).toContain("公开信息成交阻力指数");
+    expect(html).toContain("高阻力");
+    expect(html).toContain("85/100");
+    expect(html).toContain("这不是企业经营评分");
+    expect(html).toContain("数字越高");
     expect(html).toContain("暂不生成诊断报告");
     expect(html).toContain("需要先补齐可被客户和AI引用的公开资料基础");
     expect(html).toContain("数字化和网络化基础还没有形成");

@@ -752,9 +752,14 @@ function InsufficientEvidenceGEOPage({
                 </p>
               </div>
               <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-950 lg:w-[280px]">
-                <p className="text-[14px] font-semibold">当前客户感知风险</p>
-                <p className="mt-2 text-[40px] font-semibold leading-none">{situation.riskScore}</p>
-                <p className="mt-1 text-[13px] font-medium text-rose-700">非经营评分，是公开信息成交阻力判断</p>
+                <p className="text-[14px] font-semibold">公开信息成交阻力指数</p>
+                <div className="mt-2 flex items-end gap-2">
+                  <p className="text-[34px] font-semibold leading-none">{situation.riskLevelLabel}</p>
+                  <p className="pb-1 text-[18px] font-semibold text-rose-800">{situation.riskScore}/100</p>
+                </div>
+                <p className="mt-2 text-[13px] font-medium leading-[1.55] text-rose-700">
+                  这不是企业经营评分；数字越高，表示客户在公开搜索和AI问答中越难建立信任并发起咨询。
+                </p>
                 <div className="mt-3 h-2 overflow-hidden rounded bg-white">
                   <div className="h-full rounded bg-rose-700" style={{ width: `${situation.riskScore}%` }} />
                 </div>
@@ -918,6 +923,7 @@ function limitedReportSituation(
       kind: "BAD_REPUTATION" as const,
       label: "舆情阻断型",
       riskScore: 90,
+      riskLevelLabel: "极高阻力",
       primaryAction: "先做舆情核实、回应口径和信任修复，再扩大AI曝光。",
       summary: "本次公开资料还不足以支撑正式诊断，同时已经出现客户可见的风险或争议信号。对企业来说，问题不是简单低分，而是客户搜索后可能先看到阻力：如果没有统一回应、事实说明和信任内容，AI可见度越高，客户疑虑也会被同步放大。",
     };
@@ -927,6 +933,7 @@ function limitedReportSituation(
       kind: "NO_DATA" as const,
       label: "资料缺失型",
       riskScore: 85,
+      riskLevelLabel: "高阻力",
       primaryAction: "先把企业事实、服务说明、信任依据和咨询入口做成可引用信源。",
       summary: "本次公开资料不足以支撑一份可信诊断报告。对企业来说，这不是分数问题，而是数字化和网络化基础还没有形成：客户搜索时难以一次看清企业是谁、提供什么、是否可信、如何咨询；AI问答也缺少稳定、可引用的企业事实材料。",
     };
@@ -935,6 +942,7 @@ function limitedReportSituation(
     kind: "LOW_VISIBILITY" as const,
     label: "可见度不足型",
     riskScore: 72,
+    riskLevelLabel: "中高阻力",
     primaryAction: "围绕客户高频问题补齐内容资产，并持续复测AI问答表现。",
     summary: "企业已经有一定公开资料，也没有形成高风险舆情结论，但客户和AI仍难以获得完整、结构化、可引用的答案。此时报告重点应从基础建档转向客户问题覆盖、服务内容表达、案例信任和咨询转化路径建设。",
   };
