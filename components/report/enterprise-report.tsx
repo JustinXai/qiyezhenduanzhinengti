@@ -5,7 +5,7 @@ import type { EnterpriseReportViewModel, LimitedReportDataV1 } from "../../src/c
 import { ScoreHeadline } from "./score-card";
 import { formatDate } from "./labels";
 import { PRIMARY_CTA_LABEL, SECONDARY_CTA_LABEL, SERVICE_BRAND_NAME } from "../../src/product/customer-copy";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { buildReputationReportSummary, type ReputationEvidenceSummary } from "../../src/diagnosis/reputation/report-summary";
 
 // ============================================================================
@@ -426,6 +426,7 @@ const SERVICE_COLLAB_ITEMS = [
 
 function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
   const limited = vm.limitedReport!;
+  const activeSectionId = useActiveSection(SECTION_IDS);
   const report = limited.mvpReport;
   if (!report) {
     return <LegacyLimitedEnterpriseReport vm={vm} />;
@@ -461,8 +462,8 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
           <p className="text-[14px] text-slate-500">报告日期 {formatDate(report.overview.reportDate)}</p>
         </header>
 
-        <div className="mb-5 lg:hidden print:hidden">
-          <MobileNav groups={navGroups} />
+        <div className="sticky top-0 z-10 mb-5 lg:hidden print:hidden">
+          <MobileNav groups={navGroups} activeId={activeSectionId} />
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[232px_minmax(0,1fr)]">
@@ -470,9 +471,13 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
             <p className="text-[13px] font-semibold text-slate-500">报告目录</p>
             <nav className="mt-3 space-y-3">
               {navGroups.map((group) => (
-                <a key={group.href} href={group.href} className="block rounded px-2 py-1.5 text-[14px] text-slate-700 transition hover:bg-slate-50">
-                  <span className="font-semibold text-slate-900">{group.index}</span> {group.title}
-                  <span className="mt-1 block text-[12px] leading-[1.45] text-slate-500">{group.children.join(" / ")}</span>
+                <a
+                  key={group.href}
+                  href={group.href}
+                  className={`block rounded border px-2 py-2 text-[14px] transition ${activeSectionId === group.href.slice(1) ? "border-slate-900 bg-slate-900 text-white" : "border-transparent text-slate-700 hover:bg-slate-50"}`}
+                >
+                  <span className={`font-semibold ${activeSectionId === group.href.slice(1) ? "text-white" : "text-slate-900"}`}>{group.index}</span> {group.title}
+                  <span className={`mt-1 block text-[12px] leading-[1.45] ${activeSectionId === group.href.slice(1) ? "text-slate-200" : "text-slate-500"}`}>{group.children.join(" / ")}</span>
                 </a>
               ))}
             </nav>
@@ -491,6 +496,16 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
                   <span className="rounded border border-slate-200 bg-white px-3 py-1">{report.overview.region}</span>
                 </div>
               </div>
+              <div className="xl:hidden">
+                <HeroMetricStack
+                  overallScore={report.score.overall}
+                  scoreLevel={report.score.level}
+                  reputationScore={reputationScore}
+                  riskLevel={reputationSummary.riskLevel}
+                  weightedScore={weightedFoundationScore}
+                  hasCriticalRisk={hasHighReputationRisk}
+                />
+              </div>
               <p className="max-w-[760px] text-[17px] leading-[1.72] text-slate-700">
                 {customerSummary(hasHighReputationRisk)}
               </p>
@@ -503,30 +518,15 @@ function LimitedEnterpriseReport({ vm }: EnterpriseReportProps) {
               <CtaRow hasHighReputationRisk={hasHighReputationRisk} />
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-lg border border-slate-200 bg-white p-5">
-                <p className="text-[14px] font-semibold text-slate-500">综合诊断指数</p>
-                <div className="mt-2 flex items-end gap-2">
-                  <span className="text-[64px] font-semibold leading-none text-slate-950">{report.score.overall ?? "未评分"}</span>
-                  <span className="pb-2 text-[20px] text-slate-500">/100</span>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded bg-slate-100">
-                  <div className="h-full rounded bg-slate-800" style={{ width: `${report.score.overall ?? 0}%` }} />
-                </div>
-                <p className="mt-3 text-[19px] font-semibold text-slate-900">{report.score.level}</p>
-              </div>
-
-              <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[14px] font-semibold text-rose-800">舆情与口碑</p>
-                    <p className="mt-1 text-[28px] font-semibold leading-none text-rose-950">{reputationScore ?? "未检查"}分</p>
-                  </div>
-                  <span className="rounded bg-white px-2.5 py-1 text-[13px] font-semibold text-rose-800">客户搜索与信任风险：{reputationRiskLabel(reputationSummary.riskLevel)}</span>
-                </div>
-              </div>
-
-              <ScoreExplanation weightedScore={weightedFoundationScore} overallScore={report.score.overall} hasCriticalRisk={hasHighReputationRisk} />
+            <div className="hidden space-y-4 xl:block">
+              <HeroMetricStack
+                overallScore={report.score.overall}
+                scoreLevel={report.score.level}
+                reputationScore={reputationScore}
+                riskLevel={reputationSummary.riskLevel}
+                weightedScore={weightedFoundationScore}
+                hasCriticalRisk={hasHighReputationRisk}
+              />
             </div>
           </div>
 
@@ -630,6 +630,40 @@ function customerSummary(hasHighReputationRisk = false) {
   return "当前企业已经具备部分公开信息基础，但客户在进一步了解服务、专业能力、流程和咨询方式时，仍难以从公开渠道获得完整答案。建议优先统一企业信任信息和核心服务内容，再逐步覆盖客户高频问题。";
 }
 
+const SECTION_IDS = ["overview", "reputation", "geo-foundation", "action-plan", "evidence"] as const;
+
+function useActiveSection(ids: readonly string[]) {
+  const [activeId, setActiveId] = useState<string>(ids[0] ?? "");
+
+  useEffect(() => {
+    const sections = ids
+      .map((id) => document.getElementById(id))
+      .filter((section): section is HTMLElement => Boolean(section));
+
+    if (sections.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible[0]?.target?.id) {
+          setActiveId(visible[0].target.id);
+        }
+      },
+      {
+        rootMargin: "-20% 0px -60% 0px",
+        threshold: [0.2, 0.45, 0.7],
+      },
+    );
+
+    for (const section of sections) observer.observe(section);
+    return () => observer.disconnect();
+  }, [ids]);
+
+  return activeId;
+}
+
 function reportNavGroups() {
   return [
     { index: "01", title: "诊断总览", href: "#overview", children: ["综合指数", "第一行动"] },
@@ -640,11 +674,15 @@ function reportNavGroups() {
   ];
 }
 
-function MobileNav({ groups }: { groups: ReturnType<typeof reportNavGroups> }) {
+function MobileNav({ groups, activeId }: { groups: ReturnType<typeof reportNavGroups>; activeId: string }) {
   return (
-    <nav className="flex gap-2 overflow-x-auto rounded-lg border border-slate-200 bg-white p-2">
+    <nav className="flex gap-2 overflow-x-auto rounded-lg border border-slate-200 bg-white/95 p-2 backdrop-blur">
       {groups.map((group) => (
-        <a key={group.href} href={group.href} className="shrink-0 rounded border border-slate-200 px-3 py-2 text-[14px] font-medium text-slate-700">
+        <a
+          key={group.href}
+          href={group.href}
+          className={`shrink-0 rounded border px-3 py-2 text-[14px] font-medium transition ${activeId === group.href.slice(1) ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-700"}`}
+        >
           {group.index} {group.title}
         </a>
       ))}
@@ -658,6 +696,68 @@ function CtaRow({ hasHighReputationRisk }: { hasHighReputationRisk: boolean }) {
       <CustomerButton primary>{hasHighReputationRisk ? "获取舆情核实清单与首期信任修复方案" : "预约报告解读"}</CustomerButton>
       <CustomerButton>{hasHighReputationRisk ? "预约报告解读" : "获取首期建设方案"}</CustomerButton>
       <a href="#evidence" className="text-[15px] font-medium text-slate-500 underline underline-offset-4">补充企业资料</a>
+    </div>
+  );
+}
+
+function HeroMetricStack({
+  overallScore,
+  scoreLevel,
+  reputationScore,
+  riskLevel,
+  weightedScore,
+  hasCriticalRisk,
+}: {
+  overallScore: number | null;
+  scoreLevel: string;
+  reputationScore: number | null;
+  riskLevel: string;
+  weightedScore: number | null;
+  hasCriticalRisk: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_168px] xl:grid-cols-1">
+        <div className="rounded-lg border border-slate-200 bg-white p-5">
+          <p className="text-[14px] font-semibold text-slate-500">综合诊断指数</p>
+          <div className="mt-2 flex items-end gap-2">
+            <span className="text-[58px] font-semibold leading-none text-slate-950 md:text-[64px]">{overallScore ?? "未评分"}</span>
+            <span className="pb-2 text-[20px] text-slate-500">/100</span>
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded bg-slate-100">
+            <div className="h-full rounded bg-slate-800" style={{ width: `${overallScore ?? 0}%` }} />
+          </div>
+          <p className="mt-3 text-[19px] font-semibold text-slate-900">{scoreLevel}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-1 xl:grid-cols-1">
+          <SnapshotPill label="公开建设" value={weightedScore === null ? "未评分" : `${weightedScore}分`} tone="slate" />
+          <SnapshotPill label="风险等级" value={reputationRiskLabel(riskLevel)} tone="rose" />
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[14px] font-semibold text-rose-800">舆情与口碑</p>
+            <p className="mt-1 text-[28px] font-semibold leading-none text-rose-950">{reputationScore ?? "未检查"}分</p>
+          </div>
+          <span className="rounded bg-white px-2.5 py-1 text-[13px] font-semibold text-rose-800">客户搜索与信任风险：{reputationRiskLabel(riskLevel)}</span>
+        </div>
+      </div>
+
+      <ScoreExplanation weightedScore={weightedScore} overallScore={overallScore} hasCriticalRisk={hasCriticalRisk} />
+    </div>
+  );
+}
+
+function SnapshotPill({ label, value, tone }: { label: string; value: string; tone: "slate" | "rose" }) {
+  const style = tone === "rose"
+    ? "border-rose-200 bg-rose-50 text-rose-900"
+    : "border-slate-200 bg-slate-50 text-slate-900";
+  return (
+    <div className={`rounded-lg border p-3 ${style}`}>
+      <p className="text-[12px] font-semibold text-slate-500">{label}</p>
+      <p className="mt-1 text-[18px] font-semibold">{value}</p>
     </div>
   );
 }
@@ -998,9 +1098,15 @@ function RoadmapStage({ stage, index }: { stage: NonNullable<LimitedReportDataV1
   const target = stage.stage === "0-30天" ? "统一企业事实和核心信任信息" : stage.stage === "31-60天" ? "补齐服务内容、客户问题和咨询入口" : "持续发布、复测和优化";
   return (
     <article className="relative rounded-lg border border-slate-200 bg-white p-4 before:absolute before:left-5 before:top-10 before:hidden before:h-[calc(100%-2.5rem)] before:w-px before:bg-slate-200 sm:before:block lg:before:hidden">
-      <div className="flex items-center gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[13px] font-semibold text-white">{index + 1}</span>
-        <h3 className="text-[18px] font-semibold text-stone-950 md:text-[19px]">{stage.stage}</h3>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[13px] font-semibold text-white">{index + 1}</span>
+          <div>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-400">阶段 {index + 1}</p>
+            <h3 className="text-[18px] font-semibold text-stone-950 md:text-[19px]">{stage.stage}</h3>
+          </div>
+        </div>
+        <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-medium text-slate-600 sm:inline-flex">{target}</span>
       </div>
       <dl className="mt-3 space-y-3 text-[16px] leading-[1.72]">
         <DetailRow label="目标" value={target} />
@@ -1027,7 +1133,7 @@ function CustomerButton({ children, primary = false, muted = false }: { children
     : muted
       ? "border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
       : "border border-emerald-800 bg-white text-emerald-900 hover:bg-emerald-50";
-  return <button type="button" className={`rounded-lg px-5 py-3 text-[16px] font-semibold transition ${style}`}>{children}</button>;
+  return <button type="button" className={`min-h-12 rounded-lg px-5 py-3 text-[16px] font-semibold transition ${style}`}>{children}</button>;
 }
 
 function PriorityBadge({ priority }: { priority: "P0" | "P1" | "P2" }) {
