@@ -161,7 +161,7 @@ describe("customer readability polish report", () => {
     expect(html).toContain("需要先补齐可被客户和AI引用的公开资料基础");
     expect(html).toContain("数字化和网络化基础还没有形成");
     expect(html).toContain("这属于哪一种GEO成交风险");
-    expect(html).toContain("舆情阻断型");
+    expect(html).toContain("信任阻力待核实型");
     expect(html).toContain("可见度不足型");
     expect(html).toContain("GEO成交准备度缺口");
     expect(html).toContain("AI可见度曝光");
@@ -230,6 +230,7 @@ describe("customer readability polish report", () => {
     expect(html).toContain("客户可见负面舆情");
     expect(html).toContain("风险等级为中");
     expect(html).toContain("主要舆情情况");
+    expect(html).toContain("退费争议");
     expect(html).toContain("中性基础：65分");
     expect(html).toContain("高决策影响：-5分");
     expect(html).toContain("事实具体性 MEDIUM");

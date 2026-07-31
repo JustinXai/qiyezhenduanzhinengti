@@ -724,6 +724,8 @@ function InsufficientEvidenceGEOPage({
   const materials = requestedMaterials.slice(0, 6);
   const salesReadinessRows = buildLimitedSalesReadinessRows(reputation);
   const situation = limitedReportSituation(readinessScore, reputation);
+  const reputationSummary = buildReputationReportSummary(reputation);
+  const hasReputationEvidence = reputationSummary.matchedEvidenceCount > 0;
   return (
     <div className="min-h-screen bg-slate-50 pb-16 text-[16px] leading-[1.75] text-slate-800 md:text-[17px] md:leading-[1.72] print:bg-white">
       <div className="mx-auto max-w-[980px] px-4 py-6 sm:px-6 lg:px-8">
@@ -772,11 +774,65 @@ function InsufficientEvidenceGEOPage({
             </div>
           </section>
 
+          {hasReputationEvidence && (
+            <section className="rounded-lg border border-rose-200 bg-white p-5 md:p-6">
+              <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <p className="text-[14px] font-semibold text-rose-700">先看具体发现</p>
+                  <h2 className="mt-1 text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">这次检索到底发现了什么</h2>
+                </div>
+                <p className="max-w-[360px] text-[15px] leading-[1.65] text-slate-500">
+                  这里展示的是待核实线索，不等于已经确认企业存在责任或违规事实。
+                </p>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                <MetricTile label="客户可见入口" value={`${reputationSummary.customerVisibleEntryCount}个`} />
+                <MetricTile label="底层风险线索" value={`${reputationSummary.underlyingNegativeEventCount}类`} />
+                <MetricTile label="风险主题" value={reputationSummary.issueThemes.map((item) => item.theme).join("、") || "待确认"} />
+                <MetricTile label="原始来源" value={`${reputationSummary.independentOriginalSourceCount}个`} />
+              </div>
+
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <p className="text-[16px] font-semibold text-amber-950">需要先核实的事实边界</p>
+                <p className="mt-2 text-[15px] leading-[1.7] text-amber-900">
+                  {reputationSummary.independentOriginalSourceCount > 0
+                    ? "本次检索已发现可追溯原始来源，建议进一步确认主体关系、事件性质、处理状态和可公开回应口径。"
+                    : "本次检索尚未追溯到原始司法、监管或官方处理详情，因此只能作为客户可见风险线索处理；正式沟通前应先核实主体关系、事件性质和处理结果。"}
+                </p>
+              </div>
+
+              {reputationSummary.issueThemes.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  {reputationSummary.issueThemes.map((item) => (
+                    <article key={item.theme} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <h3 className="text-[18px] font-semibold text-slate-950">{item.theme}</h3>
+                      <p className="mt-2 text-[15px] leading-[1.7] text-slate-700">
+                        本次发现 {item.count} 条相关公开信息。{item.summary}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+
+              {reputationSummary.representativeEvidence.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-[16px] font-semibold text-slate-950">代表性入口</p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {reputationSummary.representativeEvidence.slice(0, 2).map((item) => (
+                      <ReputationEvidenceCard key={`${item.url}-${item.title}`} item={item} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
           <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
             <h2 className="text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">这属于哪一种GEO成交风险</h2>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
               <SituationCard active={situation.kind === "NO_DATA"} title="1. 资料缺失型" body="客户和AI找不到足够资料，不能判断企业是谁、做什么、凭什么可信。重点不是打低分，而是先把可被引用的数字化信源建起来。" />
-              <SituationCard active={situation.kind === "BAD_REPUTATION"} title="2. 舆情阻断型" body="客户能搜到企业，但负面、投诉、退费或争议信息更醒目。先处理事实核实、回应说明和信任修复，否则曝光越多阻力越大。" />
+              <SituationCard active={situation.kind === "BAD_REPUTATION"} title="2. 信任阻力待核实型" body="客户能搜到企业，也能看到争议、投诉或风险提示类入口。先核实事实、处理状态和回应口径，再扩大AI曝光。" />
               <SituationCard active={situation.kind === "LOW_VISIBILITY"} title="3. 可见度不足型" body="企业有部分资料，舆情也不算差，但AI和客户问题覆盖弱。需要建设内容资产、FAQ、案例和咨询路径，把曝光转成咨询。" />
             </div>
           </section>
@@ -857,6 +913,20 @@ function InsufficientEvidenceGEOPage({
               <CustomerButton>获取企业GEO优化方案</CustomerButton>
             </div>
           </section>
+
+          {hasReputationEvidence && (
+            <section className="rounded-lg border border-slate-200 bg-white p-5 md:p-6">
+              <h2 className="text-[23px] font-semibold leading-[1.25] text-slate-950 md:text-[26px]">事实证据附件</h2>
+              <p className="mt-2 text-[15px] leading-[1.65] text-slate-500">
+                以下为本次公开检索命中的相关入口。证据用于说明“客户可能看到什么”，不替代企业内部核实、官方登记或法律结论。
+              </p>
+              <div className="mt-4 grid grid-cols-1 gap-4">
+                {reputationSummary.representativeEvidence.map((item) => (
+                  <ReputationEvidenceCard key={`${item.url}-${item.title}-bottom`} item={item} />
+                ))}
+              </div>
+            </section>
+          )}
         </main>
       </div>
     </div>
@@ -901,6 +971,15 @@ function buildLimitedSalesReadinessRows(reputation?: ReputationAndPublicOpinionS
   ];
 }
 
+function MetricTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <p className="text-[13px] font-semibold text-slate-500">{label}</p>
+      <p className="mt-1 break-words text-[18px] font-semibold leading-[1.35] text-slate-950 [overflow-wrap:anywhere]">{value}</p>
+    </div>
+  );
+}
+
 function SituationCard({ active, title, body }: { active: boolean; title: string; body: string }) {
   return (
     <article className={`rounded-lg border p-4 ${active ? "border-rose-200 bg-rose-50 text-rose-950" : "border-slate-200 bg-white text-slate-800"}`}>
@@ -921,11 +1000,11 @@ function limitedReportSituation(
   if (hasReputationRisk) {
     return {
       kind: "BAD_REPUTATION" as const,
-      label: "舆情阻断型",
-      riskScore: 90,
-      riskLevelLabel: "极高阻力",
-      primaryAction: "先做舆情核实、回应口径和信任修复，再扩大AI曝光。",
-      summary: "本次公开资料还不足以支撑正式诊断，同时已经出现客户可见的风险或争议信号。对企业来说，问题不是简单低分，而是客户搜索后可能先看到阻力：如果没有统一回应、事实说明和信任内容，AI可见度越高，客户疑虑也会被同步放大。",
+      label: "信任阻力待核实",
+      riskScore: 82,
+      riskLevelLabel: "高阻力",
+      primaryAction: "先核实公开风险线索、处理状态和回应口径，再扩大AI曝光。",
+      summary: "本次公开资料还不足以支撑正式诊断，同时出现了客户可见的争议或风险提示类入口。对企业来说，问题不是简单低分，而是客户搜索后可能先产生疑虑：如果没有统一事实说明、服务边界和信任内容，AI可见度越高，疑虑也可能被同步放大。",
     };
   }
   if (readinessScore.checkedWeight < 0.35 || readinessScore.score === null) {
