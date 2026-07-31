@@ -424,12 +424,6 @@ export function createRealEvidencePipeline(deps: RealEvidencePipelineDeps): Evid
         }
       }
 
-      if (executedQueries.length === 0 && results.length === 0) {
-        throw new Error(
-          `SEARCH_INSUFFICIENT: all ${planned.length} planned queries failed (${searchFailures} failures)`,
-        );
-      }
-
       const relevantResults = filterSearchResultsForDiagnosis(results, {
         brandName: resolvedBrand(input),
         websiteHost: host,

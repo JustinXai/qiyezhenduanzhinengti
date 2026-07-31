@@ -7,6 +7,48 @@ import type { GuardedCrawler } from "../../../src/security/crawler/guarded-crawl
 import type { WebSearchProvider, WebSearchResultItem } from "../../../src/providers/types";
 
 describe("Round-6 crawl budget audit", () => {
+  it("keeps brand-only empty public search as a measured limited path instead of throwing", async () => {
+    const tracker = new CanaryBudgetTracker();
+    const crawler: GuardedCrawler = {
+      async crawl() {
+        throw new Error("brand-only empty search should not crawl");
+      },
+    };
+    const bocha: WebSearchProvider = {
+      async search() {
+        return { ok: true, results: [] };
+      },
+    };
+    const pipeline = createRealEvidencePipeline({ bocha, crawler, tracker });
+
+    const search = await pipeline.search({
+      diagnosisId: "diag_empty_public_search",
+      input: { website: "", brandName: "清石医疗洗纹身专科诊所" },
+    });
+    const crawl = await pipeline.crawl(
+      {
+        diagnosisId: "diag_empty_public_search",
+        input: { website: "", brandName: "清石医疗洗纹身专科诊所" },
+      },
+      search,
+    );
+    const normalized = await pipeline.normalize(
+      {
+        diagnosisId: "diag_empty_public_search",
+        input: { website: "", brandName: "清石医疗洗纹身专科诊所" },
+      },
+      crawl,
+    );
+
+    expect((search.usage ?? []).some((item) => item.provider === "bocha" && item.stage === "SEARCHING")).toBe(true);
+    expect(crawl.usage).toEqual([
+      { provider: "crawler", stage: "CRAWLING_FIRST_PARTY", callCount: 0 },
+      { provider: "crawler", stage: "CRAWLING_COMPETITOR", callCount: 0 },
+    ]);
+    expect(normalized.evidence).toEqual([]);
+    expect(normalized.coverage?.executedQueries).toEqual([]);
+  });
+
   it("caps first-party pages across domains, not once per domain", () => {
     const tracker = new CanaryBudgetTracker();
     for (let index = 0; index < 12; index += 1) {
