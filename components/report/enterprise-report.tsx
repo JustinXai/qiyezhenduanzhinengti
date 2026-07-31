@@ -934,7 +934,8 @@ function InsufficientEvidenceGEOPage({
 }
 
 function buildLimitedSalesReadinessRows(reputation?: ReputationAndPublicOpinionSnapshotV1) {
-  const hasReputationRisk = Boolean(reputation && reputation.complaintSignals.length > 0 && reputation.riskLevel !== "UNKNOWN");
+  const reputationSummary = buildReputationReportSummary(reputation);
+  const hasReputationRisk = reputationSummary.validCustomerVisibleNegativeCount > 0 && reputationSummary.riskLevel !== "UNKNOWN";
   return [
     {
       title: "AI可见度曝光",
@@ -996,7 +997,8 @@ function limitedReportSituation(
   readinessScore: LimitedReportDataV1["readinessScore"],
   reputation?: ReputationAndPublicOpinionSnapshotV1,
 ) {
-  const hasReputationRisk = Boolean(reputation && reputation.complaintSignals.length > 0 && reputation.riskLevel !== "UNKNOWN");
+  const reputationSummary = buildReputationReportSummary(reputation);
+  const hasReputationRisk = reputationSummary.validCustomerVisibleNegativeCount > 0 && reputationSummary.riskLevel !== "UNKNOWN";
   if (hasReputationRisk) {
     return {
       kind: "BAD_REPUTATION" as const,

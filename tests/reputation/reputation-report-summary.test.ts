@@ -153,6 +153,37 @@ describe("reputation report summary", () => {
     expect(summary.summary).not.toContain("没有相关舆情");
   });
 
+  it("downgrades historical weak complaint signals when the dispute is not scoped to the brand", () => {
+    const weak = signal({
+      signalId: "rep_ev_weak",
+      evidenceId: "ev_weak",
+      signalType: "COMPLAINT",
+      sentiment: "NEGATIVE",
+      sourceCategory: "新闻媒体",
+      title: "其他机构退费纠纷报道",
+      snippet: "报道提到报名机构退费争议。相关推荐：测试企业服务介绍。",
+      riskTheme: "退费争议",
+      entityMatch: "MEDIUM",
+      url: "https://example.com/unrelated",
+    });
+    const summary = buildReputationReportSummary(snapshot({
+      reputationSignals: [weak],
+      complaintSignals: [weak],
+      riskThemes: ["退费争议"],
+      evidenceIds: ["ev_weak"],
+      overallReputationScore: 35,
+      riskLevel: "HIGH",
+    }));
+
+    expect(summary.negativeSignalCount).toBe(0);
+    expect(summary.validCustomerVisibleNegativeCount).toBe(0);
+    expect(summary.reputationDeduction).toBe(0);
+    expect(summary.riskLevel).toBe("LOW");
+    expect(summary.score).toBe(65);
+    expect(summary.summary).toContain("暂未发现明确负面风险信号");
+    expect(summary.summary).not.toContain("客户可见负面舆情");
+  });
+
   it("case 3: no matched evidence stays bounded without excellent-reputation claims", () => {
     const summary = buildReputationReportSummary(snapshot({
       reputationSignals: [],
@@ -171,7 +202,15 @@ describe("reputation report summary", () => {
   });
 
   it("case 4: response signals do not erase original disputes", () => {
-    const negative = signal({ evidenceId: "ev_neg", signalType: "COMPLAINT", sentiment: "NEGATIVE", sourceCategory: "黑猫投诉", riskTheme: "合同争议" });
+    const negative = signal({
+      evidenceId: "ev_neg",
+      signalType: "COMPLAINT",
+      sentiment: "NEGATIVE",
+      sourceCategory: "黑猫投诉",
+      title: "测试企业投诉、争议处理记录",
+      snippet: "用户反映测试企业合同争议，企业后续公开回应。",
+      riskTheme: "合同争议",
+    });
     const response = signal({ evidenceId: "ev_resp", signalType: "COMPANY_RESPONSE", sourceCategory: "企业自身回应", resolutionStatus: "RESPONDED" });
     const summary = buildReputationReportSummary(snapshot({
       reputationSignals: [negative, response],

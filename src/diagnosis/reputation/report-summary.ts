@@ -276,23 +276,36 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
   if (!snapshot) return empty;
 
   const signals = snapshot.reputationSignals;
-  const negativeSignalCount = snapshot.complaintSignals.length;
   const positiveSignalCount = snapshot.positiveSignals.length;
   const neutralSignalCount = snapshot.neutralSignals.length;
   const responseSignalCount = snapshot.responseSignals.length;
-  const breakdown = reputationPenaltyBreakdown(snapshot.complaintSignals, snapshot.responseSignals, signals, snapshot.sourceCoverage, snapshot.reputationNeutralBase ?? 65, snapshot.searchedQueries.length);
+  const breakdown = reputationPenaltyBreakdown(
+    snapshot.complaintSignals,
+    snapshot.responseSignals,
+    signals,
+    snapshot.sourceCoverage,
+    snapshot.reputationNeutralBase ?? 65,
+    snapshot.searchedQueries.length,
+    snapshot.knownBrandNames,
+  );
+  const negativeSignalCount = breakdown.validCustomerVisibleNegativeCount;
   const reputationDeduction = breakdown.totalPenalty;
   const complaintCount = sourceCategoryCount(signals, "黑猫投诉") + sourceCategoryCount(signals, "消费投诉平台");
   const mediaCount = sourceCategoryCount(signals, "新闻媒体");
   const officialCount = sourceCategoryCount(signals, "官方公开渠道");
   const companyResponseCount = responseSignalCount;
   const matchedEvidenceCount = snapshot.evidenceIds.length;
-  const themes = issueThemes(snapshot.complaintSignals);
+  const themes = negativeSignalCount > 0 ? issueThemes(snapshot.complaintSignals) : [];
+  const effectiveRiskLevel = matchedEvidenceCount === 0
+    ? "UNKNOWN"
+    : negativeSignalCount === 0
+      ? "LOW"
+      : snapshot.riskLevel;
   const summary = summaryFor({
     matchedEvidenceCount,
     negativeSignalCount,
     responseSignalCount,
-    riskLevel: snapshot.riskLevel,
+    riskLevel: effectiveRiskLevel,
     issueThemes: themes,
     independentNegativeSourceCount: breakdown.independentNegativeSourceCount,
     underlyingNegativeEventCount: breakdown.underlyingNegativeEventCount,
@@ -320,8 +333,8 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
     resolutionStatus: signal.resolutionStatus,
   }));
   const result: ReputationReportSummary = {
-    score: matchedEvidenceCount === 0 ? null : snapshot.overallReputationScore,
-    riskLevel: matchedEvidenceCount === 0 ? "UNKNOWN" : snapshot.riskLevel,
+    score: matchedEvidenceCount === 0 ? null : negativeSignalCount === 0 && snapshot.overallReputationScore !== null ? Math.max(snapshot.overallReputationScore, breakdown.reputationNeutralBase) : snapshot.overallReputationScore,
+    riskLevel: effectiveRiskLevel,
     searchedQueryCount: snapshot.searchedQueries.length,
     matchedEvidenceCount,
     complaintCount,
@@ -358,8 +371,8 @@ export function buildReputationReportSummary(snapshot: ReputationAndPublicOpinio
       reputationDeduction,
       mediaCount,
       officialCount,
-      riskThemes: snapshot.riskThemes,
-      riskLevel: snapshot.riskLevel,
+      riskThemes: negativeSignalCount > 0 ? snapshot.riskThemes : [],
+      riskLevel: effectiveRiskLevel,
       customerVisibleEntryCount: breakdown.customerVisibleEntryCount,
       underlyingNegativeEventCount: breakdown.underlyingNegativeEventCount,
       independentOriginalSourceCount: breakdown.independentOriginalSourceCount,

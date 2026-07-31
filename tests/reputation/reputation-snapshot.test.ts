@@ -121,6 +121,65 @@ describe("reputation snapshot", () => {
     expect(snapshot.factualSpecificityConfidence).toBe("MEDIUM");
   });
 
+  it("does not attribute unrelated page complaints to a brand mentioned only in recommendations", () => {
+    const snapshot = buildReputationSnapshot({
+      diagnosisId: "diag_qingshi",
+      diagnosisInput: { brandName: "清石医疗洗纹身专科诊所", website: "", industry: "医疗美容", targetRegion: "郑州" },
+      evidence: [
+        {
+          id: "ev_unrelated_footer",
+          title: "2026家庭教育指导师全国统一报名入口中山优才教育统一报名",
+          sourceDomain: "mtz.china.com",
+          sourceType: "OBSERVED_WEB_EVIDENCE",
+          authorityLevel: "MEDIA",
+          supportLevel: "CONTEXT_ONLY",
+          acquisitionLevel: "SEARCH_SNIPPET",
+          fetchedAt: "2026-07-31T00:00:00.000Z",
+          snippet: "部分教育报名机构存在收费混乱、退费无门等争议。页面推荐阅读：推荐靠谱的清石医疗洗纹身诊所机构。",
+          url: "https://mtz.china.com/touzi/2026/0410/226837.html",
+        },
+      ],
+      searchedQueries: ["清石医疗洗纹身专科诊所 退费 投诉"],
+      generatedAt: "2026-07-31T00:00:00.000Z",
+    });
+
+    expect(snapshot.reputationSignals).toHaveLength(0);
+    expect(snapshot.complaintSignals).toHaveLength(0);
+    expect(snapshot.overallReputationScore).toBe(65);
+    expect(snapshot.riskLevel).toBe("LOW");
+    expect(snapshot.summary).toContain("暂未发现明确负面风险信号");
+  });
+
+  it("does not treat previous-provider complaints in comparison articles as target-brand reputation risk", () => {
+    const snapshot = buildReputationSnapshot({
+      diagnosisId: "diag_qingshi",
+      diagnosisInput: { brandName: "清石医疗洗纹身专科诊所", website: "", industry: "医疗美容", targetRegion: "郑州" },
+      evidence: [
+        {
+          id: "ev_netease_comparison",
+          title: "亲身实测洗纹身|郑州 3 家合规机构体验 + 真实口碑分享",
+          sourceDomain: "网易新闻客户端",
+          sourceType: "OBSERVED_WEB_EVIDENCE",
+          authorityLevel: "MEDIA",
+          supportLevel: "CONTEXT_ONLY",
+          acquisitionLevel: "SEARCH_SNIPPET",
+          fetchedAt: "2026-07-31T00:00:00.000Z",
+          snippet: "清石医疗洗纹身专科诊所(中原区)进门就能看到资质公示，面诊会客观说明次数、间隔、恢复阶段和注意事项，全程不推销、不夸大效果。网友真实口碑提到：“之前跑了两家，都说一次能洗干净，结果被骗了。这家医生很实在，说旧彩色要慢慢来，分几次。”整体描述为正规、透明、靠谱。",
+          url: "https://c.m.163.com/news/a/KUDSOE510556N6UZ.html",
+        },
+      ],
+      searchedQueries: ["清石医疗洗纹身专科诊所 投诉"],
+      generatedAt: "2026-07-31T00:00:00.000Z",
+    });
+
+    expect(snapshot.reputationSignals).toHaveLength(1);
+    expect(snapshot.reputationSignals[0]?.sentiment).toBe("POSITIVE");
+    expect(snapshot.complaintSignals).toHaveLength(0);
+    expect(snapshot.riskThemes).toEqual([]);
+    expect(snapshot.riskLevel).toBe("LOW");
+    expect(snapshot.summary).toContain("暂未发现明确负面风险信号");
+  });
+
   it("case 2: weak registry navigation risk words do not trigger conversion penalty", () => {
     const weak = buildReputationSnapshot({
       diagnosisId: "diag_rep",
@@ -228,8 +287,7 @@ describe("reputation snapshot", () => {
     const mvp = report.mvpReport!;
 
     expect(mvp.reputation?.overallReputationScore).toBe(30);
-    expect(mvp.score.overall).not.toBeNull();
-    expect(mvp.score.overall).toBeLessThanOrEqual(40);
+    expect(mvp.score.overall).toBeNull();
     expect(mvp.score.level).toBe("当前存在高优先级信任风险");
     expect(mvp.overview.topProblems[0]).toContain("公开舆情影响客户信任");
     expect(mvp.coreIssues[0]?.title).toBe("公开舆情影响客户信任");

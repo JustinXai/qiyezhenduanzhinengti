@@ -64,6 +64,10 @@ function containsAny(text: string, terms: readonly string[]): boolean {
   return terms.some((term) => text.includes(term.toLowerCase()));
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function hasAffirmativeResponse(text: string): boolean {
   if (NEGATED_RESPONSE_PATTERN.test(text)) return false;
   return /(?:企业|商家|官方).{0,6}(?:回应|回复)|(?:回应|回复).{0,6}(?:企业|商家|官方)|已回复|已回应|已解决|处理完成|双方达成|协商一致/.test(text);
@@ -75,6 +79,73 @@ function hasNonzeroOfficialRisk(text: string): boolean {
 
 function hasConcreteNegativeIssue(text: string): boolean {
   return hasNonzeroOfficialRisk(text) || containsAny(text, NEGATIVE_TERMS);
+}
+
+function hasKnownName(text: string, names: readonly string[]): boolean {
+  return names.some((name) => name.length >= 2 && text.includes(name.toLowerCase()));
+}
+
+function hasNearbyNegativeTerm(text: string, names: readonly string[], maxDistance = 48): boolean {
+  const nameIndexes = names
+    .filter((name) => name.length >= 2)
+    .flatMap((name) => indexesOf(text, name.toLowerCase()));
+  if (nameIndexes.length === 0) return false;
+  const negativeIndexes = NEGATIVE_TERMS.flatMap((term) => indexesOf(text, term.toLowerCase()));
+  return nameIndexes.some((nameIndex) =>
+    negativeIndexes.some((termIndex) =>
+      Math.abs(nameIndex - termIndex) <= maxDistance && !hasRecommendationBoundaryBetween(text, nameIndex, termIndex),
+    ),
+  );
+}
+
+function hasRecommendationBoundaryBetween(text: string, firstIndex: number, secondIndex: number): boolean {
+  const start = Math.min(firstIndex, secondIndex);
+  const end = Math.max(firstIndex, secondIndex);
+  const between = text.slice(start, end);
+  return /推荐阅读|相关推荐|相关阅读|相关链接|热门文章|上一篇|下一篇|延伸阅读|页面推荐/.test(between);
+}
+
+function indexesOf(text: string, needle: string): number[] {
+  const indexes: number[] = [];
+  if (!needle) return indexes;
+  let start = 0;
+  while (start < text.length) {
+    const index = text.indexOf(needle, start);
+    if (index < 0) break;
+    indexes.push(index);
+    start = index + needle.length;
+  }
+  return indexes;
+}
+
+function isComplaintSource(item: EvidenceItem): boolean {
+  const text = lowerText(item);
+  return /黑猫|消费保|消费投诉|投诉详情|tousu\.sina|xfb315/.test(text);
+}
+
+function hasThirdPartyComparisonNegativeContext(text: string, names: readonly string[]): boolean {
+  if (!hasKnownName(text, names)) return false;
+  const previousProviderNegative =
+    /(?:之前|此前|原来|曾经).{0,18}(?:跑了|去过|找了|咨询过|在).{0,18}(?:两家|几家|多家|别家|其他|外面|地方).{0,50}(?:被骗|套路|留印|留疤|不适|增生|踩坑)/.test(text)
+    || /(?:怕|担心).{0,12}(?:被骗|被套路|留印|留疤|洗不干净)/.test(text);
+  const targetPositive =
+    /(?:这家|该企业|该机构|该诊所|诊所|机构).{0,50}(?:实在|靠谱|满意|正规|透明|不推销|不夸大|客观|隐私|资质公示|体验很好|扫码核对|资质)/.test(text)
+    || names.some((name) => new RegExp(`${escapeRegExp(name.toLowerCase())}.{0,50}(?:实在|靠谱|满意|正规|透明|不推销|不夸大|客观|隐私|资质公示|体验很好|扫码核对|资质)`).test(text));
+  return previousProviderNegative && targetPositive;
+}
+
+function hasEntityScopedNegativeIssue(item: EvidenceItem, names: readonly string[]): boolean {
+  const title = clean(item.title).toLowerCase();
+  const text = lowerText(item);
+  const officialRisk = hasNonzeroOfficialRisk(text);
+  if (officialRisk) {
+    return hasKnownName(text, names)
+      && (hasKnownName(title, names) || hasNearbyNegativeTerm(text, names, 80) || OFFICIAL_REGISTRY_DOMAINS.some((domain) => item.sourceDomain.toLowerCase().includes(domain)));
+  }
+  if (!containsAny(text, NEGATIVE_TERMS)) return false;
+  if (!isComplaintSource(item) && !containsAny(title, NEGATIVE_TERMS) && hasThirdPartyComparisonNegativeContext(text, names)) return false;
+  if (hasNearbyNegativeTerm(text, names)) return true;
+  return hasKnownName(title, names) && (containsAny(title, NEGATIVE_TERMS) || isComplaintSource(item));
 }
 
 function sourceCategory(item: EvidenceItem): string {
@@ -113,7 +184,7 @@ function classifySignal(item: EvidenceItem, names: readonly string[], region: st
   const match = entityMatch(item, names, region);
   if (match === "LOW" || match === "CONFLICTED") return null;
   const officialRisk = hasNonzeroOfficialRisk(text);
-  const negative = hasConcreteNegativeIssue(text);
+  const negative = hasEntityScopedNegativeIssue(item, names);
   const positive = containsAny(text, POSITIVE_TERMS);
   const responded = hasAffirmativeResponse(text);
   let signalType: SignalType = "NEUTRAL_MENTION";
@@ -154,12 +225,33 @@ function classifySignal(item: EvidenceItem, names: readonly string[], region: st
   };
 }
 
-function isCustomerVisibleNegative(signal: ReputationSignalV1): boolean {
+function hasSignalEntityScopedNegativeIssue(signal: ReputationSignalV1, names: readonly string[]): boolean {
+  if (names.length === 0) return true;
+  const title = clean(signal.title).toLowerCase();
+  const text = `${signal.title} ${signal.snippet} ${signal.sourceName} ${signal.url}`.toLowerCase();
+  const officialRisk = hasNonzeroOfficialRisk(text);
+  if (officialRisk) {
+    return hasKnownName(text, names)
+      && (hasKnownName(title, names) || hasNearbyNegativeTerm(text, names, 80) || isAggregatorSource(signal));
+  }
+  if (!containsAny(text, NEGATIVE_TERMS)) return false;
+  if (hasNearbyNegativeTerm(text, names)) return true;
+  return hasKnownName(title, names) && (containsAny(title, NEGATIVE_TERMS) || /黑猫|消费保|消费投诉|投诉详情|tousu\.sina|xfb315/.test(text));
+}
+
+function isComplaintPlatformSignal(signal: ReputationSignalV1): boolean {
+  return signal.sourceCategory === "黑猫投诉"
+    || signal.sourceCategory === "消费投诉平台"
+    || /黑猫|消费保|消费投诉|投诉详情|tousu\.sina|xfb315/.test(`${signal.sourceName} ${signal.url} ${signal.title}`);
+}
+
+function isCustomerVisibleNegative(signal: ReputationSignalV1, names: readonly string[] = []): boolean {
   const text = `${signal.title} ${signal.snippet}`;
-  return (signal.sentiment === "NEGATIVE" || signal.sentiment === "MIXED")
+  const visibleNegative = (signal.sentiment === "NEGATIVE" || signal.sentiment === "MIXED")
     && (signal.entityMatch === "HIGH" || signal.entityMatch === "MEDIUM")
-    && hasConcreteNegativeIssue(text)
     && /^https?:\/\//.test(signal.url);
+  if (!visibleNegative) return false;
+  return hasConcreteNegativeIssue(text) && hasSignalEntityScopedNegativeIssue(signal, names);
 }
 
 function independentSourceKey(signal: ReputationSignalV1): string {
@@ -288,8 +380,9 @@ export function reputationPenaltyBreakdown(
   sourceCoverage: readonly string[] = [],
   baseScore = NEUTRAL_REPUTATION_BASE_SCORE,
   searchedQueryCount = 0,
+  knownNames: readonly string[] = [],
 ): ReputationPenaltyBreakdown {
-  const validSignals = negativeSignals.filter(isCustomerVisibleNegative);
+  const validSignals = negativeSignals.filter((signal) => isCustomerVisibleNegative(signal, knownNames));
   const byTheme = new Map<string, ReputationSignalV1[]>();
   const bySource = new Map<string, ReputationSignalV1[]>();
   for (const signal of validSignals) {
@@ -363,8 +456,8 @@ function riskLevelFromPenalty(score: number, breakdown: ReputationPenaltyBreakdo
   return "MEDIUM";
 }
 
-function scoreFromSignals(negativeSignals: readonly ReputationSignalV1[], positives: readonly ReputationSignalV1[], responses: readonly ReputationSignalV1[], allSignals: readonly ReputationSignalV1[], sourceCoverage: readonly string[]): number {
-  const breakdown = reputationPenaltyBreakdown(negativeSignals, responses, allSignals, sourceCoverage);
+function scoreFromSignals(negativeSignals: readonly ReputationSignalV1[], positives: readonly ReputationSignalV1[], responses: readonly ReputationSignalV1[], allSignals: readonly ReputationSignalV1[], sourceCoverage: readonly string[], knownNames: readonly string[]): number {
+  const breakdown = reputationPenaltyBreakdown(negativeSignals, responses, allSignals, sourceCoverage, NEUTRAL_REPUTATION_BASE_SCORE, 0, knownNames);
   void positives;
   const raw = breakdown.preNegativeReputationScore - breakdown.totalPenalty;
   const capped = breakdown.scoreCap === null ? raw : Math.min(raw, breakdown.scoreCap);
@@ -401,8 +494,8 @@ export function buildReputationSnapshot(input: {
   const sourceCoverage = REPUTATION_SOURCE_CATEGORIES.filter((category) =>
     signals.some((signal) => signal.sourceCategory === category),
   );
-  const score = scoreFromSignals(complaintSignals, positiveSignals, responseSignals, signals, sourceCoverage);
-  const breakdown = reputationPenaltyBreakdown(complaintSignals, responseSignals, signals, sourceCoverage, NEUTRAL_REPUTATION_BASE_SCORE, input.searchedQueries.length);
+  const score = scoreFromSignals(complaintSignals, positiveSignals, responseSignals, signals, sourceCoverage, names);
+  const breakdown = reputationPenaltyBreakdown(complaintSignals, responseSignals, signals, sourceCoverage, NEUTRAL_REPUTATION_BASE_SCORE, input.searchedQueries.length, names);
   const riskLevel = riskLevelFromPenalty(score, breakdown);
   return {
     diagnosisId: input.diagnosisId,
