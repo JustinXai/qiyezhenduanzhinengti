@@ -53,6 +53,7 @@ export class ProviderModeError extends Error {
 type Env = Record<string, string | undefined>;
 
 let singleton: DiagnosesApiDeps | null = null;
+let storageSingleton: DiagnosesApiDeps["storage"] | null = null;
 
 function resolveDbUrl(env: Env = process.env): string {
   return env.DATABASE_URL ?? DEFAULT_DB_URL;
@@ -130,15 +131,23 @@ export function buildProviders(
 
 /** Lazily open the DB + migrate on first request, then reuse the connection. */
 export function getRuntime(): DiagnosesApiDeps {
-  if (!singleton) {
+  const mode = resolveProviderMode();
+  if (!storageSingleton) {
     const db = openMigratedDatabase(resolveDbUrl());
-    const { evidence, producer } = buildProviders(resolveProviderMode());
-    singleton = {
-      storage: new SqliteStorageAdapter(db),
+    storageSingleton = new SqliteStorageAdapter(db);
+  }
+  if (mode === "REAL") {
+    const { evidence, producer } = buildProviders(mode);
+    return {
+      storage: storageSingleton,
       evidence,
       producer,
       // verifier omitted → state machine defaults to the deterministic verifier.
     };
+  }
+  if (!singleton) {
+    const { evidence, producer } = buildProviders(mode);
+    singleton = { storage: storageSingleton, evidence, producer };
   }
   return singleton;
 }
@@ -146,4 +155,5 @@ export function getRuntime(): DiagnosesApiDeps {
 /** Test/reset hook: drop the cached runtime so the next call rebuilds it. */
 export function resetRuntime(): void {
   singleton = null;
+  storageSingleton = null;
 }

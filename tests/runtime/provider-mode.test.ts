@@ -3,8 +3,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildProviders,
+  getRuntime,
   resolveProviderMode,
   realProviderPreflight,
+  resetRuntime,
   ProviderModeError,
   PROVIDER_ERROR,
 } from "../../src/runtime/create-runtime";
@@ -18,7 +20,13 @@ import {
 } from "../../src/runtime/api/diagnoses-handlers";
 import { presentReport } from "../../src/report/presentation";
 
-afterEach(() => vi.restoreAllMocks());
+const ORIGINAL_ENV = { ...process.env };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  resetRuntime();
+  process.env = { ...ORIGINAL_ENV };
+});
 
 describe("Provider Mode (MOCK | REAL)", () => {
   it("1) MOCK mode makes ZERO network calls end-to-end", async () => {
@@ -74,6 +82,25 @@ describe("Provider Mode (MOCK | REAL)", () => {
       string | undefined
     >;
     expect(resolveProviderMode(requestLike)).toBe("MOCK");
+  });
+
+  it("5b) REAL runtime creates fresh provider seams per diagnosis request", () => {
+    process.env = {
+      ...ORIGINAL_ENV,
+      DATABASE_URL: ":memory:",
+      PROVIDER_MODE: "REAL",
+      BOCHA_API_KEY: "x".repeat(20),
+      DEEPSEEK_API_KEY: "y".repeat(20),
+      TECHNICAL_COMPANY_CANARY_AUTHORIZED: "true",
+      DIAGNOSIS_SMOKE_MODE: "false",
+    };
+
+    const first = getRuntime();
+    const second = getRuntime();
+
+    expect(second.storage).toBe(first.storage);
+    expect(second.evidence).not.toBe(first.evidence);
+    expect(second.producer).not.toBe(first.producer);
   });
 
   it("6) provider mode never appears in the public report payload", async () => {
