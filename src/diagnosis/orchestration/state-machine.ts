@@ -519,6 +519,48 @@ export async function runDiagnosisPipeline(
     return { ok: false, status: "FAILED", failedStage, error };
   };
 
+  const saveLimitedReport = async (input: DiagnosisInput, evidence: EvidenceItem[], searchCompleted: boolean) => {
+    const limitedBase = buildLimitedCanonicalReport({
+      diagnosisId,
+      publicToken,
+      input,
+      evidence,
+      searchCompleted,
+      generatedAt: (deps.clock ?? (() => new Date()))().toISOString(),
+    });
+    const coverage: EvidenceCoverage = deriveCoverage({
+      evidence,
+      firstPartyDomains: firstPartyDomainsOf(input.website),
+    });
+    const profile = evaluateCompletionProfile({
+      diagnosisId,
+      input,
+      evidence: limitedBase.evidence,
+      coverage,
+      usage: allUsage,
+      report: limitedBase,
+      truthGuardPassed: false,
+      evaluatedAt: (deps.clock ?? (() => new Date()))().toISOString(),
+    });
+    const limited = DiagnosisReport.parse(
+      applyCompletionProfileToReport(limitedBase, profile, {
+        input,
+        searchCompleted,
+        generatedAt: limitedBase.generatedAt,
+      }),
+    );
+    await setStatus("VALIDATING_REPORT");
+    await storage.saveReport({
+      id: idFactory(),
+      diagnosisId,
+      reportContractVersion: limited.reportContractVersion,
+      scoreContractVersion: limited.scoreContractVersion,
+      canonicalJson: JSON.stringify(limited),
+    });
+    await setStatus("READY_LIMITED");
+    return { ok: true as const, status: "READY_LIMITED" as const, report: limited };
+  };
+
   // -- VALIDATING -------------------------------------------------------------
   await setStatus("VALIDATING");
   const parsed = parseDiagnosisInput(args.input);
@@ -539,6 +581,9 @@ export async function runDiagnosisPipeline(
   try {
     searchResult = await deps.evidence.search(ctx);
   } catch (e) {
+    if (!input.website) {
+      return saveLimitedReport(input, [], false);
+    }
     return fail("SEARCHING", toPipelineError("SEARCH_FAILED", e));
   }
   await recordUsage(searchResult.usage);
@@ -593,30 +638,11 @@ export async function runDiagnosisPipeline(
     (item) => (item.acquisitionLevel ?? "SEARCH_SNIPPET") === "SEARCH_SNIPPET",
   );
   if (!input.website || !hasCrawledEvidence || onlySearchSnippets) {
-    const limitedBase = buildLimitedCanonicalReport({
-      diagnosisId, publicToken, input, evidence: normalized.evidence,
-      searchCompleted: allUsage.some((usage) => usage.stage === "SEARCHING" && (usage.callCount ?? 0) > 0),
-      generatedAt: (deps.clock ?? (() => new Date()))().toISOString(),
-    });
-    const profile = evaluateCompletionProfile({
-      diagnosisId, input, evidence: limitedBase.evidence, coverage, usage: allUsage,
-      report: limitedBase, truthGuardPassed: false,
-      evaluatedAt: (deps.clock ?? (() => new Date()))().toISOString(),
-    });
-    const limited = DiagnosisReport.parse(
-      applyCompletionProfileToReport(limitedBase, profile, {
-        input,
-        searchCompleted: allUsage.some((usage) => usage.stage === "SEARCHING" && (usage.callCount ?? 0) > 0),
-        generatedAt: limitedBase.generatedAt,
-      }),
+    return saveLimitedReport(
+      input,
+      normalized.evidence,
+      allUsage.some((usage) => usage.stage === "SEARCHING" && (usage.callCount ?? 0) > 0),
     );
-    await setStatus("VALIDATING_REPORT");
-    await storage.saveReport({
-      id: idFactory(), diagnosisId, reportContractVersion: limited.reportContractVersion,
-      scoreContractVersion: limited.scoreContractVersion, canonicalJson: JSON.stringify(limited),
-    });
-    await setStatus("READY_LIMITED");
-    return { ok: true, status: "READY_LIMITED", report: limited };
   }
 
   // -- ANALYZING --------------------------------------------------------------

@@ -179,6 +179,40 @@ describe("diagnosis pipeline state machine", () => {
     expect((await adapter.getDiagnosisRequest(id))!.status).toBe("FAILED");
   });
 
+  it("returns READY_LIMITED for brand-only search failures instead of a dead-end failure", async () => {
+    const input = { brandName: "清石医疗洗纹身专科诊所" };
+    const id = "diag_brand_search_timeout";
+    const token = "tok_brand_search_timeout";
+    await adapter.createDiagnosisRequest({
+      id,
+      inputJson: JSON.stringify(input),
+      publicToken: token,
+    });
+    const evidence: EvidencePipeline = {
+      ...createMockEvidencePipeline(),
+      async search() {
+        throw new Error("wall clock exceeded 900000ms");
+      },
+    };
+
+    const result = await runDiagnosisPipeline(deps({ evidence }), {
+      diagnosisId: id,
+      publicToken: token,
+      input,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected limited success");
+    expect(result.status).toBe("READY_LIMITED");
+    expect(result.report.executionMode).toBe("LIMITED_PUBLIC_SCAN");
+    expect(result.report.publicReportEligible).toBe(false);
+    expect(result.report.scores.overallScore).toBeNull();
+    expect(result.report.limitedReport).toBeDefined();
+    expect(result.report.limitedReport?.sourceCoverageMatrix[0]?.checkedQueries).toEqual([]);
+    expect((await adapter.getDiagnosisRequest(id))!.status).toBe("READY_LIMITED");
+    expect(await adapter.getReport(id)).not.toBeNull();
+  });
+
   it("fails at ANALYZING when the producer returns an error", async () => {
     const { id, token } = await createRequest("diag_an", "tok_an");
     const producer: ReportProducer = {
