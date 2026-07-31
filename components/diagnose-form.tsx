@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 
 // ============================================================================
 // 企业诊断智能体 — 首页表单 (Round-8 FINAL MVP)
-// 表单字段顺序固定: 1.企业/品牌名称  2.企业官网  3.所属行业  4.主要产品或服务
-//                  5.所在地区  6.补充问题与竞品(选填)  7.联系人/手机(选填)
+// 主入口只要求企业/品牌名称；官网、行业、服务、地区、问题与竞品均为可选补充。
 //
 // 设计原则:
 //   - 只有企业/品牌名称必填；客户问题为空时由系统生成典型决策问题。
@@ -125,9 +124,9 @@ export function DiagnoseForm() {
       {/* 1. 企业/品牌名称 (必填) */}
       <Field
         id="brandName"
-        label="企业/品牌名称"
+        label="企业名称"
         required
-        help="只填写企业名称即可开始诊断。补充官网、行业和客户问题，可以让报告更加准确。"
+        help="只填企业名称即可生成报告。系统会自动检索公开信息；找不到资料时，也会给出公开信息缺口和GEO建设建议。"
       >
         <input
           id="brandName"
@@ -141,67 +140,60 @@ export function DiagnoseForm() {
         />
       </Field>
 
-      {/* 2. 企业官网 (选填) */}
-      <Field id="website" label="企业官网" optional help="选填，需包含 http:// 或 https://">
-        <input
-          id="website"
-          type="url"
-          value={website}
-          onChange={(e) => setWebsite(e.target.value)}
-          placeholder="https://example.com"
-          data-testid="input-website"
-          className={inputClass}
-          autoComplete="url"
-          inputMode="url"
-        />
-      </Field>
-
-      {/* 3. 所属行业 (选填) */}
-      <Field id="industry" label="所属行业" optional help="例如: 教育培训 / 食品制造 / 本地生活服务">
-        <input
-          id="industry"
-          value={industry}
-          onChange={(e) => setIndustry(e.target.value)}
-          placeholder="选填，系统也会根据公开信息辅助判断"
-          data-testid="input-industry"
-          className={inputClass}
-        />
-      </Field>
-
-      {/* 4. 主要产品或服务 (选填) */}
-      <Field
-        id="productOrService"
-        label="主要产品或服务"
-        optional
-        help="例如: 考研培训、烘焙食品、企业软件服务"
-      >
-        <input
-          id="productOrService"
-          value={productOrService}
-          onChange={(e) => setProductOrService(e.target.value)}
-          placeholder="一句话概括主营业务，选填"
-          data-testid="input-product"
-          className={inputClass}
-        />
-      </Field>
-
-      {/* 5. 所在地区 (选填) */}
-      <Field id="targetRegion" label="所在地区" optional help="例如: 中国 / 成都 / 四川">
-        <input
-          id="targetRegion"
-          value={targetRegion}
-          onChange={(e) => setTargetRegion(e.target.value)}
-          placeholder="请填写主要业务或客户所在地区"
-          data-testid="input-region"
-          className={inputClass}
-        />
-      </Field>
-
       <details className="rounded-lg border border-neutral-200 bg-neutral-50 p-4" data-testid="advanced-optional">
         <summary className="cursor-pointer text-base font-medium text-neutral-800">
-          补充更多信息，让报告更准确（选填）
+          我愿意补充更多信息（选填）
         </summary>
         <div className="mt-4 flex flex-col gap-4">
+          <Field id="website" label="企业官网" optional help="选填，需包含 http:// 或 https://">
+            <input
+              id="website"
+              type="url"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              placeholder="https://example.com"
+              data-testid="input-website"
+              className={inputClass}
+              autoComplete="url"
+              inputMode="url"
+            />
+          </Field>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Field id="industry" label="所属行业" optional help="例如：教育培训">
+              <input
+                id="industry"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                placeholder="系统也会辅助判断"
+                data-testid="input-industry"
+                className={inputClass}
+              />
+            </Field>
+
+            <Field id="productOrService" label="主营业务" optional help="例如：考研培训">
+              <input
+                id="productOrService"
+                value={productOrService}
+                onChange={(e) => setProductOrService(e.target.value)}
+                placeholder="一句话即可"
+                data-testid="input-product"
+                className={inputClass}
+              />
+            </Field>
+
+            <Field id="targetRegion" label="所在地区" optional help="例如：成都">
+              <input
+                id="targetRegion"
+                value={targetRegion}
+                onChange={(e) => setTargetRegion(e.target.value)}
+                placeholder="主要服务地区"
+                data-testid="input-region"
+                className={inputClass}
+              />
+            </Field>
+          </div>
+
           <Field
             id="customerQuestions"
             label="客户最常问的问题"
@@ -241,16 +233,14 @@ export function DiagnoseForm() {
         </div>
       </details>
 
-      {/* 8. 联系人和手机号 (选填, 仅用于报告解读联系) */}
-      <div className="rounded-xl border border-dashed border-neutral-200 bg-neutral-50 p-4">
-        <div className="mb-2 flex items-baseline gap-2">
-          <span className="text-sm font-medium text-neutral-800">联系人和手机号</span>
-          <span className="text-xs text-neutral-400">选填</span>
-        </div>
-        <p className="mb-3 text-xs leading-relaxed text-neutral-500">
+      <details className="rounded-lg border border-dashed border-neutral-200 bg-neutral-50 p-4">
+        <summary className="cursor-pointer text-sm font-medium text-neutral-800">
+          留下联系方式，方便解读报告（选填）
+        </summary>
+        <p className="mt-3 text-xs leading-relaxed text-neutral-500">
           仅用于报告解读联系,不会写入诊断结果,也不会出现在公开报告内容中。
         </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <input
             value={contactName}
             onChange={(e) => setContactName(e.target.value)}
@@ -269,7 +259,7 @@ export function DiagnoseForm() {
             inputMode="tel"
           />
         </div>
-      </div>
+      </details>
 
       {error ? (
         <p
