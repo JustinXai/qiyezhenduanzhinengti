@@ -239,12 +239,6 @@ function hasSignalEntityScopedNegativeIssue(signal: ReputationSignalV1, names: r
   return hasKnownName(title, names) && (containsAny(title, NEGATIVE_TERMS) || /黑猫|消费保|消费投诉|投诉详情|tousu\.sina|xfb315/.test(text));
 }
 
-function isComplaintPlatformSignal(signal: ReputationSignalV1): boolean {
-  return signal.sourceCategory === "黑猫投诉"
-    || signal.sourceCategory === "消费投诉平台"
-    || /黑猫|消费保|消费投诉|投诉详情|tousu\.sina|xfb315/.test(`${signal.sourceName} ${signal.url} ${signal.title}`);
-}
-
 function isCustomerVisibleNegative(signal: ReputationSignalV1, names: readonly string[] = []): boolean {
   const text = `${signal.title} ${signal.snippet}`;
   const visibleNegative = (signal.sentiment === "NEGATIVE" || signal.sentiment === "MIXED")
